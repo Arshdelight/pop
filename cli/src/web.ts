@@ -108,12 +108,18 @@ function mimeFor(ws: ReturnType<typeof openWorkspace>, hash: string): string {
 }
 
 export function openBrowser(url: string): void {
-  let args: string[];
-  if (process.platform === 'win32') args = ['/c', 'start', '', url];
-  else if (process.platform === 'darwin') args = [url];
-  else args = [url];
-  const cmd = process.platform === 'win32' ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  spawn(cmd, args, { stdio: 'ignore', detached: true }).unref();
+  if (process.platform === 'win32') {
+    // cmd 把 & 当命令分隔符，URL 必须整体加引号（否则带 query 的 OAuth 授权 URL 被截断在首个 &）；
+    // start 的首个引号参数是窗口标题占位；/d /s + verbatim 让 cmd 按原样解析这条命令行
+    spawn('cmd', ['/d', '/s', '/c', `start "" "${url}"`], {
+      windowsVerbatimArguments: true,
+      stdio: 'ignore',
+      detached: true,
+    }).unref();
+    return;
+  }
+  const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
+  spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
 }
 
 const CSS = `
