@@ -15,7 +15,7 @@ import { openBrowser } from './web.js';
  *   tokens = await exchangeCode(...)           // code + verifier → access/refresh
  */
 
-export const LOGIN_SCOPES = 'pop:read pop:create pop:publish';
+export const LOGIN_SCOPES = 'pop:read pop:write pop:publish pop:delete';
 const CALLBACK_PATH = '/callback';
 const TIMEOUT_MS = 5 * 60 * 1000; // 授权页等待上限
 
