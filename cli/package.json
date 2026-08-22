@@ -4,7 +4,7 @@
   "description": "Local registry CLI for POP (Protocol of Practice): manage a personal, content-addressed collection of practice documents on top of @arshdelight/pop-sdk.",
   "type": "module",
   "bin": {
-    "pop": "./dist/index.js"
+    "pop": "dist/index.js"
   },
   "files": [
     "dist"
