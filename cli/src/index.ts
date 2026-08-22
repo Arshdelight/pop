@@ -7,7 +7,7 @@ import { runRemote } from './cmd/remote.js';
 import { runLs } from './cmd/ls.js';
 import { runNew } from './cmd/new.js';
 import { runShow } from './cmd/show.js';
-import { runLogin, runLogout } from './cmd/login.js';
+import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 
@@ -24,8 +24,9 @@ usage:
        | pop new < file.json
   pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
   pop web [--port 4317] [--no-open]  browse direct pops in a local web UI
-  pop login [--token <token>]    store a token for the configured remote
-  pop logout                     clear stored credentials
+  pop login [--no-open]           OAuth 登录（浏览器授权 practihub；--no-open 只打印 URL）
+  pop logout                      clear stored credentials (revokes on the server)
+  pop me                          show the authenticated practihub user
   pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
 
@@ -33,7 +34,8 @@ options:
   --data-dir <path>              target data directory (same default as init)
 
 the data directory is a POP workspace: nodes are content-addressed (nodes/*.md),
-and pop.json records the remote, stored credentials, and registered direct roots.
+pop.json records the remote and registered direct roots; login credentials live
+in pop.auth.json (kept out of pop.json so the workspace stays commit-safe).
 `;
 
 const COMMON = {
@@ -108,14 +110,23 @@ async function main(argv: string[]): Promise<number> {
       return runWeb({ dataDir: str(values['data-dir']), port: Number.isInteger(port) && port > 0 ? port : 4317, open: values['no-open'] !== true });
     }
     case 'login': {
-      const { values } = parseArgs({ args: rest, options: { ...COMMON, token: { type: 'string' as const } }, allowPositionals: true });
-      if (values.help) { console.log('usage: pop login [--token <token>]'); return 0; }
-      return runLogin({ dataDir: str(values['data-dir']), token: values.token });
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, 'no-open': { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: pop login [--no-open]'); return 0; }
+      return runLogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true });
     }
     case 'logout': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: pop logout'); return 0; }
       return runLogout({ dataDir: str(values['data-dir']) });
+    }
+    case 'me': {
+      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop me'); return 0; }
+      return runMe({ dataDir: str(values['data-dir']) });
     }
     case 'blob': {
       const sub = rest[0];

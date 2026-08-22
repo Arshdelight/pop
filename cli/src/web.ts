@@ -107,7 +107,7 @@ function mimeFor(ws: ReturnType<typeof openWorkspace>, hash: string): string {
   return 'application/octet-stream';
 }
 
-function openBrowser(url: string): void {
+export function openBrowser(url: string): void {
   let args: string[];
   if (process.platform === 'win32') args = ['/c', 'start', '', url];
   else if (process.platform === 'darwin') args = [url];

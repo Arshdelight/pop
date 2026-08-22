@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# 登录凭证（refresh token）——绝不入库
+pop.auth.json

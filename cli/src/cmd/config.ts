@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { defaultDataDir, loadState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
+import { loadCredentials, authPath } from '../credentials.js';
 
 export interface ConfigOpts {
   dataDir?: string;
@@ -17,9 +18,10 @@ export function runConfig(opts: ConfigOpts): number {
   }
   const direct = state.direct.length;
   const indirect = ws ? ws.nodes.size - direct : 0;
+  const creds = loadCredentials(dataDir);
   console.log(`data dir:   ${path.resolve(dataDir)}`);
   console.log(`remote:     ${state.remote ? state.remote.url : '(not set)'}`);
-  console.log(`auth:       ${state.auth?.token ? 'token stored (masked)' : '(not logged in)'}`);
+  console.log(`auth:       ${creds ? `logged in as ${creds.client_name ?? 'pop cli'} (${authPath(dataDir)})` : '(not logged in)'}`);
   console.log(`direct:     ${direct}`);
   console.log(`indirect:   ${indirect}`);
   if (ws && ws.parseIssues.length > 0) {

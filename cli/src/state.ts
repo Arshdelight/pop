@@ -10,8 +10,6 @@ export interface State {
   schema: 1;
   /** Remote provider (e.g. https://practihub.com) */
   remote?: { url: string };
-  /** Stored credentials for the remote */
-  auth?: { token?: string };
   /** Root hashes the user created/imported themselves (own uploads, §9.1 "direct") */
   direct: string[];
 }
@@ -46,8 +44,6 @@ export function loadState(dataDir: string): State {
     const state: State = { schema: 1, direct: [] };
     const remoteUrl = asString(asRecord(rec.remote)?.url);
     if (remoteUrl) state.remote = { url: remoteUrl };
-    const token = asString(asRecord(rec.auth)?.token);
-    if (token) state.auth = { token };
     if (Array.isArray(rec.direct)) {
       state.direct = rec.direct.filter((x): x is string => typeof x === 'string' && HASH_RE.test(x));
     }

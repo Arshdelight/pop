@@ -1,39 +1,124 @@
-import fs from 'node:fs';
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { defaultDataDir, loadState } from '../state.js';
+import { saveCredentials, deleteCredentials, loadCredentials } from '../credentials.js';
+import {
+  cliResource,
+  discoverAs,
+  registerClient,
+  createLoopbackSession,
+  generatePkcePair,
+  buildAuthorizeUrl,
+  openAuthorizeUrl,
+  exchangeCode,
+  revokeToken,
+  LOGIN_SCOPES,
+} from '../oauth.js';
+import { authedFetch } from '../client.js';
 
 export interface LoginOpts {
   dataDir?: string;
-  token?: string;
+  /** 不自动开浏览器，只打印授权 URL（适合无头环境/agent） */
+  noOpen?: boolean;
 }
 
-export function runLogin(opts: LoginOpts): number {
+/**
+ * pop login：OAuth 2.1 Authorization Code + PKCE（loopback 回调）登录 practihub。
+ * 浏览器授权 → 换 access+refresh token → 凭证存 $dataDir/pop.auth.json（独立于 workspace 状态）。
+ * 之后命令自动用 refresh token 续期（rotation），无需再次交互。
+ */
+export async function runLogin(opts: LoginOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
     console.error('error: no remote configured — run `pop remote set <url>` first');
     return 1;
   }
-  let token = opts.token;
-  if (token === undefined && !process.stdin.isTTY) token = readStdin().trim();
-  if (!token) {
-    console.error('usage: pop login [--token <token>]   (or pipe the token on stdin)');
+  if (loadCredentials(dataDir)) {
+    console.error('error: already logged in — run `pop logout` first to re-authenticate');
     return 1;
   }
-  state.auth = { token };
-  saveState(dataDir, state);
-  console.log(`logged in to ${state.remote.url} (token stored in ${dataDir})`);
-  return 0;
+
+  const remote = state.remote.url;
+  const resource = cliResource(remote);
+  console.log(`logging in to ${remote}`);
+  console.log(`resource: ${resource}`);
+  console.log(`scopes:   ${LOGIN_SCOPES}`);
+
+  const meta = await discoverAs(remote);
+  const session = createLoopbackSession();
+  try {
+    const { client_id: clientId } = await registerClient(remote, session.redirectUri);
+    const pkce = generatePkcePair();
+    const url = buildAuthorizeUrl({
+      authorizationEndpoint: meta.authorization_endpoint,
+      clientId,
+      redirectUri: session.redirectUri,
+      state: session.state,
+      codeChallenge: pkce.challenge,
+      resource,
+    });
+    openAuthorizeUrl(url, opts.noOpen !== true);
+
+    const code = await session.waitForCode();
+    const tokens = await exchangeCode(remote, {
+      clientId,
+      redirectUri: session.redirectUri,
+      code,
+      verifier: pkce.verifier,
+    });
+
+    saveCredentials(dataDir, {
+      schema: 1,
+      client_id: clientId,
+      resource,
+      scope: tokens.scope || LOGIN_SCOPES,
+      client_name: 'pop cli',
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: Date.now() + tokens.expires_in * 1000,
+    });
+    console.log(`logged in to ${remote} — credentials stored in ${dataDir}/pop.auth.json`);
+    return 0;
+  } finally {
+    session.close();
+  }
 }
 
-export function runLogout(opts: { dataDir?: string }): number {
+/** pop logout：服务端 revoke（best-effort）+ 删除本地凭证 */
+export async function runLogout(opts: { dataDir?: string }): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
-  delete state.auth;
-  saveState(dataDir, state);
+  const creds = loadCredentials(dataDir);
+  if (creds && state.remote) {
+    await revokeToken(state.remote.url, creds.client_id, creds.refresh_token, 'refresh_token');
+  }
+  deleteCredentials(dataDir);
   console.log('logged out');
   return 0;
 }
 
-function readStdin(): string {
-  return fs.readFileSync(0, 'utf8');
+export interface MeOpts {
+  dataDir?: string;
+}
+
+/** pop me：校验登录态，显示当前用户/角色/scope */
+export async function runMe(opts: MeOpts): Promise<number> {
+  const dataDir = opts.dataDir ?? defaultDataDir();
+  const state = loadState(dataDir);
+  if (!state.remote) {
+    console.error('error: no remote configured — run `pop remote set <url>` first');
+    return 1;
+  }
+  const res = await authedFetch(dataDir, state.remote.url, '/api/auth/me');
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    console.error(`error: not authenticated — ${typeof body.error === 'string' ? body.error : `HTTP ${res.status}`}`);
+    return 1;
+  }
+  console.log(`username:     ${body.username ?? '(unknown)'}`);
+  console.log(`profile:      ${body.profileUsername ?? '(none)'}`);
+  if (body.role) console.log(`role:         ${body.role}`);
+  const creds = loadCredentials(dataDir);
+  if (creds?.scope) console.log(`scopes:       ${creds.scope}`);
+  console.log(`remote:       ${state.remote.url}`);
+  return 0;
 }
