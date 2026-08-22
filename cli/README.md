@@ -26,6 +26,9 @@ pop push [hash]                upload pops to the remote (default: all direct; s
 pop pull [hash]                fetch pops from the remote (default: all of mine)
 pop search [query...]          search pops on the remote (title-first; empty = browse)
                                [--scope public|me|all] [--limit N] [--json]
+pop submit [hash]               submit pops for public review (default: all direct)
+pop unpublish [hash]            withdraw a submission / take one back out of public
+pop delete <hash>               remove your direct claim on the remote (hash required)
 pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                (hashes the bytes, stores local blobs in the workspace)
 ```
@@ -53,6 +56,12 @@ The data directory is a POP workspace (nodes content-addressed under `nodes/*.md
 - `pop search <query...>` searches the remote via `GET /api/v1/pop/search` — both title and content match, **title hits rank first**; an empty query browses the newest documents.
 - `--scope public` (default) searches the published library; `--scope me` searches your own documents in **any status** (including PRIVATE); `--scope all` is the union — your visible universe.
 - `--json` dumps the raw API response. Fetch any result with `pop pull <hash>`.
+
+### Lifecycle (submit / unpublish / delete)
+
+- `pop submit [hash]` submits your direct pops for public review (`PRIVATE → PENDING_REVIEW`; an admin approves before they go public). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
+- `pop unpublish [hash]` withdraws a pending submission or takes a published pop back out of public distribution (`→ PRIVATE`).
+- `pop delete <hash>` removes your direct claim on the remote (children's indirect claims are reclaimed; a document with no claims left is hard-deleted). Explicit hash required — there is no delete-all. Pure remote operation: your local workspace is untouched, and pushing the same content again recreates it (fresh row, PRIVATE).
 
 ## License
 

@@ -50,6 +50,9 @@ pop me                         show the authenticated remote user
 pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
 pop pull [hash]                fetch pops from the remote (default: all of mine)
 pop search [query...]          search the remote (title-first; --scope public|me|all)
+pop submit [hash]               submit pops for public review (default: all direct)
+pop unpublish [hash]            withdraw a submission / unpublish
+pop delete <hash>               remove your direct claim on the remote
 pop blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
 ```
 

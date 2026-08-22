@@ -13,6 +13,7 @@ import { runBlobAdd } from './cmd/blob.js';
 import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
 import { runSearch } from './cmd/search.js';
+import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 
 const USAGE = `pop — local registry for POP (Protocol of Practice)
 
@@ -34,6 +35,9 @@ usage:
   pop pull [hash]                 fetch pops from the remote (default: all of mine)
   pop search [query...]           search pops on the remote (title-first; empty = browse)
        [--scope public|me|all] [--limit N] [--json]
+  pop submit [hash]               submit pops for public review (default: all direct)
+  pop unpublish [hash]            withdraw a submission / take one back out of public
+  pop delete <hash>               remove your direct claim on the remote (hash required)
   pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
 
@@ -165,6 +169,21 @@ async function main(argv: string[]): Promise<number> {
         limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
         json: values.json === true,
       });
+    }
+    case 'submit': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop submit [hash]   (default: all direct pops)'); return 0; }
+      return runSubmit({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'unpublish': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop unpublish [hash]   (default: all direct pops)'); return 0; }
+      return runUnpublish({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'delete': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help || positionals.length === 0) { console.log('usage: pop delete <hash>   (explicit hash required)'); return 0; }
+      return runDelete({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'blob': {
       const sub = rest[0];
