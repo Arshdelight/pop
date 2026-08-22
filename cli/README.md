@@ -37,6 +37,8 @@ The data directory is a POP workspace (nodes content-addressed under `nodes/*.md
 
 ### Login to PractiHub
 
+The CLI defaults its remote to **https://practihub.com** — `pop login` works out of the box; run `pop remote set <url>` only when pointing at another hub (e.g. a local dev server).
+
 `pop login` authenticates via **OAuth 2.1 Authorization Code + PKCE** (loopback redirect, RFC 8252): it opens your browser to PractiHub's consent page, exchanges the code for tokens, and stores them in `pop.auth.json` (next to `pop.json`). Credentials are deliberately **kept out of `pop.json`** so the workspace stays commit-safe; on POSIX the file is `chmod 600`.
 
 - Credentials are long-lived but auto-refreshing: commands use the refresh token (rotation) to renew the 1-hour access token, so once logged in, an agent can keep using `pop` without interactive prompts.

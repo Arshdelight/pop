@@ -6,6 +6,9 @@ import path from 'node:path';
 export const STATE_FILE = 'pop.json';
 export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
+/** 默认 remote：开箱即连官方 hub；自建/本地 hub 用 `pop remote set <url>` 覆盖 */
+export const DEFAULT_REMOTE_URL = 'https://practihub.com';
+
 export interface State {
   schema: 1;
   /** Remote provider (e.g. https://practihub.com) */
@@ -36,14 +39,15 @@ function asString(v: unknown): string | undefined {
 
 export function loadState(dataDir: string): State {
   const p = statePath(dataDir);
-  const base: State = { schema: 1, direct: [] };
+  // 未配置（或 pop.json 不存在/损坏）时回落默认 remote：开箱即连官方 hub
+  const base: State = { schema: 1, direct: [], remote: { url: DEFAULT_REMOTE_URL } };
   if (!fs.existsSync(p)) return base;
   try {
     const rec = asRecord(JSON.parse(fs.readFileSync(p, 'utf8')));
     if (rec === null) return base;
     const state: State = { schema: 1, direct: [] };
     const remoteUrl = asString(asRecord(rec.remote)?.url);
-    if (remoteUrl) state.remote = { url: remoteUrl };
+    state.remote = remoteUrl ? { url: remoteUrl } : { url: DEFAULT_REMOTE_URL };
     if (Array.isArray(rec.direct)) {
       state.direct = rec.direct.filter((x): x is string => typeof x === 'string' && HASH_RE.test(x));
     }
