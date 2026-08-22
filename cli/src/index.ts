@@ -12,6 +12,7 @@ import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
+import { runSearch } from './cmd/search.js';
 
 const USAGE = `pop — local registry for POP (Protocol of Practice)
 
@@ -31,6 +32,8 @@ usage:
   pop me                          show the authenticated practihub user
   pop push [hash]                 upload pops to the remote (default: all direct; stored PRIVATE)
   pop pull [hash]                 fetch pops from the remote (default: all of mine)
+  pop search [query...]           search pops on the remote (title-first; empty = browse)
+       [--scope public|me|all] [--limit N] [--json]
   pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
 
@@ -141,6 +144,27 @@ async function main(argv: string[]): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: pop pull [hash]'); return 0; }
       return runPull({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'search': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          scope: { type: 'string' as const, default: 'public' },
+          limit: { type: 'string' as const },
+          json: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: pop search [query...] [--scope public|me|all] [--limit N] [--json]'); return 0; }
+      const limit = values.limit ? Number(values.limit) : 20;
+      return runSearch({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        scope: values.scope ?? 'public',
+        limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
+        json: values.json === true,
+      });
     }
     case 'blob': {
       const sub = rest[0];

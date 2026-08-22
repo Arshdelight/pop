@@ -24,6 +24,8 @@ pop logout                     clear stored credentials (revokes on the server)
 pop me                         show the authenticated remote user
 pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
 pop pull [hash]                fetch pops from the remote (default: all of mine)
+pop search [query...]          search pops on the remote (title-first; empty = browse)
+                               [--scope public|me|all] [--limit N] [--json]
 pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                (hashes the bytes, stores local blobs in the workspace)
 ```
@@ -45,6 +47,12 @@ The data directory is a POP workspace (nodes content-addressed under `nodes/*.md
 - `pop pull [hash]` fetches a document by root hash (public docs readable anonymously; private docs need login as an owner). `pop pull` with no argument pulls **all of your own** documents (`/mine`).
 - Ownership on pull: your own documents (private, or public with a DIRECT claim matching your profile) are registered as **direct** roots; someone else's public documents are stored as **indirect** nodes only — they never show up as your uploads.
 - Attachments: the hub does not store attachment bytes, so push sends the document with attachment pointers only; blobs stay local (or external `url` if provided).
+
+### Search
+
+- `pop search <query...>` searches the remote via `GET /api/v1/pop/search` — both title and content match, **title hits rank first**; an empty query browses the newest documents.
+- `--scope public` (default) searches the published library; `--scope me` searches your own documents in **any status** (including PRIVATE); `--scope all` is the union — your visible universe.
+- `--json` dumps the raw API response. Fetch any result with `pop pull <hash>`.
 
 ## License
 

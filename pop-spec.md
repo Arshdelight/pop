@@ -258,17 +258,21 @@ When a practice is read, steps / attachments / flow / **declared inputs & output
 - Skill import maps frontmatter keys into `metadata` **verbatim** (no `x-` prefixing), so independent converters produce identical documents — and identical hashes — for the same skill
 - Breaking changes bump the major version; the version policy and history live in the README
 
-## 9. Transport (POP-over-HTTP, planned)
+## 9. Transport (POP-over-HTTP)
 
-Planned contract for hub implementations; until then documents move as files.
+Contract for hub implementations. The reference hub is Practihub; the `pop` CLI in this repo speaks this transport. Paths below are logical; a hub may prefix them (Practihub serves them under `/api/v1`). Public reads are anonymous; writes and private reads require authentication (Practihub uses OAuth 2.1 with PKCE and three scopes: `pop:read`, `pop:create`, `pop:publish` — details are hub policy, not protocol).
 
 | Operation | Semantics |
 |---|---|
-| `POST /pop` | Store a document (body: §1 JSON). The server parses per §3 and computes the root_hash; **idempotent**: the same root_hash is stored exactly once and returns the existing record (never a second copy, never an overwrite); the uploader claims it as owner (§9.1) |
-| `GET /pop/:ref` | Fetch a document; `ref` = a `sha256:`-prefixed root_hash, full or unique prefix (content addressing); published documents are publicly readable, non-public only by their claimers (§9.1) |
-| `GET /pop/search?q=` | Search published documents (index text derived by §7 aggregation, including declared inputs/outputs — the index may exceed §7, e.g. recursing into `set` children, recall first; conventions like `produces:X` / `needs:X` over declared flows keep hub query surfaces interoperable) |
-| `POST /pop/blobs` | Store attachment bytes; idempotent by hash |
-| `GET /pop/blobs/:hash` | Fetch attachment bytes (content-addressed, cacheable) |
+| `POST /pop` | Store a document (body: §1 JSON). The server parses per §3 and computes the root_hash; **idempotent**: the same root_hash is stored exactly once and returns the existing record (never a second copy, never an overwrite); the uploader claims it as owner (§9.1). Stored documents start non-public |
+| `GET /pop/:ref` | Fetch a document; `ref` = a `sha256:`-prefixed root_hash (the hub requires the full hash; unique-prefix resolution is a client-side convenience — the CLI resolves prefixes locally). Published documents are publicly readable, non-public only by their claimers (§9.1) |
+| `GET /pop/search?q=&scope=&page=&limit=` | Search documents (index text derived by §7 aggregation, including declared inputs/outputs — the index may exceed §7, e.g. recursing into `set` children, recall first; conventions like `produces:X` / `needs:X` over declared flows keep hub query surfaces interoperable). Both title and content match, **title hits rank first**. `scope`: `public` = published documents only (default); `me` = the caller's direct-claimed documents, any status; `all` = the union — the caller's visible universe. Empty `q` returns the newest documents for the scope. Vector/semantic ranking is a hub-side enhancement, reserved but not part of the contract |
+| `GET /pop/mine` | List the caller's direct-claimed documents (any status), newest first |
+| `POST /pop/:ref/submit` | Author requests publication: non-public → pending review (visibility stays claimer-only until the hub decides) |
+| `POST /pop/:ref/unpublish` | Author withdraws a submission or takes a published document back out of public distribution |
+| `DELETE /pop/:ref` | Author delete: removes the caller's direct claim (§9.1 lifecycle) |
+
+Attachment **bytes are not transported**: attachments carry their content hash plus an optional external `url`; blob bytes stay client-side (§5). A hub that does host blobs exposes its own blob endpoints as an extension.
 
 Transport adds, beyond §4.1:
 
@@ -290,11 +294,11 @@ Content addressing fixes *what* a document is; a hub additionally decides *who o
 - **Refinement indexing.** A stored practice's `refines` edge (improved version → improved-upon hash, §2.3) is indexable: the hub keeps the reverse index (hash → its refinements), so anyone referencing a hash can discover that improvements of it exist. Publishing a refinement is optional — `refines` is a history pointer, never enforced; several refinements of one hash form a candidate list, and ranking belongs to the trust layer, not the protocol. Annotation is advisory and never blocks validation.
 - **Lifecycle.** Removing a `direct` claim (author delete; "edit" = delete the old hash's claim + upload the new hash) reclaims the owner's `indirect` claims on the deleted document's children. A document with **no remaining claims may be hard-deleted** — its identity is gone, and a future upload of the same content starts a fresh document. **Referencing is claiming**: as long as any live document references a hash, that hash carries an indirect claim and survives — the claim table is the reference count that guarantees deletion never orphans another user's references; hard delete requires zero claims, direct and indirect alike.
 - **Visibility.** Non-public documents are readable by their claimers; publication status is a hub application-layer policy, not part of the protocol (§3.3).
-- **Blob retention.** Blobs may outlive the documents that reference them; garbage collection is hub policy (§5) — a hub should not delete a blob while any live document carries a pointer to it.
+- **Blob retention.** Blob bytes are not transported (§9); they live client-side or at external urls. A hub that chooses to host blobs may let them outlive the documents that reference them; garbage collection is hub policy (§5) — such a hub should not delete a blob while any live document carries a pointer to it.
 
 ## Appendix A: Test vectors
 
-Implementations must reproduce every value below. Inputs are canonical node objects (nodes carry no ids); children contribute their **own hashes**, so the vectors are order-dependent — A2 wires `from` to A1's hash, A3 pins A1/A2. Sample data includes the non-ASCII `°` (U+00B0), pinning multi-byte handling. Regenerate with `conformance/scripts/vectors.ts`.
+Implementations must reproduce every value below. Inputs are canonical node objects (nodes carry no ids); children contribute their **own hashes**, so the vectors are order-dependent — A2 wires `from` to A1's hash, A3 pins A1/A2. Sample data includes the non-ASCII `°` (U+00B0), pinning multi-byte handling. Regenerate with `sdk/scripts/vectors.ts`.
 
 **A1 minimal action**
 
