@@ -26,6 +26,9 @@
     "type": "git",
     "url": "git+https://github.com/Arshdelight/pop.git"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
