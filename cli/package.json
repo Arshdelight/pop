@@ -1,0 +1,39 @@
+{
+  "name": "@arshdelight/pop-cli",
+  "version": "0.1.0",
+  "description": "Local registry CLI for POP (Protocol of Practice): manage a personal, content-addressed collection of practice documents on top of @arshdelight/pop-sdk.",
+  "type": "module",
+  "bin": {
+    "pop": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "pop",
+    "practice",
+    "cli",
+    "registry"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arshdelight/pop.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@arshdelight/pop-sdk": "1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.2"
+  }
+}

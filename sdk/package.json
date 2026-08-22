@@ -1,0 +1,49 @@
+{
+  "name": "@arshdelight/pop-sdk",
+  "version": "1.0.0",
+  "description": "Official SDK for POP (Protocol of Practice): the spec-verified implementation of parsing, hashing, validation and aggregation.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "pop",
+    "practice",
+    "protocol",
+    "skill",
+    "content-addressing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arshdelight/pop.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

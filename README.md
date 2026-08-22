@@ -10,22 +10,48 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 ```
 pop-spec.md              the specification
-conformance/             its verification tool
+sdk/                     @arshdelight/pop-sdk — the official SDK + its conformance test suite
+cli/                     @arshdelight/pop-cli — the `pop` local registry CLI (built on the SDK)
+examples/                seed documents
 ```
 
-**The protocol is just a convention**: writing a practice requires no code — a practice is a JSON document, zero hashes required to start. Any implementer — hub, CLI, desktop app, third-party tool — builds from the spec independently.
+**The protocol is just a convention**: writing a practice requires no code — a practice is a JSON document, zero hashes required to start. The official SDK implements the spec; any other implementer — hub, desktop app, third-party tool — may build on the SDK or from the spec alone. The spec is the sole normative definition.
 
-## conformance/
+## sdk/ — @arshdelight/pop-sdk
 
-A private verification tool, never published and never imported by implementers — the spec must not be eclipsed by an official implementation. It:
+The spec-verified implementation of parsing, hashing, validation and aggregation (document import, the content-addressed store, aggregate views). Its test suite doubles as the conformance harness:
 
 1. Generates the Appendix A test vectors and cross-verifies them against the spec text, byte-for-byte
 2. Verifies the spec is self-consistent: export/import round-trips, validation invariants, aggregation semantics
 
+First-party tooling (`cli/`) depends on it; correctness is locked by the spec and the vector tests, so the spec stays normative rather than being eclipsed by implementation drift.
+
 ```bash
-cd conformance
-npm test    # vitest (74 cases, incl. Appendix A vector re-verification)
+npm run build -w @arshdelight/pop-sdk   # dist/ — importable as @arshdelight/pop-sdk
+npm test -w @arshdelight/pop-sdk        # vitest (74 cases, incl. Appendix A vector re-verification)
 ```
+
+## cli/ — @arshdelight/pop-cli (the `pop` command)
+
+A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider, stored credentials and the registered **direct** roots (indirect = every other node the direct pops reference).
+
+```bash
+pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
+pop config                     show data dir, remote, registry summary
+pop remote set <url>           set the remote provider (e.g. https://practihub.com)
+pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
+pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+pop web [--port 4317]          browse direct pops in a local web UI
+pop login [--token <token>]    store a token for the configured remote
+```
+
+```bash
+npm run build -w @arshdelight/pop-cli
+npm link -w @arshdelight/pop-cli   # installs the `pop` command globally
+```
+
+Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally).
 
 ## Hosted hubs
 

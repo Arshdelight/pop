@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
-import os from 'node:os';
 import path from 'node:path';
 import matter from 'gray-matter';
 import { parse as parseYaml } from 'yaml';
@@ -27,16 +26,6 @@ export interface Workspace {
   parseIssues: ParseIssue[];
   /** hash → full raw file text, for validate to locate error lines */
   texts: Map<string, string>;
-}
-
-export function findWorkspaceRoot(startDir: string): string | null {
-  let dir = path.resolve(startDir);
-  for (;;) {
-    if (fs.existsSync(path.join(dir, CONFIG_FILE))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
-  }
 }
 
 /** Explicit workspace initialization (writes practice.yaml + nodes/). Reports E_EXISTS if already initialized. */
@@ -73,37 +62,6 @@ export function resolveNodeRef(ws: Workspace, ref: string): string {
     }
   }
   throw new PracticeError('E_NOT_FOUND', `node "${ref}" does not exist`);
-}
-
-/**
- * Default workspace (Practi-style zero friction): the fallback data location
- * when no local workspace exists. PRACTICE_HOME overrides; Windows uses
- * %APPDATA%\practice, other platforms ~/.practice.
- */
-export function defaultWorkspaceRoot(): string {
-  if (process.env.PRACTICE_HOME) return path.resolve(process.env.PRACTICE_HOME);
-  const appdata = process.env.APPDATA;
-  if (appdata) return path.join(appdata, 'practice');
-  return path.join(os.homedir(), '.practice');
-}
-
-/**
- * Resolve the workspace for the current command: local (walk up) first,
- * otherwise the default workspace. Read commands get an empty view when the
- * default workspace does not exist; write commands (create: true) create it.
- */
-export function requireWorkspace(cwd: string, opts?: { create?: boolean }): Workspace {
-  const local = findWorkspaceRoot(cwd);
-  const root = local ?? defaultWorkspaceRoot();
-  if (local === null && opts?.create) {
-    fs.mkdirSync(path.join(root, NODES_DIR), { recursive: true });
-    const cfg = path.join(root, CONFIG_FILE);
-    if (!fs.existsSync(cfg)) {
-      fs.writeFileSync(cfg, 'name: default\nschema: 1\n', 'utf8');
-      console.error(`Created default workspace: ${root}`);
-    }
-  }
-  return loadWorkspace(root);
 }
 
 /**

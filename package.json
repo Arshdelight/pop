@@ -1,0 +1,14 @@
+{
+  "name": "pop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "POP (Protocol of Practice) monorepo: the specification, the official SDK, and the local registry CLI.",
+  "workspaces": [
+    "sdk",
+    "cli"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspace @arshdelight/pop-sdk"
+  }
+}
