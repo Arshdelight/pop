@@ -1,0 +1,23 @@
+{
+  "name": "pop-conformance",
+  "version": "1.0.0",
+  "description": "Conformance tool for POP (Protocol of Practice): generates the spec test vectors and verifies spec self-consistency. Private: never published, never imported by implementers.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "private": true
+}
