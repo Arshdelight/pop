@@ -62,7 +62,7 @@ Media (images, files, video) ride along as content-addressed blobs with in-node 
 
 ## API surface
 
-- **Parsing & hashing** — `computeNodeHash`, `stableStringify`, `createFromDoc` (document → content-addressed tree, `@name` labels resolved)
+- **Parsing & hashing** — `computeNodeHash`, `stableStringify`, `parseDocument` (pure import: validate + build + hashes, no persistence — for transports with their own store), `createFromDoc` (document → content-addressed tree, `@name` labels resolved)
 - **Storage** — `initWorkspace`, `loadWorkspace`, `saveNode`, `storeBlob`, `resolveNodeRef` (full hash or unique prefix)
 - **Views** — `aggregateView` (steps / attachments / flow / declared inputs + outputs)
 - **Validation** — `validateWorkspace`, `upgradeStatus` (refinement graph, advisory)

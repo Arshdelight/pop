@@ -436,3 +436,51 @@ export function createFromDoc(ws: Workspace, doc: unknown): { root: string; crea
   const rootNode = persistTree(ws.root, root, created);
   return { root: computeNodeHash(rootNode), created, count: created.length };
 }
+
+/**
+ * Pure import (no persistence): parse → validate → build, returning the tree,
+ * its Merkle root hash, and every node's hash → node. For transports that keep
+ * their own store (a hub), the document is imported without touching the
+ * content-addressed workspace.
+ *
+ * Two transport-layer differences from createFromDoc:
+ * - ChildRefs are E_DANGLING — the importing transport resolves them first
+ *   (hub pattern: expand { hash } against its own store before parsing)
+ * - inputs.from must be document-internal (self-contained, spec §9)
+ */
+export function parseDocument(doc: unknown): ParsedDocument {
+  const empty: Workspace = { root: '', config: { name: '', schema: 1 }, nodes: new Map(), parseIssues: [], texts: new Map() };
+  const ctx: PlanCtx = { ws: empty };
+  const root = plan(ctx, doc, '$');
+
+  resolveMediaRefs(root);
+
+  const nameIndex = new Map<string, Planned[]>();
+  indexNames(root, nameIndex);
+  resolveLabels(root, nameIndex, new Set());
+
+  const docHashes = new Set<string>();
+  collectHashes(root, docHashes);
+  resolveFroms(root, docHashes, empty);
+
+  const nodeHashes = new Map<string, PNode>();
+  const collect = (p: Planned): void => {
+    const { node, hash } = buildPlannedNode(p);
+    nodeHashes.set(hash, node);
+    for (const c of p.children) {
+      if (c.kind === 'inline') collect(c.node);
+    }
+  };
+  collect(root);
+  const built = buildPlannedNode(root);
+  return { root: built.node, rootHash: built.hash, nodeHashes };
+}
+
+export interface ParsedDocument {
+  /** The built tree (defaults filled, from labels resolved to hashes) */
+  root: PNode;
+  /** Document identity = the root's Merkle hash over the whole subtree */
+  rootHash: string;
+  /** hash → node for every node of the document (roots and inline children) */
+  nodeHashes: Map<string, PNode>;
+}

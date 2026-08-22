@@ -21,6 +21,8 @@ pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
 pop web [--port 4317]          browse direct pops in a local web UI
 pop login [--token <token>]    store a token for the configured remote
 pop logout                     clear stored credentials
+pop blob add <file-or-url>     stage an attachment; emits the attachment entry
+                               (hashes the bytes, stores local blobs in the workspace)
 ```
 
 The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider, stored credentials and the registered **direct** roots (indirect = every other node the direct pops reference).

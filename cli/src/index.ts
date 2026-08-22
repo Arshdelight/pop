@@ -9,6 +9,7 @@ import { runNew } from './cmd/new.js';
 import { runShow } from './cmd/show.js';
 import { runLogin, runLogout } from './cmd/login.js';
 import { runWeb } from './web.js';
+import { runBlobAdd } from './cmd/blob.js';
 
 const USAGE = `pop — local registry for POP (Protocol of Practice)
 
@@ -25,6 +26,8 @@ usage:
   pop web [--port 4317] [--no-open]  browse direct pops in a local web UI
   pop login [--token <token>]    store a token for the configured remote
   pop logout                     clear stored credentials
+  pop blob add <file-or-url>     stage an attachment; emits the attachment entry
+                                 (hashes the bytes, stores local blobs in the workspace)
 
 options:
   --data-dir <path>              target data directory (same default as init)
@@ -42,7 +45,7 @@ function str(v: string | undefined): string | undefined {
   return v;
 }
 
-function main(argv: string[]): number {
+async function main(argv: string[]): Promise<number> {
   const cmd = argv[0] ?? 'help';
   const rest = argv.slice(1);
 
@@ -114,6 +117,20 @@ function main(argv: string[]): number {
       if (values.help) { console.log('usage: pop logout'); return 0; }
       return runLogout({ dataDir: str(values['data-dir']) });
     }
+    case 'blob': {
+      const sub = rest[0];
+      const { values, positionals } = parseArgs({
+        args: rest.slice(1),
+        options: { ...COMMON, name: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: pop blob add <file-or-url> [--name <name>]'); return 0; }
+      if (sub === 'add') {
+        return runBlobAdd({ dataDir: str(values['data-dir']), name: values.name, positional: positionals });
+      }
+      console.error('usage: pop blob add <file-or-url> [--name <name>]');
+      return 1;
+    }
     case 'help':
     case '--help':
     case '-h':
@@ -126,16 +143,18 @@ function main(argv: string[]): number {
   }
 }
 
-try {
-  process.exitCode = main(process.argv.slice(2));
-} catch (e) {
-  if (e instanceof PracticeError) {
-    console.error(`error [${e.code}]: ${e.message}`);
-    if (e.hint) console.error(`  hint: ${e.hint}`);
-  } else if (e instanceof Error) {
-    console.error(`error: ${e.message}`);
-  } else {
-    console.error(`error: ${String(e)}`);
+(async () => {
+  try {
+    process.exitCode = await main(process.argv.slice(2));
+  } catch (e) {
+    if (e instanceof PracticeError) {
+      console.error(`error [${e.code}]: ${e.message}`);
+      if (e.hint) console.error(`  hint: ${e.hint}`);
+    } else if (e instanceof Error) {
+      console.error(`error: ${e.message}`);
+    } else {
+      console.error(`error: ${String(e)}`);
+    }
+    process.exitCode = 1;
   }
-  process.exitCode = 1;
-}
+})();
