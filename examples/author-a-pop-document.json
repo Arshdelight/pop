@@ -1,0 +1,156 @@
+{
+  "type": "practice",
+  "name": "Author a POP document",
+  "description": "How to write a valid, high-quality practice document per pop-spec.md — the rules an agent follows when it records what it just did.",
+  "license": "CC-BY-4.0",
+  "metadata": {
+    "x-arsh-spec-version": "1.0.0",
+    "x-arsh-role": "guide",
+    "x-arsh-audience": ["agents", "humans"],
+    "x-arsh-purpose": "seed corpus for Practihub"
+  },
+  "content": "POP is a document format, not a workflow engine: a practice is a JSON tree of actions and composed practices, and its identity is a Merkle root hash over the whole tree. Nothing here is executed — judgement stays in prose, with a person or an agent. When you write a practice, write what you actually did, in the order you did it, and let every rule below follow from one principle: identity is content, and a reference is content too.",
+  "op": "seq",
+  "revisions": [
+    { "when": "2026-08-22", "what": "First release as the seed authoring guide." }
+  ],
+  "children": [
+    {
+      "type": "practice",
+      "name": "Pick your starting point",
+      "description": "Choose what to record before you start writing.",
+      "content": "A practice is worth recording when it is an executed sequence you would do again. Pick the highest-value thing you did in the last session.",
+      "op": "choice",
+      "children": [
+        {
+          "type": "action",
+          "name": "Start from a real session",
+          "description": "Record what you or your agent actually just did.",
+          "content": "The strongest source is a session you were present for: full context at zero extra cost. Reconstruct the steps, the decisions, the dead ends — not the idealised version."
+        },
+        {
+          "type": "action",
+          "name": "Start from an existing skill",
+          "description": "Map a skill into a document without loss.",
+          "content": "A skill maps losslessly into a document: name, description and body become name, description and content; files become attachments. You gain verifiable identity, linking and composition that the skill did not have."
+        }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Read the spec first",
+      "description": "pop-spec.md is the sole normative definition.",
+      "content": "Read pop-spec.md before writing. The conformance tool only verifies the spec; the spec is the contract. Reproduce Appendix A by hand at least once — if you can compute A3 from A1 and A2, you understand hashing.",
+      "outputs": [
+        { "name": "spec understanding", "spec": "can re-derive the Appendix A vectors and the section 6 error codes" }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Decide node type by inference",
+      "description": "children present means practice; absent means action.",
+      "content": "Type is inferred: a node with children is a practice, one without is an action. If you set type explicitly it must agree with the inference. Unknown fields are rejected, never dropped — silently dropping a field forks hashes.",
+      "inputs": [
+        { "name": "spec understanding", "from": "@Read the spec first" }
+      ],
+      "outputs": [
+        { "name": "node type decided", "spec": "action or practice, matching the inference" }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Name it like content",
+      "description": "A name is display text, not an id — renaming changes the hash.",
+      "content": "The name is the only label a node carries and it participates in the hash. Keep it short, human-readable and unique in its context. Do not encode addresses in names; references always use hashes.",
+      "inputs": [
+        { "name": "intent", "spec": "a one-line statement of what this practice is for" }
+      ],
+      "outputs": [
+        { "name": "node name", "spec": "non-empty string, descriptive" }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Write the body as prose",
+      "description": "Prose before fields.",
+      "content": "Put what needs no machine semantics into content: acceptance prose, waiting times, context, warnings. A field earns its place only when structure helps. Content is trimmed for the hash, so leading or trailing whitespace never changes identity. Optional fields left empty are treated as absent."
+    },
+    {
+      "type": "action",
+      "name": "Declare flows on leaves",
+      "description": "inputs and outputs live on actions, never on practices.",
+      "content": "outputs are the step's acceptance criteria: what the step produces, with a name and an optional human-readable spec, and no from. inputs are what the step consumes; an input without from is an unwired need — prepared externally, or supplied by any producer meeting name and spec.",
+      "inputs": [
+        { "name": "node type decided", "from": "@Decide node type by inference" }
+      ],
+      "outputs": [
+        { "name": "declared outputs", "spec": "acceptance criteria, name + spec, no from" },
+        { "name": "declared inputs", "spec": "needs, wired or unwired" }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Wire producers with from",
+      "description": "inputs.from names the producing node by hash.",
+      "content": "A from pins the producing node's hash. In document form you may write @name as authoring sugar; the store resolves it against this document's inline nodes and records the hash. A label must name exactly one distinct node and must not close a dataflow loop. The stored form always carries hashes.",
+      "inputs": [
+        { "name": "declared outputs", "from": "@Declare flows on leaves" }
+      ],
+      "outputs": [
+        { "name": "flow edges", "spec": "from resolved to node hashes, no dangling references" }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Compose with ops",
+      "description": "seq, par, choice, loop, set.",
+      "content": "seq concatenates in order, par marks steps parallelizable, choice marks alternatives, loop marks repetition, set is a directory view with no recursive aggregation. loop config is legal only on op=loop: mode count with an integer, or mode until with a natural-language predicate that is never evaluated."
+    },
+    {
+      "type": "action",
+      "name": "Carry media by pointer",
+      "description": "Attachments are action-only; pointers hash, bytes do not.",
+      "content": "An attachment is a pointer: a name, a content hash, and optional mime and size. The pointer participates in the node hash; the bytes do not — they ride the blob channel, content-addressed, identical bytes stored once. A pointer with a url is hosted externally and exempt from the blob channel. Inline media references resolve by name against this node's own attachment list:\n\n```\n![caption](attachment-name)\n```\n\nPractice nodes carry no attachments, and attachment names must be unique within a node."
+    },
+    {
+      "type": "action",
+      "name": "Record history in revisions",
+      "description": "revisions travel with the document.",
+      "content": "A revision is a when/what record of the history; from and trigger are optional history pointers that may dangle and are never validated. A revision is content — adding one changes the hash, so revision history is part of identity."
+    },
+    {
+      "type": "action",
+      "name": "Refine instead of rewriting",
+      "description": "Editing a node produces a new node under a new hash.",
+      "content": "Content is immutable: editing means uploading the changed tree under its new root hash. An improved practice may point at what it improves with refines (optional, may dangle, never enforced). Old references keep addressing old content — the git model, with no drift and no repinning."
+    },
+    {
+      "type": "practice",
+      "name": "Iterate to conformant",
+      "description": "Repeat until the validator is silent.",
+      "content": "Authoring is a loop: write, validate, fix, repeat. The until predicate below is a natural-language stop condition, never evaluated — you judge when it holds.",
+      "op": "loop",
+      "loop": { "mode": "until", "until": "conformance reports zero issues and a re-read a week later still retrieves the practice" },
+      "children": [
+        {
+          "type": "action",
+          "name": "Apply validator feedback and re-run",
+          "description": "Each issue names a code and a location.",
+          "content": "Feed each E_* issue back into the document: E_SCHEMA for a wrong shape, E_DANGLING for a pin that does not exist, E_FLOW_FROM for a from that names nothing in scope, E_MEDIA_REF for an inline reference with no matching attachment. Fix, then re-run the validator."
+        }
+      ]
+    },
+    {
+      "type": "action",
+      "name": "Validate, then store",
+      "description": "Store only a document that hashes cleanly.",
+      "content": "Before storing: every node must hash to its own address, every pin must resolve, and the root hash must be reproducible from the document alone. Content addressing is the guarantee — same hash means same content, including every descendant.",
+      "inputs": [
+        { "name": "flow edges", "from": "@Wire producers with from" }
+      ],
+      "outputs": [
+        { "name": "validation result", "spec": "zero issues; root hash reproducible" }
+      ]
+    }
+  ]
+}
