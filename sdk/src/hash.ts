@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { isHashFormat, isRecord, type ActionNode, type PracticeNode } from './model.js';
+import { HASH_PREFIX, isHashFormat, isRecord, type ActionNode, type PracticeNode } from './model.js';
 import { PracticeError } from './errors.js';
 
 /**
@@ -20,6 +20,11 @@ function compareByCodePoint(a: string, b: string): number {
     const d = aRes.value.codePointAt(0)! - bRes.value.codePointAt(0)!;
     if (d !== 0) return d;
   }
+}
+
+/** §3.2 blob identity (§5): content hash of arbitrary bytes */
+export function blobHash(bytes: Uint8Array): string {
+  return HASH_PREFIX + createHash('sha256').update(bytes).digest('hex');
 }
 
 /**

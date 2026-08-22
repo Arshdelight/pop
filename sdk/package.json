@@ -1,6 +1,6 @@
 {
   "name": "@arshdelight/pop-sdk",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Official SDK for POP (Protocol of Practice): the spec-verified implementation of parsing, hashing, validation and aggregation.",
   "type": "module",
   "main": "dist/index.js",

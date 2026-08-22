@@ -148,8 +148,12 @@ export function presentString(v: unknown, field: string): string | undefined {
   return v.trim() === '' ? undefined : v;
 }
 
+/** §3.2 "sha256:" + 64 hex — the address prefix and its full-form grammar */
+export const HASH_PREFIX = "sha256:";
+export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
+
 export function isHashFormat(v: unknown): v is string {
-  return typeof v === 'string' && /^sha256:[0-9a-f]{64}$/.test(v);
+  return typeof v === 'string' && HASH_RE.test(v);
 }
 
 /**
