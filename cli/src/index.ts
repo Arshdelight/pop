@@ -10,6 +10,8 @@ import { runShow } from './cmd/show.js';
 import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
+import { runPush } from './cmd/push.js';
+import { runPull } from './cmd/pull.js';
 
 const USAGE = `pop — local registry for POP (Protocol of Practice)
 
@@ -27,6 +29,8 @@ usage:
   pop login [--no-open]           OAuth 登录（浏览器授权 practihub；--no-open 只打印 URL）
   pop logout                      clear stored credentials (revokes on the server)
   pop me                          show the authenticated practihub user
+  pop push [hash]                 upload pops to the remote (default: all direct; stored PRIVATE)
+  pop pull [hash]                 fetch pops from the remote (default: all of mine)
   pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
 
@@ -127,6 +131,16 @@ async function main(argv: string[]): Promise<number> {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: pop me'); return 0; }
       return runMe({ dataDir: str(values['data-dir']) });
+    }
+    case 'push': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop push [hash]'); return 0; }
+      return runPush({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'pull': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop pull [hash]'); return 0; }
+      return runPull({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'blob': {
       const sub = rest[0];
