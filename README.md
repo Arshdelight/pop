@@ -47,6 +47,8 @@ npm test -w @arshdelight/pop-sdk        # vitest (80 cases, incl. Appendix A vec
 A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider, stored credentials and the registered **direct** roots (indirect = every other node the direct pops reference).
 
 ```bash
+pop version | --version        show CLI + pop-spec versions
+pop update                     self-update via npm (checks the registry's latest)
 pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
 pop config                     show data dir, remote, registry summary
 pop remote set <url>           set the remote provider (e.g. https://practihub.com)

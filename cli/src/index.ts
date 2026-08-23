@@ -14,10 +14,20 @@ import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
 import { runSearch } from './cmd/search.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
+import { runUpdate } from './cmd/update.js';
+import { CLI_VERSION, POP_SPEC_VERSION } from './version.js';
+
+function printVersion(): number {
+  console.log(`pop-cli  ${CLI_VERSION}`);
+  console.log(`pop-spec ${POP_SPEC_VERSION}  (via @arshdelight/pop-sdk)`);
+  return 0;
+}
 
 const USAGE = `pop — local registry for POP (Protocol of Practice)
 
 usage:
+  pop version | --version        show CLI + pop-spec versions
+  pop update                    self-update via npm (checks the registry's latest)
   pop init [path]                initialize a data directory (default: %APPDATA%\\pop / ~/.pop)
   pop config                     show data dir, remote, registry summary
   pop remote set <url>           set the remote provider (e.g. https://practihub.com)
@@ -61,6 +71,10 @@ function str(v: string | undefined): string | undefined {
 async function main(argv: string[]): Promise<number> {
   const cmd = argv[0] ?? 'help';
   const rest = argv.slice(1);
+
+  if (cmd === 'version' || argv.includes('--version') || argv.includes('-v')) {
+    return printVersion();
+  }
 
   switch (cmd) {
     case 'init': {
@@ -198,6 +212,11 @@ async function main(argv: string[]): Promise<number> {
       }
       console.error('usage: pop blob add <file-or-url> [--name <name>]');
       return 1;
+    }
+    case 'update': {
+      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop update   (self-update via npm; checks the registry\'s latest)'); return 0; }
+      return await runUpdate({ dataDir: str(values['data-dir']) });
     }
     case 'help':
     case '--help':

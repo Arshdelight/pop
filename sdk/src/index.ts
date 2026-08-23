@@ -13,3 +13,4 @@ export * from './export.js';
 export * from './aggregate.js';
 export * from './validate.js';
 export * from './errors.js';
+export * from './version.js';

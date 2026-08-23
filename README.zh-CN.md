@@ -47,6 +47,8 @@ npm test -w @arshdelight/pop-sdk        # vitest（80 例，含 Appendix A 向�
 POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`pop.json` 记录 remote 服务方与注册的 **direct** 根（indirect = direct pop 引用到的其余全部节点）。
 
 ```bash
+pop version | --version        查看 CLI 与 pop-spec 协议版本
+pop update                     经 npm 自更新（检查 registry 最新版）
 pop init [path]                初始化数据目录（默认： %APPDATA%\pop / ~/.pop）
 pop config                     查看数据目录、remote、registry 概要
 pop remote set <url>           设置 remote 服务方（如 https://practihub.com）

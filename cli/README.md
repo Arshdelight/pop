@@ -11,6 +11,8 @@ npm install -g @arshdelight/pop-cli
 ## Commands
 
 ```
+pop version | --version        show CLI + pop-spec versions
+pop update                     self-update via npm (checks the registry's latest)
 pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
 pop config                     show data dir, remote, registry summary
 pop remote set <url>           set the remote provider (e.g. https://practihub.com)
