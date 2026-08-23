@@ -104,6 +104,7 @@ The command prints a ready-to-paste object. Put it on the **action's** `attachme
 
 ```bash
 pop new doc.json        # or: pop new --json '<text>'  /  pop new < doc.json (stdin)
+pop edit <hash> doc.json  # replace a direct pop (new hash; auto-revision + GC of unreachable nodes)
 pop show <hash>         # aggregate view; --json machine view; --doc full document form
 pop ls [-a]             # direct roots; -a adds indirect nodes
 pop web                 # browse direct pops in a local web UI
@@ -141,4 +142,4 @@ pop delete <hash>       # remove your direct claim on the remote (hash required;
 
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `pop new doc.json` → confirm `status: valid` → `pop show <hash>` to review → optional `pop push`.
 - **Find prior art** — `pop search <query>` → `pop pull <hash>` → `pop show <hash>`.
-- **Improve an existing practice** — `pop show <hash> --doc > doc.json` → edit → set the root's `refines` to the old root hash → `pop new doc.json` (a new identity; old references keep addressing the old content).
+- **Edit one of your direct pops** — `pop show <hash> --doc > doc.json` → edit the JSON → `pop edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct pop (`--keep` preserves them; blobs are never GC'd). Local only: sync the hub afterwards with `pop push` then `pop delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `pop new`.

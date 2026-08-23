@@ -55,6 +55,7 @@ pop remote set <url>           set the remote provider (e.g. https://practihub.c
 pop remote show | remove       inspect / clear the remote
 pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
 pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC of unreachable nodes)
 pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
 pop web [--port 4317]          browse direct pops in a local web UI
 pop login [--no-open]          OAuth login against the remote (opens the browser)

@@ -1,6 +1,6 @@
 {
   "name": "@arshdelight/pop-cli",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Local registry CLI for POP (Protocol of Practice): manage a personal, content-addressed collection of practice documents on top of @arshdelight/pop-sdk.",
   "type": "module",
   "bin": {

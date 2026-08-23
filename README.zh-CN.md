@@ -55,6 +55,7 @@ pop remote set <url>           设置 remote 服务方（如 https://practihub.c
 pop remote show | remove       查看 / 清除 remote
 pop ls [-a] [--json]           列出 direct pop（-a 连 indirect 节点一起列）
 pop new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
+pop edit <hash> <file.json>    编辑 direct pop（产生新哈希；自动留 revision + 回收不可达节点）
 pop show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
 pop web [--port 4317]          在本地 web UI 浏览 direct pop
 pop login [--no-open]          对 remote 的 OAuth 登录（打开浏览器）

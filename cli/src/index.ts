@@ -6,6 +6,7 @@ import { runConfig } from './cmd/config.js';
 import { runRemote } from './cmd/remote.js';
 import { runLs } from './cmd/ls.js';
 import { runNew } from './cmd/new.js';
+import { runEdit } from './cmd/edit.js';
 import { runShow } from './cmd/show.js';
 import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runWeb } from './web.js';
@@ -36,6 +37,9 @@ usage:
   pop new <file.json>            create a pop from a JSON document
        | pop new --json '<text>'
        | pop new < file.json
+  pop edit <hash> <file.json>     replace a direct pop (new hash; auto-revision + GC)
+       | pop edit <hash> --json '<text>' | pop edit <hash> < file.json
+       [--message <text>] [--no-revision] [--keep]
   pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
   pop web [--port 4317] [--no-open]  browse direct pops in a local web UI
   pop login [--no-open]           OAuth 登录（浏览器授权 practihub；--no-open 只打印 URL）
@@ -109,6 +113,30 @@ async function main(argv: string[]): Promise<number> {
       });
       if (values.help) { console.log('usage: pop new <file.json> | pop new --json \'<text>\' | pop new < file.json'); return 0; }
       return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, positional: positionals });
+    }
+    case 'edit': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          json: { type: 'string' as const },
+          file: { type: 'string' as const },
+          message: { type: 'string' as const },
+          'no-revision': { type: 'boolean' as const },
+          keep: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: pop edit <hash> <file.json> [--message <text>] [--no-revision] [--keep]'); return 0; }
+      return runEdit({
+        dataDir: str(values['data-dir']),
+        json: values.json,
+        file: values.file,
+        message: values.message,
+        noRevision: values['no-revision'] === true,
+        keep: values.keep === true,
+        positional: positionals,
+      });
     }
     case 'show': {
       const { values, positionals } = parseArgs({

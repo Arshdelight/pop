@@ -19,6 +19,8 @@ pop remote set <url>           set the remote provider (e.g. https://practihub.c
 pop remote show | remove       inspect / clear the remote
 pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
 pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+pop edit <hash> <file.json>    replace a direct pop with new content (new hash; auto-revision
+                               + GC of nodes unreachable from any direct root)
 pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
 pop web [--port 4317]          browse direct pops in a local web UI
 pop login [--no-open]          OAuth login to the remote (browser authorize; --no-open prints the URL)
@@ -48,6 +50,10 @@ The CLI defaults its remote to **https://practihub.com** — `pop login` works o
 - `pop me` verifies the current session and prints the authenticated user / profile / granted scopes.
 - Headless / agent environments: use `pop login --no-open`, then open the printed URL manually.
 - Dead credentials never block a re-login: `pop login` probes the stored session — if the remote rejects it (or it was issued by a different hub), it is auto-cleared and the login proceeds; if the hub is merely unreachable, credentials are kept and the error says `cannot reach <remote>` instead of blaming the session. `pop remote set` revokes (best-effort) and clears credentials issued by the previous hub.
+
+### Edit
+
+Editing is replacing: content addressing means an edit produces a **new root hash**. `pop edit <hash> <file.json>` (or `--json` / stdin) validates and stores the new tree, swaps the old root out of the direct registration, and auto-appends a revision record on the root (`from` = old root hash — a history pointer that may dangle by design, never validated). Nodes no longer reachable from any direct root are garbage-collected — the local counterpart of the hub's claim reconciliation: content still referenced by another direct pop survives, exclusive descendants go (`--keep` preserves them; `--message` sets the revision note; `--no-revision` skips it). Purely local — the hub still holds the old version: sync with `pop push` + `pop delete <old-root>`.
 
 ### Push & pull
 
