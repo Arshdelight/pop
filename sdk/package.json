@@ -1,6 +1,6 @@
 {
   "name": "@arshdelight/pop-sdk",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Official SDK for POP (Protocol of Practice): the spec-verified implementation of parsing, hashing, validation and aggregation.",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "spec"
   ],
   "license": "MIT",
   "keywords": [
