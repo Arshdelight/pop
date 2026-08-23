@@ -28,34 +28,34 @@ function printVersion(): number {
 const USAGE = `pop — local registry for POP (Protocol of Practice)
 
 usage:
-  pop version | --version        show CLI + pop-spec versions
-  pop update                    self-update via npm (checks the registry's latest)
-  pop spec                      print pop-spec.md (bundled with the SDK; no network)
-  pop init [path]                initialize a data directory (default: %APPDATA%\\pop / ~/.pop)
+  pop blob add <file-or-url>     stage an attachment; emits the attachment entry
+                                 (hashes the bytes, stores local blobs in the workspace)
   pop config                     show data dir, remote, registry summary
-  pop remote set <url>           set the remote provider (e.g. https://practihub.com)
-  pop remote show | remove       inspect / clear the remote
+  pop delete <hash>              remove your direct claim on the remote (hash required)
+  pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC)
+       | pop edit <hash> --json '<text>' | pop edit <hash> < file.json
+       [--message <text>] [--no-revision] [--keep]
+  pop init [path]                initialize a data directory (default: %APPDATA%\\pop / ~/.pop)
+  pop login [--no-open]          OAuth login in the browser (--no-open prints the URL only)
+  pop logout                     clear stored credentials (revokes on the server)
   pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
+  pop me                         show the authenticated practihub user
   pop new <file.json>            create a pop from a JSON document
        | pop new --json '<text>'
        | pop new < file.json
-  pop edit <hash> <file.json>     replace a direct pop (new hash; auto-revision + GC)
-       | pop edit <hash> --json '<text>' | pop edit <hash> < file.json
-       [--message <text>] [--no-revision] [--keep]
+  pop pull [hash]                fetch pops from the remote (default: all of mine)
+  pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
+  pop remote set <url>           set the remote provider (e.g. https://practihub.com)
+  pop remote show | remove       inspect / clear the remote
+  pop search [query...]          search pops (remote by default; --local the workspace)
+       [--local] [--scope public|me|all] [--limit N] [--json]
   pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+  pop spec                       print pop-spec.md (bundled with the SDK; no network)
+  pop submit [hash]              submit pops for public review (default: all direct)
+  pop unpublish [hash]           withdraw a submission / take one back out of public
+  pop update                     self-update via npm (checks the registry's latest)
+  pop version | --version        show CLI + pop-spec versions
   pop web [--port 4317] [--no-open]  browse direct pops in a local web UI
-  pop login [--no-open]           OAuth login in the browser (--no-open prints the URL only)
-  pop logout                      clear stored credentials (revokes on the server)
-  pop me                          show the authenticated practihub user
-  pop push [hash]                 upload pops to the remote (default: all direct; stored PRIVATE)
-  pop pull [hash]                 fetch pops from the remote (default: all of mine)
-  pop search [query...]           search pops on the remote (title-first; empty = browse)
-       [--scope public|me|all] [--limit N] [--json]
-  pop submit [hash]               submit pops for public review (default: all direct)
-  pop unpublish [hash]            withdraw a submission / take one back out of public
-  pop delete <hash>               remove your direct claim on the remote (hash required)
-  pop blob add <file-or-url>     stage an attachment; emits the attachment entry
-                                 (hashes the bytes, stores local blobs in the workspace)
 
 options:
   --data-dir <path>              target data directory (same default as init)
@@ -198,13 +198,14 @@ async function main(argv: string[]): Promise<number> {
         args: rest,
         options: {
           ...COMMON,
+          local: { type: 'boolean' as const },
           scope: { type: 'string' as const, default: 'public' },
           limit: { type: 'string' as const },
           json: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop search [query...] [--scope public|me|all] [--limit N] [--json]'); return 0; }
+      if (values.help) { console.log('usage: pop search [query...] [--local] [--scope public|me|all] [--limit N] [--json]'); return 0; }
       const limit = values.limit ? Number(values.limit) : 20;
       return runSearch({
         dataDir: str(values['data-dir']),
@@ -212,6 +213,7 @@ async function main(argv: string[]): Promise<number> {
         scope: values.scope ?? 'public',
         limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
         json: values.json === true,
+        local: values.local === true,
       });
     }
     case 'submit': {

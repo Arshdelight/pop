@@ -47,28 +47,30 @@ npm test -w @arshdelight/pop-sdk        # vitest (80 cases, incl. Appendix A vec
 A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider, stored credentials and the registered **direct** roots (indirect = every other node the direct pops reference).
 
 ```bash
-pop version | --version        show CLI + pop-spec versions
-pop spec                      print the bundled pop-spec.md (no network fetch)
-pop update                     self-update via npm (checks the registry's latest)
-pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
+pop blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
 pop config                     show data dir, remote, registry summary
-pop remote set <url>           set the remote provider (e.g. https://practihub.com)
-pop remote show | remove       inspect / clear the remote
-pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
-pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+pop delete <hash>              remove your direct claim on the remote
 pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC of unreachable nodes)
-pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
-pop web [--port 4317]          browse direct pops in a local web UI
+pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
 pop login [--no-open]          OAuth login against the remote (opens the browser)
 pop logout                     clear stored credentials (revokes on the server)
+pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
 pop me                         show the authenticated remote user
-pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
+pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
 pop pull [hash]                fetch pops from the remote (default: all of mine)
-pop search [query...]          search the remote (title-first; --scope public|me|all)
-pop submit [hash]               submit pops for public review (default: all direct)
-pop unpublish [hash]            withdraw a submission / unpublish
-pop delete <hash>               remove your direct claim on the remote
-pop blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
+pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
+pop remote set <url>           set the remote provider (e.g. https://practihub.com)
+pop remote show | remove       inspect / clear the remote
+pop search [query...]          search pops (remote by default; --local the workspace)
+                               [--local] [--scope public|me|all] [--limit N] [--json]
+pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+pop spec                       print the bundled pop-spec.md (no network fetch)
+pop submit [hash]              submit pops for public review (default: all direct)
+pop unpublish [hash]           withdraw a submission / unpublish
+pop update                     self-update via npm (checks the registry's latest)
+pop version | --version        show CLI + pop-spec versions
+pop web [--port 4317]          browse direct pops in a local web UI
+
 ```
 
 ```bash

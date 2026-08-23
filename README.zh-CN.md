@@ -47,29 +47,30 @@ npm test -w @arshdelight/pop-sdk        # vitest（80 例，含 Appendix A 向�
 POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`pop.json` 记录 remote 服务方与注册的 **direct** 根（indirect = direct pop 引用到的其余全部节点）。
 
 ```bash
-pop version | --version        查看 CLI 与 pop-spec 协议版本
-pop spec                      打印包内 pop-spec.md（无网络依赖）
-pop update                     经 npm 自更新（检查 registry 最新版）
-pop init [path]                初始化数据目录（默认： %APPDATA%\pop / ~/.pop）
+pop blob add <file-or-url>     暂存附件（对字节算哈希，本地 blob 入库）
 pop config                     查看数据目录、remote、registry 概要
-pop remote set <url>           设置 remote 服务方（如 https://practihub.com）
-pop remote show | remove       查看 / 清除 remote
-pop ls [-a] [--json]           列出 direct pop（-a 连 indirect 节点一起列）
-pop new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
+pop delete <hash>              删除自己在 remote 上的 direct 声明（必须给 hash）
 pop edit <hash> <file.json>    编辑 direct pop（产生新哈希；自动留 revision + 回收不可达节点）
-pop show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
-pop web [--port 4317]          在本地 web UI 浏览 direct pop
+pop init [path]                初始化数据目录（默认： %APPDATA%\pop / ~/.pop）
 pop login [--no-open]          对 remote 的 OAuth 登录（打开浏览器）
 pop logout                     清除凭据（并在服务端撤销）
+pop ls [-a] [--json]           列出 direct pop（-a 连 indirect 节点一起列）
 pop me                         查看已认证的 remote 用户
-pop push [hash]                上传 pop 到 remote（默认：全部 direct；存储为 PRIVATE）
+pop new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
 pop pull [hash]                从 remote 拉取 pop（默认：我的全部）
-pop search [query...]          搜索 remote 上的 pop（标题优先；空查询 = 浏览最新）
-                               [--scope public|me|all] [--limit N] [--json]
-pop submit [hash]               提交 pop 进入公开审核（默认：全部 direct）
-pop unpublish [hash]            撤回审核 / 把已发布的撤出公开分发
-pop delete <hash>               删除自己在 remote 上的 direct 声明（必须给 hash）
-pop blob add <file-or-url>     暂存附件（对字节算哈希，本地 blob 入库）
+pop push [hash]                上传 pop 到 remote（默认：全部 direct；存储为 PRIVATE）
+pop remote set <url>           设置 remote 服务方（如 https://practihub.com）
+pop remote show | remove       查看 / 清除 remote
+pop search [query...]          搜索 pop（默认搜 remote；--local 搜本地工作区）
+                               [--local] [--scope public|me|all] [--limit N] [--json]
+pop show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
+pop spec                       打印包内 pop-spec.md（无网络依赖）
+pop submit [hash]              提交 pop 进入公开审核（默认：全部 direct）
+pop unpublish [hash]           撤回审核 / 把已发布的撤出公开分发
+pop update                     经 npm 自更新（检查 registry 最新版）
+pop version | --version        查看 CLI 与 pop-spec 协议版本
+pop web [--port 4317]          在本地 web UI 浏览 direct pop
+
 ```
 
 ```bash

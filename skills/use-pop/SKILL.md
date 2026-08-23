@@ -107,6 +107,7 @@ pop new doc.json        # or: pop new --json '<text>'  /  pop new < doc.json (st
 pop edit <hash> doc.json  # replace a direct pop (new hash; auto-revision + GC of unreachable nodes)
 pop show <hash>         # aggregate view; --json machine view; --doc full document form
 pop ls [-a]             # direct roots; -a adds indirect nodes
+pop search --local <q>  # offline search over every stored node (name/description/content; hash prefixes too)
 pop web                 # browse direct pops in a local web UI
 ```
 
@@ -117,7 +118,7 @@ pop web                 # browse direct pops in a local web UI
 
 ```bash
 pop push [hash]         # upload (default: all direct); stored PRIVATE — record first, publish later
-pop search [query...]   # --scope public|me|all, --limit N, --json; title hits rank first; empty = browse newest
+pop search [query...]   # --scope public|me|all, --limit N, --json; title hits rank first; empty = browse newest; --local searches the workspace instead
 pop pull [hash]         # fetch one, or all of your own; others' public docs land as indirect nodes only
 pop submit [hash]       # PRIVATE → PENDING_REVIEW (admin approves before public); default: all direct
 pop unpublish [hash]    # withdraw a submission / take a published pop out of public
