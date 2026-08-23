@@ -11,7 +11,7 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 Paste this prompt to your AI agent — it installs the [use-pop skill](skills/use-pop/SKILL.md), and the skill walks the agent through everything else: the `pop` CLI, [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
 
 ```text
-Install the use-pop skill (npx skills add Arshdelight/pop -g -y), read it, and follow it to set me up with pop + PractiHub. When ready, help me record my first practice from this conversation.
+Install the use-pop skill (npx skills add Arshdelight/pop -g -y), read it, and follow it to set me up with pop + PractiHub.
 ```
 
 ## What's in this repo
