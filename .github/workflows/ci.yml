@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install (npm workspaces)
+        run: npm ci
+
+      # spec 一致性：仓库根 pop-spec.md 是唯一标准，SDK 包内副本必须逐字节一致。
+      # 快速失败给贡献者最直白的信号；sdk/tests/spec.test.ts 随后还会校验
+      # 副本与 POP_SPEC_VERSION 的对齐（版本行显式标注在 spec 头部）。
+      - name: Spec sync (root ⇄ sdk/spec)
+        run: cmp pop-spec.md sdk/spec/pop-spec.md
+
+      - name: Build & test SDK (conformance + spec-sync tests)
+        run: npm test -w @arshdelight/pop-sdk
+
+      - name: Build CLI (tsc typecheck)
+        run: npm run build -w @arshdelight/pop-cli
+
+      - name: CLI smoke (version + spec print)
+        run: |
+          node cli/dist/index.js --version
+          node cli/dist/index.js spec | head -1
