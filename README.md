@@ -1,5 +1,7 @@
 # POP — Protocol of Practice
 
+<b>English</b> | <a href="README.zh-CN.md">中文</a>
+
 A protocol that defines practice knowledge — "how to do a thing" — as open data: publishable, linkable, verifiable, composable.
 
 **Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding.
