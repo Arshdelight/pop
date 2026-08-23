@@ -44,7 +44,7 @@ usage:
        [--message <text>] [--no-revision] [--keep]
   pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
   pop web [--port 4317] [--no-open]  browse direct pops in a local web UI
-  pop login [--no-open]           OAuth 登录（浏览器授权 practihub；--no-open 只打印 URL）
+  pop login [--no-open]           OAuth login in the browser (--no-open prints the URL only)
   pop logout                      clear stored credentials (revokes on the server)
   pop me                          show the authenticated practihub user
   pop push [hash]                 upload pops to the remote (default: all direct; stored PRIVATE)
