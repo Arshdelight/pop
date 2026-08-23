@@ -45,6 +45,7 @@ The CLI defaults its remote to **https://practihub.com** — `pop login` works o
 - `pop logout` revokes the refresh token on the server (best-effort) and deletes `pop.auth.json`.
 - `pop me` verifies the current session and prints the authenticated user / profile / granted scopes.
 - Headless / agent environments: use `pop login --no-open`, then open the printed URL manually.
+- Dead credentials never block a re-login: `pop login` probes the stored session — if the remote rejects it (or it was issued by a different hub), it is auto-cleared and the login proceeds; if the hub is merely unreachable, credentials are kept and the error says `cannot reach <remote>` instead of blaming the session. `pop remote set` revokes (best-effort) and clears credentials issued by the previous hub.
 
 ### Push & pull
 

@@ -6,6 +6,11 @@ import {
 } from './credentials.js';
 import { refreshAccessToken } from './oauth.js';
 
+/** refresh 被服务端拒绝（token 端点有应答但 HTTP 报错）——凭据已死，需重新 login */
+export class RefreshRejectedError extends Error {}
+/** token 端点不可达（网络/超时）——凭据生死未知，报"连不上"而非"已过期" */
+export class HubUnreachableError extends Error {}
+
 /**
  * 登录态之上的远程请求层：保证请求带有效 Bearer access token。
  * - access token 已过期 → 用 refresh token 换新对（rotation，回写 pop.auth.json）
@@ -26,7 +31,11 @@ async function refreshAndSave(dataDir: string, remote: string, creds: Credential
   try {
     next = await refreshAccessToken(remote, creds.client_id, creds.refresh_token);
   } catch (e) {
-    throw new Error(`session expired or revoked — run \`pop login\` again (${(e as Error).message})`);
+    const msg = (e as Error).message;
+    if (/^token endpoint failed \(HTTP/.test(msg)) {
+      throw new RefreshRejectedError(`session expired or revoked — run \`pop login\` again (${msg})`);
+    }
+    throw new HubUnreachableError(`cannot reach ${remote} — is the hub running? (${msg})`);
   }
   const updated: Credentials = {
     ...creds,

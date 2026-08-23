@@ -1,11 +1,13 @@
 import { defaultDataDir, loadState, saveState } from '../state.js';
+import { loadCredentials, deleteCredentials } from '../credentials.js';
+import { cliResource, revokeToken } from '../oauth.js';
 
 export interface RemoteOpts {
   dataDir?: string;
   positional: string[];
 }
 
-export function runRemote(opts: RemoteOpts): number {
+export async function runRemote(opts: RemoteOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   const action = opts.positional[0] ?? 'show';
@@ -24,6 +26,14 @@ export function runRemote(opts: RemoteOpts): number {
       state.remote = { url: url.replace(/\/+$/, '') };
       saveState(dataDir, state);
       console.log(`remote set: ${state.remote.url}`);
+      // 换 hub 时，旧 hub 签发的凭据对新 remote 无用：revoke（best-effort，打给旧 hub）并清除
+      const creds = loadCredentials(dataDir);
+      if (creds && creds.resource && creds.resource !== cliResource(state.remote.url)) {
+        const oldOrigin = creds.resource.replace(/\/cli$/, '');
+        if (oldOrigin) await revokeToken(oldOrigin, creds.client_id, creds.refresh_token, 'refresh_token');
+        deleteCredentials(dataDir);
+        console.log(`note: cleared credentials issued by ${oldOrigin} — run \`pop login\` against ${state.remote.url}`);
+      }
       return 0;
     }
     case 'remove': {

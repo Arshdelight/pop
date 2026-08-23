@@ -1,5 +1,5 @@
 import { defaultDataDir, loadState } from '../state.js';
-import { saveCredentials, deleteCredentials, loadCredentials } from '../credentials.js';
+import { saveCredentials, deleteCredentials, loadCredentials, isAccessTokenFresh } from '../credentials.js';
 import {
   cliResource,
   discoverAs,
@@ -12,7 +12,7 @@ import {
   revokeToken,
   LOGIN_SCOPES,
 } from '../oauth.js';
-import { authedFetch } from '../client.js';
+import { authedFetch, validAccessToken, HubUnreachableError } from '../client.js';
 
 export interface LoginOpts {
   dataDir?: string;
@@ -32,13 +32,34 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
     console.error('error: no remote configured — run `pop remote set <url>` first');
     return 1;
   }
-  if (loadCredentials(dataDir)) {
-    console.error('error: already logged in — run `pop logout` first to re-authenticate');
-    return 1;
-  }
-
   const remote = state.remote.url;
   const resource = cliResource(remote);
+  const existing = loadCredentials(dataDir);
+  if (existing) {
+    if (existing.resource && existing.resource !== resource) {
+      // 凭据由另一个 hub 签发，对当前 remote 无用——清掉直接走新登录
+      console.error(`note: stored credentials were issued for ${existing.resource}, not ${resource} — clearing them`);
+      deleteCredentials(dataDir);
+    } else if (isAccessTokenFresh(existing)) {
+      console.error('error: already logged in — run `pop logout` first to re-authenticate');
+      return 1;
+    } else {
+      // access 已过期：探一次 refresh。被拒=凭据已死，自动清除后继续；连不上=生死未知，保留并退出
+      try {
+        await validAccessToken(dataDir, remote);
+        console.error('error: already logged in — run `pop logout` first to re-authenticate');
+        return 1;
+      } catch (e) {
+        if (e instanceof HubUnreachableError) {
+          console.error(`error: already logged in, but the session cannot be verified — ${e.message}`);
+          console.error('        run `pop logout` to force re-login');
+          return 1;
+        }
+        console.error(`note: stored credentials are dead — clearing them (${(e as Error).message})`);
+        deleteCredentials(dataDir);
+      }
+    }
+  }
   console.log(`logging in to ${remote}`);
   console.log(`resource: ${resource}`);
   console.log(`scopes:   ${LOGIN_SCOPES}`);
