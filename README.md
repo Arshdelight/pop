@@ -6,12 +6,26 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 **The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.0.0. The spec covers only the protocol; everything else lives here.
 
+## Quick start
+
+Paste this prompt to your AI agent — it installs the [use-pop skill](skills/use-pop/SKILL.md) and the `pop` CLI, and logs you into [PractiHub](https://practihub.com). From then on, just tell the agent to record, search, or publish practices.
+
+```text
+Set me up to record and share practices with pop + PractiHub:
+1. npx skills add Arshdelight/pop -g -y    # install the use-pop skill; read it and follow it from now on
+2. npm install -g @arshdelight/pop-cli     # the pop CLI (skip if `pop config` already works)
+3. pop init                                 # initialize the local workspace (idempotent)
+4. pop login                                # OAuth via browser; headless: `pop login --no-open` prints the URL
+Verify with `pop me`, then help me record my first practice from this conversation.
+```
+
 ## What's in this repo
 
 ```
 pop-spec.md              the specification
 sdk/                     @arshdelight/pop-sdk — the official SDK + its conformance test suite
 cli/                     @arshdelight/pop-cli — the `pop` local registry CLI (built on the SDK)
+skills/                  installable agent skill (use-pop — `npx skills add Arshdelight/pop`)
 examples/                seed documents
 ```
 
