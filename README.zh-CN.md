@@ -64,13 +64,15 @@ pop remote show | remove       查看 / 清除 remote
 pop search [query...]          搜索 pop（默认搜 remote；--local 搜本地工作区）
                                [--local] [--scope public|me|all] [--limit N] [--json]
 pop show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
+pop skill install               安装包内自带的 use-pop skill（默认：~/.agents/skills）
+pop skill update                刷新已安装的 use-pop skill（--dir 指定其它 skills 目录）
+pop skill uninstall             卸载已安装的 use-pop skill
 pop spec                       打印包内 pop-spec.md（无网络依赖）
 pop submit [hash]              提交 pop 进入公开审核（默认：全部 direct）
 pop unpublish [hash]           撤回审核 / 把已发布的撤出公开分发
 pop update                     经 npm 自更新（检查 registry 最新版）
 pop version | --version        查看 CLI 与 pop-spec 协议版本
 pop web [--port 4317]          在本地 web UI 浏览 direct pop
-
 ```
 
 ```bash

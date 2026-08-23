@@ -7,7 +7,8 @@
     "pop": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "license": "MIT",
   "keywords": [

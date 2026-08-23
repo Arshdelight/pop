@@ -64,13 +64,15 @@ pop remote show | remove       inspect / clear the remote
 pop search [query...]          search pops (remote by default; --local the workspace)
                                [--local] [--scope public|me|all] [--limit N] [--json]
 pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+pop skill install               install the bundled use-pop skill (default: ~/.agents/skills)
+pop skill update                refresh the installed use-pop skill (--dir to target another dir)
+pop skill uninstall             remove the installed use-pop skill
 pop spec                       print the bundled pop-spec.md (no network fetch)
 pop submit [hash]              submit pops for public review (default: all direct)
 pop unpublish [hash]           withdraw a submission / unpublish
 pop update                     self-update via npm (checks the registry's latest)
 pop version | --version        show CLI + pop-spec versions
 pop web [--port 4317]          browse direct pops in a local web UI
-
 ```
 
 ```bash

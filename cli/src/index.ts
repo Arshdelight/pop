@@ -17,6 +17,7 @@ import { runSearch } from './cmd/search.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
+import { runSkill } from './cmd/skill.js';
 import { CLI_VERSION, POP_SPEC_VERSION } from './version.js';
 
 function printVersion(): number {
@@ -50,6 +51,9 @@ usage:
   pop search [query...]          search pops (remote by default; --local the workspace)
        [--local] [--scope public|me|all] [--limit N] [--json]
   pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+  pop skill install               install the bundled use-pop skill (default: ~/.agents/skills)
+  pop skill update                refresh the installed use-pop skill (--dir to override)
+  pop skill uninstall             remove the installed use-pop skill
   pop spec                       print pop-spec.md (bundled with the SDK; no network)
   pop submit [hash]              submit pops for public review (default: all direct)
   pop unpublish [hash]           withdraw a submission / take one back out of public
@@ -244,6 +248,19 @@ async function main(argv: string[]): Promise<number> {
       }
       console.error('usage: pop blob add <file-or-url> [--name <name>]');
       return 1;
+    }
+    case 'skill': {
+      const sub = rest[0];
+      const { values } = parseArgs({
+        args: rest.slice(1),
+        options: { ...COMMON, dir: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help || (sub !== 'install' && sub !== 'update' && sub !== 'uninstall')) {
+        console.log('usage: pop skill install|update|uninstall [--dir <skills-dir>]   (default dir: ~/.agents/skills)');
+        return sub !== undefined && !values.help ? 1 : 0;
+      }
+      return runSkill({ action: sub, dir: values.dir });
     }
     case 'spec': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
