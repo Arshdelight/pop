@@ -48,6 +48,7 @@ POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 re
 
 ```bash
 pop version | --version        查看 CLI 与 pop-spec 协议版本
+pop spec                      打印包内 pop-spec.md（无网络依赖）
 pop update                     经 npm 自更新（检查 registry 最新版）
 pop init [path]                初始化数据目录（默认： %APPDATA%\pop / ~/.pop）
 pop config                     查看数据目录、remote、registry 概要

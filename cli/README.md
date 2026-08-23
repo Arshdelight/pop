@@ -12,6 +12,7 @@ npm install -g @arshdelight/pop-cli
 
 ```
 pop version | --version        show CLI + pop-spec versions
+pop spec                      print the bundled pop-spec.md (no network fetch)
 pop update                     self-update via npm (checks the registry's latest)
 pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
 pop config                     show data dir, remote, registry summary

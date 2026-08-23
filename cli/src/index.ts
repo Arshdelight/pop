@@ -16,6 +16,7 @@ import { runPull } from './cmd/pull.js';
 import { runSearch } from './cmd/search.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
+import { runSpec } from './cmd/spec.js';
 import { CLI_VERSION, POP_SPEC_VERSION } from './version.js';
 
 function printVersion(): number {
@@ -29,6 +30,7 @@ const USAGE = `pop — local registry for POP (Protocol of Practice)
 usage:
   pop version | --version        show CLI + pop-spec versions
   pop update                    self-update via npm (checks the registry's latest)
+  pop spec                      print pop-spec.md (bundled with the SDK; no network)
   pop init [path]                initialize a data directory (default: %APPDATA%\\pop / ~/.pop)
   pop config                     show data dir, remote, registry summary
   pop remote set <url>           set the remote provider (e.g. https://practihub.com)
@@ -240,6 +242,11 @@ async function main(argv: string[]): Promise<number> {
       }
       console.error('usage: pop blob add <file-or-url> [--name <name>]');
       return 1;
+    }
+    case 'spec': {
+      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: pop spec   (print the bundled pop-spec.md)'); return 0; }
+      return runSpec({ dataDir: str(values['data-dir']) });
     }
     case 'update': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
