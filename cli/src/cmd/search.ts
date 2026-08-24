@@ -17,7 +17,7 @@ interface SearchRow {
   name: string;
   description: string | null;
   status: string;
-  authorName: string | null;
+  authorName?: string | null; // 旧 hub 返回；新 hub 不再公开作者署名（认领 ≠ 作者）
   created_at: string;
 }
 

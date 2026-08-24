@@ -71,6 +71,7 @@ async function pullOne(
     root_hash?: string;
     document?: unknown;
     status?: string;
+    ownership?: { mine: boolean; kind: string | null };
     owners?: { id: string; username: string | null; kind: string }[];
     error?: string;
     message?: string;
@@ -88,13 +89,16 @@ async function pullOne(
   const ws = openWorkspace(dataDir);
   const { root } = createFromDoc(ws, body.document);
 
-  // 归属：mine 列表拉取或私有状态 → 一定是自己的；公开文档对照 owners 的 DIRECT 认领者
+  // 归属：mine 列表拉取或私有状态 → 一定是自己的；公开文档优先用 ownership.mine（新 hub，
+  // 服务端直接判定，不依赖可改名的 username），旧 hub 无该字段时回退对照 owners 认领者
   const direct =
     opts?.forceDirect === true ||
     (body.status !== undefined && body.status !== 'PUBLISHED') ||
-    (opts?.myUsername !== undefined &&
-      opts.myUsername !== null &&
-      (body.owners ?? []).some((o) => o.kind === 'DIRECT' && o.username === opts.myUsername));
+    (body.ownership !== undefined
+      ? body.ownership.mine === true && body.ownership.kind === 'DIRECT'
+      : opts?.myUsername !== undefined &&
+        opts.myUsername !== null &&
+        (body.owners ?? []).some((o) => o.kind === 'DIRECT' && o.username === opts.myUsername));
   if (direct) {
     const state = loadState(dataDir);
     if (!state.direct.includes(root)) {
