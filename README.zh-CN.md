@@ -49,6 +49,7 @@ POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 re
 ```bash
 pop blob add <file-or-url>     暂存附件（对字节算哈希，本地 blob 入库）
 pop config                     查看数据目录、remote、registry 概要
+pop clone <hash>               从 hub 取公开 pop 并认领（本地 direct + remote 认领）
 pop delete <hash>              删除自己在 remote 上的 direct 声明（必须给 hash）
 pop edit <hash> <file.json>    编辑 direct pop（产生新哈希；自动留 revision + 回收不可达节点）
 pop init [path]                初始化数据目录（默认： %APPDATA%\pop / ~/.pop）
@@ -57,8 +58,8 @@ pop logout                     清除凭据（并在服务端撤销）
 pop ls [-a] [--json]           列出 direct pop（-a 连 indirect 节点一起列）
 pop me                         查看已认证的 remote 用户
 pop new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
-pop pull [hash]                从 remote 拉取 pop（默认：我的全部）
-pop push [hash]                上传 pop 到 remote（默认：全部 direct；存储为 PRIVATE）
+pop pull [hash]                从 remote 同步自己的认领（默认：我的全部）
+pop push [hash]                把本地新增认领推送到 remote（只推新的；存储为 PRIVATE）
 pop remote set <url>           设置 remote 服务方（如 https://practihub.com）
 pop remote show | remove       查看 / 清除 remote
 pop search [query...]          搜索 pop（默认搜 remote；--local 搜本地工作区）

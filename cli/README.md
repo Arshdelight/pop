@@ -20,6 +20,7 @@ pop remote set <url>           set the remote provider (e.g. https://practihub.c
 pop remote show | remove       inspect / clear the remote
 pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
 pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+pop clone <hash>               fetch a public pop and claim it (local direct + remote claim)
 pop edit <hash> <file.json>    replace a direct pop with new content (new hash; auto-revision
                                + GC of nodes unreachable from any direct root)
 pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
@@ -27,8 +28,8 @@ pop web [--port 4317]          browse direct pops in a local web UI
 pop login [--no-open]          OAuth login to the remote (browser authorize; --no-open prints the URL)
 pop logout                     clear stored credentials (revokes on the server)
 pop me                         show the authenticated remote user
-pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
-pop pull [hash]                fetch pops from the remote (default: all of mine)
+pop push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)
+pop pull [hash]                sync YOUR claims from the remote (default: all of mine)
 pop search [query...]          search pops on the remote (title-first; empty = browse)
                                [--scope public|me|all] [--limit N] [--json]
 pop submit [hash]               submit pops for public review (default: all direct)
@@ -56,18 +57,18 @@ The CLI defaults its remote to **https://practihub.com** — `pop login` works o
 
 Editing is replacing: content addressing means an edit produces a **new root hash**. `pop edit <hash> <file.json>` (or `--json` / stdin) validates and stores the new tree, swaps the old root out of the direct registration, and auto-appends a revision record on the root (`from` = old root hash — a history pointer that may dangle by design, never validated). Nodes no longer reachable from any direct root are garbage-collected — the local counterpart of the hub's claim reconciliation: content still referenced by another direct pop survives, exclusive descendants go (`--keep` preserves them; `--message` sets the revision note; `--no-revision` skips it). Purely local — the hub still holds the old version: sync with `pop push` + `pop delete <old-root>`.
 
-### Push & pull
+### Push, pull & clone
 
-- `pop push [hash]` uploads a local pop (or all registered **direct** roots) to the remote via `POST /api/v1/pop` (content-addressed, idempotent). Documents are stored **PRIVATE**; making one public is a separate review step (submit → admin approval), keeping "record first, publish later" intact.
-- `pop pull [hash]` fetches a document by root hash (public docs readable anonymously; private docs need login as an owner). `pop pull` with no argument pulls **all of your own** documents (`/mine`).
-- Ownership on pull: your own documents (private, or public with a DIRECT claim matching your profile) are registered as **direct** roots; someone else's public documents are stored as **indirect** nodes only — they never show up as your uploads.
+- `pop push [hash]` pushes **only the local claims the remote doesn't already have for you** (git-style): it first fetches your claim list (`/mine`, paginated), diffs against your local **direct** roots, and uploads just the new ones via `POST /api/v1/pop` (content-addressed, idempotent). Documents are stored **PRIVATE**; making one public is a separate review step (submit → admin approval), keeping "record first, publish later" intact.
+- `pop pull [hash]` syncs **your own** claims from the remote: it fetches your claim list (`/mine`, paginated), diffs against your local direct roots, and pulls the missing documents (registered as **direct**). It never touches the public library — there is no ownership guessing; anything outside your claims is public content for `pop clone`.
+- `pop clone <hash>` fetches a **public** document and claims it (fork semantics): the document lands in your workspace, is registered as a local **direct** root, and is pushed back to the remote so the claim is consistent both ways. Cloning something you already claim is idempotent.
 - Attachments: the hub does not store attachment bytes, so push sends the document with attachment pointers only; blobs stay local (or external `url` if provided).
 
 ### Search
 
 - `pop search <query...>` searches the remote via `GET /api/v1/pop/search` — both title and content match, **title hits rank first**; an empty query browses the newest documents.
 - `--scope public` (default) searches the published library; `--scope me` searches your own documents in **any status** (including PRIVATE); `--scope all` is the union — your visible universe.
-- `--json` dumps the raw API response. Fetch any result with `pop pull <hash>`.
+- `--json` dumps the raw API response. Fetch any result with `pop clone <hash>`.
 
 ### Lifecycle (submit / unpublish / delete)
 

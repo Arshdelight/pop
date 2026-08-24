@@ -77,3 +77,27 @@ export async function authedFetch(
   }
   return res;
 }
+
+/** hub 上「我的」认领列表（DIRECT 根），按 total 分页拉全——push/pull 做认领表 diff 的基准。 */
+export async function fetchMine(
+  dataDir: string,
+  remote: string
+): Promise<{ root_hash: string; status: string; name?: string }[]> {
+  const out: { root_hash: string; status: string; name?: string }[] = [];
+  const limit = 100;
+  for (let page = 1; ; page++) {
+    const res = await authedFetch(dataDir, remote, `/api/v1/pop/mine?page=${page}&limit=${limit}`);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(`listing own documents failed — ${body.error ?? `HTTP ${res.status}`}`);
+    }
+    const body = (await res.json()) as {
+      results?: { root_hash: string; status: string; name?: string }[];
+      total?: number;
+    };
+    const results = body.results ?? [];
+    out.push(...results);
+    if (results.length === 0 || out.length >= (body.total ?? out.length)) break;
+  }
+  return out;
+}

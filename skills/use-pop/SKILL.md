@@ -1,6 +1,6 @@
 ---
 name: use-pop
-description: Record, search, read, publish, and manage practice documents with the pop CLI — a local, content-addressed registry of POP (Protocol of Practice) documents that syncs to a hub (default PractiHub). Use whenever the user wants to save what was just done as a reusable practice ("record this practice", "save this session", "turn this into steps"), search or read practices ("search practices", "has anyone done X", "find a how-to"), or manage them ("publish", "submit for review", "unpublish", "delete my practice") — even when pop is not mentioned by name. Also for any explicit pop CLI usage (pop new, pop show, pop ls, pop push, pop pull, pop search, pop login, pop blob add, …).
+description: Record, search, read, publish, and manage practice documents with the pop CLI — a local, content-addressed registry of POP (Protocol of Practice) documents that syncs to a hub (default PractiHub). Use whenever the user wants to save what was just done as a reusable practice ("record this practice", "save this session", "turn this into steps"), search or read practices ("search practices", "has anyone done X", "find a how-to"), or manage them ("publish", "submit for review", "unpublish", "delete my practice") — even when pop is not mentioned by name. Also for any explicit pop CLI usage (pop new, pop show, pop ls, pop push, pop pull, pop clone, pop search, pop login, pop blob add, …).
 ---
 
 # Use pop
@@ -117,9 +117,10 @@ pop web                 # browse direct pops in a local web UI
 ## Remote workflow
 
 ```bash
-pop push [hash]         # upload (default: all direct); stored PRIVATE — record first, publish later
+pop push [hash]         # push new local claims (fetch /mine, diff, upload only new ones); stored PRIVATE — record first, publish later
 pop search [query...]   # --scope public|me|all, --limit N, --json; title hits rank first; empty = browse newest; --local searches the workspace instead
-pop pull [hash]         # fetch one, or all of your own; others' public docs land as indirect nodes only
+pop pull [hash]         # sync YOUR claims from the remote (default: all of mine)
+pop clone <hash>        # fetch a public pop and claim it (local direct + remote claim)
 pop submit [hash]       # PRIVATE → PENDING_REVIEW (admin approves before public); default: all direct
 pop unpublish [hash]    # withdraw a submission / take a published pop out of public
 pop delete <hash>       # remove your direct claim on the remote (hash required; local workspace untouched)
@@ -142,5 +143,5 @@ pop delete <hash>       # remove your direct claim on the remote (hash required;
 ## Workflow quick reference
 
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `pop new doc.json` → confirm `status: valid` → `pop show <hash>` to review → optional `pop push`.
-- **Find prior art** — `pop search <query>` → `pop pull <hash>` → `pop show <hash>`.
+- **Find prior art** — `pop search <query>` → `pop clone <hash>` → `pop show <hash>`.
 - **Edit one of your direct pops** — `pop show <hash> --doc > doc.json` → edit the JSON → `pop edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct pop (`--keep` preserves them; blobs are never GC'd). Local only: sync the hub afterwards with `pop push` then `pop delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `pop new`.

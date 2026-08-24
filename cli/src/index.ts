@@ -13,6 +13,7 @@ import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
+import { runClone } from './cmd/clone.js';
 import { runSearch } from './cmd/search.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
@@ -31,6 +32,7 @@ const USAGE = `pop — local registry for POP (Protocol of Practice)
 usage:
   pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
+  pop clone <hash>               fetch a public pop and claim it (fork: local direct + remote claim)
   pop config                     show data dir, remote, registry summary
   pop delete <hash>              remove your direct claim on the remote (hash required)
   pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC)
@@ -44,8 +46,8 @@ usage:
   pop new <file.json>            create a pop from a JSON document
        | pop new --json '<text>'
        | pop new < file.json
-  pop pull [hash]                fetch pops from the remote (default: all of mine)
-  pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
+  pop pull [hash]                sync YOUR claims from the remote (default: all of mine)
+  pop push [hash]                push new local claims to the remote (git-style: only new ones)
   pop remote set <url>           set the remote provider (e.g. https://practihub.com)
   pop remote show | remove       inspect / clear the remote
   pop search [query...]          search pops (remote by default; --local the workspace)
@@ -196,6 +198,11 @@ async function main(argv: string[]): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: pop pull [hash]'); return 0; }
       return runPull({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'clone': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help || positionals.length === 0) { console.log('usage: pop clone <hash>'); return 0; }
+      return runClone({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'search': {
       const { values, positionals } = parseArgs({

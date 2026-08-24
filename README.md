@@ -49,6 +49,7 @@ A local management CLI for POP documents: a personal registry on top of a conten
 ```bash
 pop blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
 pop config                     show data dir, remote, registry summary
+pop clone <hash>               fetch a public pop and claim it (local direct + remote claim)
 pop delete <hash>              remove your direct claim on the remote
 pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC of unreachable nodes)
 pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
@@ -57,8 +58,8 @@ pop logout                     clear stored credentials (revokes on the server)
 pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
 pop me                         show the authenticated remote user
 pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
-pop pull [hash]                fetch pops from the remote (default: all of mine)
-pop push [hash]                upload pops to the remote (default: all direct; stored PRIVATE)
+pop pull [hash]                sync YOUR claims from the remote (default: all of mine)
+pop push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)
 pop remote set <url>           set the remote provider (e.g. https://practihub.com)
 pop remote show | remove       inspect / clear the remote
 pop search [query...]          search pops (remote by default; --local the workspace)

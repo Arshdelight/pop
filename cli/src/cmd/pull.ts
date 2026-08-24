@@ -1,7 +1,7 @@
 import { createFromDoc } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { authedFetch } from '../client.js';
+import { authedFetch, fetchMine } from '../client.js';
 
 export interface PullOpts {
   dataDir?: string;
@@ -9,11 +9,10 @@ export interface PullOpts {
 }
 
 /**
- * pop pull [hash]：从 practihub 拉取 POP 到本地 workspace。
- * - 带 hash：GET /api/v1/pop/:ref 拉单个（公开文档匿名可读，私有需登录且为 owner）。
- * - 不带：拉取 /api/v1/pop/mine 里我自己的全部文档。
- * 归属：pull 全部（mine）以及私有状态文档一定是自己的 → 注册为 direct；
- * 公开文档单拉 → 只落库为间接节点（不占 direct，避免把别人的文档当成自己的上传）。
+ * pop pull [hash]：把 hub 上「我的」认领同步到本地（git pull 语义）。
+ * - 分页取 hub 我的认领表（mine），diff 出本地还没认领的，逐个拉文档体并注册为 direct。
+ * - 只碰「我的认领」——不涉及公共库，因此不需要归属判断（mine 里的都是自己的）。
+ * - 带 hash：只同步 mine 中的那一个（不在 mine 里 → 公共内容请用 `pop clone`）。
  */
 export async function runPull(opts: PullOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -22,57 +21,55 @@ export async function runPull(opts: PullOpts): Promise<number> {
     console.error('error: no remote configured — run `pop remote set <url>` first');
     return 1;
   }
+  const remote = state.remote.url;
 
-  if (opts.positional[0]) {
-    // 单拉：私有文档一定是自己的（直接 [direct]）；公开文档用 /me 对照 owners 判断归属
-    const myUsername = await currentProfileUsername(dataDir, state.remote.url);
-    return pullOne(dataDir, state.remote.url, opts.positional[0], { myUsername });
-  }
-
-  // 拉全部 mine：先列清单，再逐个取文档体（mine 列表不含 canonical_doc）
-  const res = await authedFetch(dataDir, state.remote.url, '/api/v1/pop/mine?limit=100');
-  const body = (await res.json().catch(() => ({}))) as { results?: { root_hash: string; status: string; name?: string }[] };
-  if (!res.ok) {
-    console.error(`error: listing own documents failed — ${body && (body as Record<string, unknown>).error ? (body as Record<string, unknown>).error : `HTTP ${res.status}`}`);
+  // 分页取 hub 我的认领表（diff 基准）
+  let mine: { root_hash: string; status: string; name?: string }[];
+  try {
+    mine = await fetchMine(dataDir, remote);
+  } catch (e) {
+    console.error(`error: ${(e as Error).message}`);
     return 1;
   }
-  const results = body.results ?? [];
-  if (results.length === 0) {
-    console.log('nothing to pull (no own documents on the remote)');
+
+  let hashes: string[];
+  if (opts.positional[0]) {
+    const ref = opts.positional[0];
+    const hit = mine.find((r) => r.root_hash === ref || (ref.startsWith('sha256:') && r.root_hash.startsWith(ref)));
+    if (!hit) {
+      console.error(`error: ${ref} is not in your claims on the remote — for public content use \`pop clone\``);
+      return 1;
+    }
+    hashes = [hit.root_hash];
+  } else {
+    hashes = mine.map((r) => r.root_hash);
+  }
+
+  const local = new Set(loadState(dataDir).direct);
+  const toPull = hashes.filter((h) => !local.has(h)); // 本地缺失的认领
+  if (toPull.length === 0) {
+    console.log(mine.length === 0 ? 'nothing to pull (no own documents on the remote)' : 'up to date — nothing new to pull');
     return 0;
   }
+
   let failed = 0;
-  for (const r of results) {
-    failed += await pullOne(dataDir, state.remote.url, r.root_hash, { forceDirect: true });
+  for (const ref of toPull) {
+    failed += await pullOne(dataDir, remote, ref);
+  }
+
+  // 提示本地认领而 hub 还没有的（用 push 同步）
+  const localOnly = [...local].filter((h) => !mine.some((r) => r.root_hash === h));
+  if (localOnly.length > 0) {
+    console.log(`note: ${localOnly.length} direct pop(s) exist only locally — run \`pop push\` to sync`);
   }
   return failed ? 1 : 0;
 }
 
-/** 取当前登录用户的 profile username（/api/auth/me），失败返回 null（不影响拉取） */
-async function currentProfileUsername(dataDir: string, remote: string): Promise<string | null> {
-  try {
-    const res = await authedFetch(dataDir, remote, '/api/auth/me');
-    if (!res.ok) return null;
-    const body = (await res.json()) as { profileUsername?: string | null };
-    return body.profileUsername ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function pullOne(
-  dataDir: string,
-  remote: string,
-  ref: string,
-  opts?: { forceDirect?: boolean; myUsername?: string | null }
-): Promise<number> {
+async function pullOne(dataDir: string, remote: string, ref: string): Promise<number> {
   const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(ref)}`);
   const body = (await res.json().catch(() => ({}))) as {
-    root_hash?: string;
     document?: unknown;
     status?: string;
-    ownership?: { mine: boolean; kind: string | null };
-    owners?: { id: string; username: string | null; kind: string }[];
     error?: string;
     message?: string;
   };
@@ -89,23 +86,11 @@ async function pullOne(
   const ws = openWorkspace(dataDir);
   const { root } = createFromDoc(ws, body.document);
 
-  // 归属：mine 列表拉取或私有状态 → 一定是自己的；公开文档优先用 ownership.mine（新 hub，
-  // 服务端直接判定，不依赖可改名的 username），旧 hub 无该字段时回退对照 owners 认领者
-  const direct =
-    opts?.forceDirect === true ||
-    (body.status !== undefined && body.status !== 'PUBLISHED') ||
-    (body.ownership !== undefined
-      ? body.ownership.mine === true && body.ownership.kind === 'DIRECT'
-      : opts?.myUsername !== undefined &&
-        opts.myUsername !== null &&
-        (body.owners ?? []).some((o) => o.kind === 'DIRECT' && o.username === opts.myUsername));
-  if (direct) {
-    const state = loadState(dataDir);
-    if (!state.direct.includes(root)) {
-      state.direct.push(root);
-      saveState(dataDir, state);
-    }
+  const state = loadState(dataDir);
+  if (!state.direct.includes(root)) {
+    state.direct.push(root);
+    saveState(dataDir, state);
   }
-  console.log(`pulled:  ${root}  (${body.status ?? 'PUBLISHED'})${direct ? '  [direct]' : '  [indirect]'}`);
+  console.log(`pulled:  ${root}  (${body.status ?? 'PUBLISHED'})  [direct]`);
   return 0;
 }
