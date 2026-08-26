@@ -10,6 +10,7 @@ export * from './hash.js';
 export * from './store.js';
 export * from './doc.js';
 export * from './export.js';
+export * from './skill.js';
 export * from './aggregate.js';
 export * from './validate.js';
 export * from './errors.js';

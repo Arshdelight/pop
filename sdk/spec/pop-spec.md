@@ -1,6 +1,6 @@
 # POP — Protocol of Practice
 
-> This document normatively defines POP, **version 1.0.0**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
+> This document normatively defines POP, **version 1.0.1**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
 
 ## 1. Writing POP
 
@@ -214,7 +214,7 @@ See the technique first:
 Then pour along the wall.
 ```
 
-- Syntax `![caption](attachment-name)`; the caption doubles as the figure caption. Images → interleaved rich text; video/audio → the tree is the chaptering (child actions = sections; timestamps stay in prose: "at 3:20 …"). Fenced code blocks are not prose — their contents are never scanned for media syntax
+- Syntax `![caption](attachment-name)`; the caption doubles as the figure caption. Images → interleaved rich text; video/audio → the tree is the chaptering (child actions = sections; timestamps stay in prose: "at 3:20 …"). Fenced code blocks are not prose — their contents are never scanned for media syntax; **inline code spans (`` `…` ``) are code the same way and are likewise never scanned** (documentation showing the media syntax itself must not be treated as a reference)
 - Resolution is **node-local**: a name resolves only against this node's attachment list, and attachment names must be unique within a node (duplicates → `E_SCHEMA`). Reusing media across nodes means attaching another pointer; blobs deduplicate by content
 - **Strict validation**: a referenced name absent from the list → `E_MEDIA_REF`. Markdown title syntax (`![x](name "title")`) is not part of the grammar — a parenthesized target must be either exactly an attachment name, or an http(s) URL; anything else (title syntax included) is `E_MEDIA_REF`. Media dangling is loud: swapping bytes never touches the prose (name indirection); deleting an attachment that is still referenced fails validation
 - **External URL references**: `![caption](https://…)` targets an external resource directly, with no attachment-table entry. Resolution is best-effort — a consumer fetches the URL and recomputes sha256 to verify (§5); if the resource cannot be fetched it is simply annotated as unavailable, never a validation error. Scheme matching is case-insensitive (RFC 3986); the rest of the URL is preserved verbatim (host/path case is significant). External links that carry no media intent still belong in `content` as ordinary markdown links

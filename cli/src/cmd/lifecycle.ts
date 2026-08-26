@@ -7,7 +7,7 @@ export interface LifecycleOpts {
 }
 
 /**
- * pop submit [hash]：提交公开审核（PRIVATE → PENDING_REVIEW，管理员通过后 PUBLISHED）。
+ * pop submit [hash]：提交公开审核（PRIVATE → PENDING_REVIEW，自动机审通过后 PUBLISHED；此前已过审免二审）。
  * POST /api/v1/pop/:ref/submit。不带 hash 默认提交全部 direct roots（逐个尝试，非 PRIVATE 的跳过并计失败）。
  */
 export async function runSubmit(opts: LifecycleOpts): Promise<number> {

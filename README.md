@@ -6,7 +6,7 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 **Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding.
 
-**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.0.0. The spec covers only the protocol; everything else lives here.
+**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.0.1. The spec covers only the protocol; everything else lives here.
 
 ## Quick start
 
@@ -68,6 +68,8 @@ pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
 pop skill install               install the bundled use-pop skill (default: ~/.agents/skills)
 pop skill update                refresh the installed use-pop skill (--dir to target another dir)
 pop skill uninstall             remove the installed use-pop skill
+pop skill import <dir>          replay a `pop skill export` directory back into a POP (sidecar required; foreign skills enter POP by authoring, not import)
+pop skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + attachment files + pop.doc.json sidecar)
 pop spec                       print the bundled pop-spec.md (no network fetch)
 pop submit [hash]              submit pops for public review (default: all direct)
 pop unpublish [hash]           withdraw a submission / unpublish
@@ -100,4 +102,5 @@ Semver from 1.0.0: evolution adds optional fields where possible (existing ident
 
 ## History
 
+- **1.0.1** (2026-08-25) — validation clarification (§5.1): inline code spans are code, never scanned for media syntax (fenced blocks already were). No format change; hashes are unaffected.
 - **1.0.0** (2026-08-22) — first release. Nodes carry no ids: the content hash is the only address, and the root hash is a Merkle root over the whole tree (same hash ⇒ same content, descendants included). Children may be inlined or referenced by `{ hash }` — interchangeable on identity. Attachments are content-addressed blobs with optional external urls.

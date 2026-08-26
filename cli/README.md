@@ -59,7 +59,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 ### Push, pull & clone
 
-- `pop push [hash]` pushes **only the local claims the remote doesn't already have for you** (git-style): it first fetches your claim list (`/mine`, paginated), diffs against your local **direct** roots, and uploads just the new ones via `POST /api/v1/pop` (content-addressed, idempotent). Documents are stored **PRIVATE**; making one public is a separate review step (submit → admin approval), keeping "record first, publish later" intact.
+- `pop push [hash]` pushes **only the local claims the remote doesn't already have for you** (git-style): it first fetches your claim list (`/mine`, paginated), diffs against your local **direct** roots, and uploads just the new ones via `POST /api/v1/pop` (content-addressed, idempotent). Documents are stored **PRIVATE**; making one public is a separate review step (submit → auto review), keeping "record first, publish later" intact.
 - `pop pull [hash]` syncs **your own** claims from the remote: it fetches your claim list (`/mine`, paginated), diffs against your local direct roots, and pulls the missing documents (registered as **direct**). It never touches the public library — there is no ownership guessing; anything outside your claims is public content for `pop clone`.
 - `pop clone <hash>` fetches a **public** document and claims it (fork semantics): the document lands in your workspace, is registered as a local **direct** root, and is pushed back to the remote so the claim is consistent both ways. Cloning something you already claim is idempotent.
 - Attachments: the hub does not store attachment bytes, so push sends the document with attachment pointers only; blobs stay local (or external `url` if provided).
@@ -72,7 +72,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 ### Lifecycle (submit / unpublish / delete)
 
-- `pop submit [hash]` submits your direct pops for public review (`PRIVATE → PENDING_REVIEW`; an admin approves before they go public). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
+- `pop submit [hash]` submits your direct pops for public review (`PRIVATE → PENDING_REVIEW`; an auto review passes before they go public — already-approved content skips re-review). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
 - `pop unpublish [hash]` withdraws a pending submission or takes a published pop back out of public distribution (`→ PRIVATE`).
 - `pop delete <hash>` removes your direct claim on the remote (children's indirect claims are reclaimed; a document with no claims left is hard-deleted). Explicit hash required — there is no delete-all. Pure remote operation: your local workspace is untouched, and pushing the same content again recreates it (fresh row, PRIVATE).
 

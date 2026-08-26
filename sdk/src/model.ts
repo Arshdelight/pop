@@ -234,11 +234,16 @@ function parseAttachments(v: unknown, fmText?: string): Attachment[] | undefined
  * Inline media references (spec §5.1): ![caption](attachment-name) inside content.
  * Names resolve against this node's attachment list (node-local, unique per node);
  * bytes always travel via the blob channel. Fenced code blocks are not prose —
- * their contents are never scanned. An empty target `![]()` matches nothing and
- * is reported (E_MEDIA_REF at the caller) rather than silently skipped.
+ * their contents are never scanned; inline code spans (`…`) are code the same way
+ * (documentation showing the media syntax itself must not be treated as a reference).
+ * An empty target `![]()` matches nothing and is reported (E_MEDIA_REF at the
+ * caller) rather than silently skipped.
  */
 export function extractMediaRefs(content: string): string[] {
-  return [...content.replace(/```[\s\S]*?```/g, '').matchAll(/!\[[^\]]*\]\(([^)]*)\)/g)].map(m => m[1]);
+  return [...content
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`\n]*`/g, '')
+    .matchAll(/!\[[^\]]*\]\(([^)]*)\)/g)].map(m => m[1]);
 }
 
 /** Stored-form children: every entry is a {hash} pin (inline children exist only in documents, §1) */

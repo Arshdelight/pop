@@ -4,9 +4,9 @@
 
 一套把实践知识——"怎么做一件事"——定义为开放数据的协议：可发布、可链接、可验证、可组合。
 
-**兼容 skill 生态**：每份 POP 文档都读作一个 skill——action 是原子技能，practice 是组合技能（组合技能的技能）。skill 可**无损映射为**文档（`name`/`description`/正文 → `name`/`description`/`content`，文件 → `attachments`），换来可验证的身份、链接与组合能力。反方向是**投影**：文档的数据流接线、op 组合与修订历史在 skill 侧没有序列化形式——把文档读作 skill 得到的是它的一个视图，而非无损编码。
+**兼容 skill 生态**：每份 POP 文档都读作一个 skill——action 是原子技能，practice 是组合技能（组合技能的技能）。skill 可**无损映射为**文档（`name`/`description`/正文 → `name`/`description`/`content`，文件 → `attachments`），换来可验证的身份、链接与组合能力。反方向是**投影**：文档的数据流接线、op 组合与修订历史在 skill 侧没有序列化形式——把文档读作 skill 得到的是它的一个视图，而非无损编码。该映射是身份定义、不是导入通道：工具只回放导出物，外来 skill 靠重新撰写进入 POP。
 
-**协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 1.0.0。spec 只管协议本身；其余一切都在本仓库。
+**协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 1.0.1。spec 只管协议本身；其余一切都在本仓库。
 
 ## 快速开始
 
@@ -68,6 +68,8 @@ pop show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
 pop skill install               安装包内自带的 use-pop skill（默认：~/.agents/skills）
 pop skill update                刷新已安装的 use-pop skill（--dir 指定其它 skills 目录）
 pop skill uninstall             卸载已安装的 use-pop skill
+pop skill import <dir>          把 `pop skill export` 导出的目录回放成 POP（须带 sidecar；外来 skill 靠撰写进入 POP，不做机械导入）
+pop skill export <ref> [--dir]  把 POP 投影成可安装的技能目录（SKILL.md + 附件文件 + pop.doc.json sidecar）
 pop spec                       打印包内 pop-spec.md（无网络依赖）
 pop submit [hash]              提交 pop 进入公开审核（默认：全部 direct）
 pop unpublish [hash]           撤回审核 / 把已发布的撤出公开分发
@@ -100,4 +102,5 @@ npm link -w @arshdelight/pop-cli   # 全局安装 `pop` 命令
 
 ## 版本历史
 
+- **1.0.1**（2026-08-25）——校验澄清（§5.1）：行内代码块是代码，永不扫描其中的媒体语法（围栏代码块此前已是）。无格式变更；哈希不受影响。
 - **1.0.0**（2026-08-22）——首发。节点不携带 id：内容哈希是唯一地址，根哈希是整棵树的 Merkle 根（同哈希 ⇒ 同内容，含全部后代）。子节点可内联，也可用 `{ hash }` 引用——身份上可互换。附件是内容寻址 blob，可带外部 url。

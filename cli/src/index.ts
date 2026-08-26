@@ -56,6 +56,9 @@ usage:
   pop skill install               install the bundled use-pop skill (default: ~/.agents/skills)
   pop skill update                refresh the installed use-pop skill (--dir to override)
   pop skill uninstall             remove the installed use-pop skill
+  pop skill import <dir>          replay a pop skill export directory back into a POP (sidecar required;
+                                  foreign skills enter POP by authoring, not import)
+  pop skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
   pop spec                       print pop-spec.md (bundled with the SDK; no network)
   pop submit [hash]              submit pops for public review (default: all direct)
   pop unpublish [hash]           withdraw a submission / take one back out of public
@@ -258,16 +261,20 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'skill': {
       const sub = rest[0];
-      const { values } = parseArgs({
+      const { values, positionals } = parseArgs({
         args: rest.slice(1),
         options: { ...COMMON, dir: { type: 'string' as const } },
         allowPositionals: true,
       });
-      if (values.help || (sub !== 'install' && sub !== 'update' && sub !== 'uninstall')) {
+      const known = ['install', 'update', 'uninstall', 'import', 'export'] as const;
+      const action = known.find((k) => k === sub);
+      if (values.help || action === undefined) {
         console.log('usage: pop skill install|update|uninstall [--dir <skills-dir>]   (default dir: ~/.agents/skills)');
+        console.log('       pop skill import <skill-dir> [--data-dir <dir>]          replay a `pop skill export` directory (sidecar required)');
+        console.log('       pop skill export <ref> [--dir <out-dir>] [--data-dir <dir>]  POP → skill directory');
         return sub !== undefined && !values.help ? 1 : 0;
       }
-      return runSkill({ action: sub, dir: values.dir });
+      return runSkill({ action, dir: values.dir, dataDir: str(values['data-dir']), positional: positionals[0] });
     }
     case 'spec': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });

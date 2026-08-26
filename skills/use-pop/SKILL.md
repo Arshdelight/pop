@@ -1,11 +1,18 @@
 ---
 name: use-pop
-description: Record, search, read, publish, and manage practice documents with the pop CLI — a local, content-addressed registry of POP (Protocol of Practice) documents that syncs to a hub (default PractiHub). Use whenever the user wants to save what was just done as a reusable practice ("record this practice", "save this session", "turn this into steps"), search or read practices ("search practices", "has anyone done X", "find a how-to"), or manage them ("publish", "submit for review", "unpublish", "delete my practice") — even when pop is not mentioned by name. Also for any explicit pop CLI usage (pop new, pop show, pop ls, pop push, pop pull, pop clone, pop search, pop login, pop blob add, …).
+description: Record, search, read, publish, and manage practice documents with
+  the pop CLI — a local, content-addressed registry of POP (Protocol of
+  Practice) documents that syncs to a hub (default PractiHub). Use whenever the
+  user wants to save what was just done as a reusable practice ("record this
+  practice", "save this session", "turn this into steps"), search or read
+  practices ("search practices", "has anyone done X", "find a how-to"), or
+  manage them ("publish", "submit for review", "unpublish", "delete my
+  practice") — even when pop is not mentioned by name. Also for any explicit pop
+  CLI usage (pop new, pop show, pop ls, pop push, pop pull, pop clone, pop
+  search, pop login, pop blob add, pop skill import, pop skill export, …), and
+  for converting between formats ("turn this skill into a pop", "export this
+  practice as a skill").
 ---
-
-# Use pop
-
-## Mental model
 
 One JSON document = one practice tree. Leaves are **actions** — atomic skills; interior nodes are **practices** — compositions. Everything except `name` is optional, and type is inferred: a node with `children` is a practice, one without an action.
 
@@ -114,6 +121,18 @@ pop web                 # browse direct pops in a local web UI
 - `pop new` validates through the SDK, persists the content-addressed tree, registers the root as direct, and prints the root hash with `status: valid, registered as direct`. On validation issues the tree is stored but **not** registered — read the printed `E_*` issues, fix the JSON, re-run.
 - `pop show` accepts a unique hash prefix (≥4 hex digits); `--doc` emits the expanded document — the starting point for forking or refining.
 
+## Skill ⇄ POP conversion
+
+```bash
+pop skill export <ref> [--dir <out>]  # a POP → an installable skill directory (default: ./<name>)
+pop skill import <dir>                # replay a `pop skill export` directory back into a POP
+```
+
+- An exported directory carries `SKILL.md` (a readable projection), attachment files, and `pop.doc.json` — the sidecar holding the canonical document. Import replays the sidecar byte-identically (same hash, any machine), re-staging attachment files into the local blob store.
+- Import refuses directories without a sidecar (`E_NO_SIDECAR`): it is the inverse of export, not a skill importer. To bring a foreign skill into POP, read it and **author** a structured tree of practices and actions (the recording-quality rules apply) — flattening its text into one node would discard exactly the structure POP exists for.
+- Hand-editing `SKILL.md` after export desynchronizes the sidecar: import warns and treats the edited body as truth (a new hash — fork semantics). Edit the POP and re-export instead.
+- This very skill is maintained that way: `pop.doc.json` in its directory is the source document, `SKILL.md` its projection. Never hand-edit the projection — edit the document (`pop show <hash> --doc > doc.json`), `pop new` it, then `pop skill export <new-hash> --dir <skills/use-pop>`.
+
 ## Remote workflow
 
 ```bash
@@ -121,7 +140,7 @@ pop push [hash]         # push new local claims (fetch /mine, diff, upload only 
 pop search [query...]   # --scope public|me|all, --limit N, --json; title hits rank first; empty = browse newest; --local searches the workspace instead
 pop pull [hash]         # sync YOUR claims from the remote (default: all of mine)
 pop clone <hash>        # fetch a public pop and claim it (local direct + remote claim)
-pop submit [hash]       # PRIVATE → PENDING_REVIEW (admin approves before public); default: all direct
+pop submit [hash]       # PRIVATE → PENDING_REVIEW; auto review passes → public (already-approved skips re-review); default: all direct
 pop unpublish [hash]    # withdraw a submission / take a published pop out of public
 pop delete <hash>       # remove your direct claim on the remote (hash required; local workspace untouched)
 ```
