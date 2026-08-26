@@ -1,4 +1,4 @@
-import { createFromDoc } from '@arshdelight/pop-sdk';
+import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { authedFetch, fetchMine } from '../client.js';
@@ -80,6 +80,20 @@ async function pullOne(dataDir: string, remote: string, ref: string): Promise<nu
   }
   if (body.document === undefined || body.document === null) {
     console.error(`pull failed: ${ref} — response missing document`);
+    return 1;
+  }
+
+  // 入库前验算（内容寻址的客户端责任，hub 读路径不代验）：纯导入（不落库）算出的
+  // 根哈希必须等于请求地址——不符即拒绝，防止「另一身份的文档被悄悄注册为我的认领」
+  let computedRoot: string;
+  try {
+    computedRoot = parseDocument(body.document).rootHash;
+  } catch (e) {
+    console.error(`pull failed: ${ref} — invalid document: ${(e as Error).message}`);
+    return 1;
+  }
+  if (computedRoot !== ref) {
+    console.error(`pull failed: ${ref} — hash mismatch: content hashes to ${computedRoot}`);
     return 1;
   }
 

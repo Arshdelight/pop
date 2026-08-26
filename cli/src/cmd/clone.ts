@@ -1,4 +1,4 @@
-import { createFromDoc } from '@arshdelight/pop-sdk';
+import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { authedFetch } from '../client.js';
@@ -49,10 +49,24 @@ export async function runClone(opts: CloneOpts): Promise<number> {
     return 1;
   }
 
+  // 入库前验算（内容寻址的客户端责任）：本地算出的根哈希必须等于请求地址（也是服务器
+  // 声称的 root_hash）——注册与推送一律用本地算的值，不采信服务器声称的哈希
+  let computedRoot: string;
+  try {
+    computedRoot = parseDocument(body.document).rootHash;
+  } catch (e) {
+    console.error(`clone failed: ${ref} — invalid document: ${(e as Error).message}`);
+    return 1;
+  }
+  if (computedRoot !== ref || (body.root_hash !== undefined && body.root_hash !== computedRoot)) {
+    console.error(`clone failed: ${ref} — hash mismatch: content hashes to ${computedRoot}`);
+    return 1;
+  }
+
   // 落本地 workspace + 注册 direct
   const ws = openWorkspace(dataDir);
-  const { root } = createFromDoc(ws, body.document);
-  const rootHash = body.root_hash ?? root;
+  createFromDoc(ws, body.document);
+  const rootHash = computedRoot;
   const alreadyMine = body.ownership?.mine === true;
 
   const localState = loadState(dataDir);
