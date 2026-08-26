@@ -15,6 +15,7 @@ import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
 import { runClone } from './cmd/clone.js';
 import { runSearch } from './cmd/search.js';
+import { runComment } from './cmd/comment.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
@@ -33,6 +34,9 @@ usage:
   pop blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
   pop clone <hash>               fetch a public pop and claim it (fork: local direct + remote claim)
+  pop comment list|tally|add|edit|delete|report
+                                 node comments on the remote (hub extension; source-scoped list,
+                                 --node for a shared node's full view; --json for agents)
   pop config                     show data dir, remote, registry summary
   pop delete <hash>              remove your direct claim on the remote (hash required)
   pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC)
@@ -206,6 +210,39 @@ async function main(argv: string[]): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help || positionals.length === 0) { console.log('usage: pop clone <hash>'); return 0; }
       return runClone({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'comment': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          node: { type: 'string' as const },
+          cursor: { type: 'string' as const },
+          limit: { type: 'string' as const },
+          valence: { type: 'string' as const },
+          message: { type: 'string' as const, short: 'm' },
+          reason: { type: 'string' as const },
+          detail: { type: 'string' as const },
+          json: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: pop comment list|tally|add|edit|delete|report   (see `pop comment` help)');
+        return 0;
+      }
+      return runComment({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        node: values.node,
+        cursor: values.cursor,
+        limit: values.limit,
+        valence: values.valence,
+        message: values.message,
+        reason: values.reason,
+        detail: values.detail,
+        json: values.json === true,
+      });
     }
     case 'search': {
       const { values, positionals } = parseArgs({

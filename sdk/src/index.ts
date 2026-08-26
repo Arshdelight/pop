@@ -12,6 +12,7 @@ export * from './doc.js';
 export * from './export.js';
 export * from './skill.js';
 export * from './aggregate.js';
+export * from './comments.js';
 export * from './validate.js';
 export * from './errors.js';
 export * from './version.js';
