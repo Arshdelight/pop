@@ -1,17 +1,18 @@
 ---
 name: use-pop
-description: Record, search, read, publish, and manage practice documents with
-  the pop CLI — a local, content-addressed registry of POP (Protocol of
-  Practice) documents that syncs to a hub (default PractiHub). Use whenever the
-  user wants to save what was just done as a reusable practice ("record this
-  practice", "save this session", "turn this into steps"), search or read
-  practices ("search practices", "has anyone done X", "find a how-to"), or
-  manage them ("publish", "submit for review", "unpublish", "delete my
-  practice") — even when pop is not mentioned by name. Also for any explicit pop
-  CLI usage (pop new, pop show, pop ls, pop push, pop pull, pop clone, pop
-  search, pop login, pop blob add, pop skill import, pop skill export, …), and
-  for converting between formats ("turn this skill into a pop", "export this
-  practice as a skill").
+description: Record, search, read, publish, evaluate, and manage practice
+  documents with the pop CLI — a local, content-addressed registry of POP
+  (Protocol of Practice) documents that syncs to a hub (default PractiHub). Use
+  whenever the user wants to save what was just done as a reusable practice
+  ("record this practice", "save this session", "turn this into steps"), search
+  or read practices ("search practices", "has anyone done X", "find a how-to"),
+  evaluate them ("what do people say about this practice", "comment on this
+  step", "is this practice any good"), or manage them ("publish", "submit for
+  review", "unpublish", "delete my practice") — even when pop is not mentioned
+  by name. Also for any explicit pop CLI usage (pop new, pop show, pop ls, pop
+  push, pop pull, pop clone, pop search, pop comment, pop login, pop blob add,
+  pop skill import, pop skill export, …), and for converting between formats
+  ("turn this skill into a pop", "export this practice as a skill").
 ---
 
 One JSON document = one practice tree. Leaves are **actions** — atomic skills; interior nodes are **practices** — compositions. Everything except `name` is optional, and type is inferred: a node with `children` is a practice, one without an action.
@@ -148,6 +149,22 @@ pop delete <hash>       # remove your direct claim on the remote (hash required;
 - Reads of published docs are anonymous; writes and private reads need `pop login`.
 - Re-pushing the same content is idempotent (content-addressed); pushing again after `pop delete` recreates it — fresh record, PRIVATE.
 
+## Evaluating practices
+
+```bash
+pop comment list <hash> [--node <hash>]   # 看评论：整篇=该文档自己的；--node=共享节点全网
+pop comment tally <hash>                  # 正反态度分布（支持/中立/反对）
+pop comment add <hash> --node <hash> --valence support|neutral|oppose -m "<text>"
+pop comment edit <comment-id> -m "<text>" # 自由编辑（仅作者）
+pop comment delete <comment-id>           # 硬删（仅作者）
+pop comment report <comment-id> --reason illegal|infringement|spam|other [--detail "<why>"]
+```
+
+- Comments are a **hub extension**, not part of the POP protocol: flat (no replies), one per (user, node), valence required (default neutral), free edit, hard delete. They never touch the document or its hash.
+- **Viewing** — `list <hash>` shows comments made in that document's context; `--node <hash>` shows a shared node's comments across every document that uses it (the DAG view). `tally` prints the support/neutral/oppose distribution — display-only, never a score, never a ranking input.
+- **Review** — comments are publish-then-review (阿里 Green content safety); a flagged comment is hidden and editing it resubmits it. Reported comments go through platform review with the source document as context; a confirmed report deletes the comment and notifies its author.
+- **Endorsement is reuse** — a "support" comment is just a note. The real endorsement is structural: publishing a document that references a node is what endorses it.
+
 ## Error codes
 
 | Code | Trigger |
@@ -164,3 +181,4 @@ pop delete <hash>       # remove your direct claim on the remote (hash required;
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `pop new doc.json` → confirm `status: valid` → `pop show <hash>` to review → optional `pop push`.
 - **Find prior art** — `pop search <query>` → `pop clone <hash>` → `pop show <hash>`.
 - **Edit one of your direct pops** — `pop show <hash> --doc > doc.json` → edit the JSON → `pop edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct pop (`--keep` preserves them; blobs are never GC'd). Local only: sync the hub afterwards with `pop push` then `pop delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `pop new`.
+- **Evaluate / see what people say** — `pop comment list <hash>` → `pop comment tally <hash>`; leave feedback with `pop comment add <hash> --node <hash> --valence support|neutral|oppose -m "…"`.
