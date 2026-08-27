@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { HASH_PREFIX, isHashFormat, isRecord, type ActionNode, type PracticeNode } from './model.js';
+import { HASH_PREFIX, MAX_JSON_DEPTH, MAX_NODE_DEPTH, isHashFormat, isRecord, type ActionNode, type PracticeNode } from './model.js';
 import { PracticeError } from './errors.js';
 
 /**
@@ -31,16 +31,29 @@ export function blobHash(bytes: Uint8Array): string {
  * Stable serialization: object keys sorted, undefined values dropped, no whitespace.
  * This guarantees the canonical form of the hash input: the same semantic content
  * (regardless of key order) yields the same string.
+ *
+ * Depth-guarded: a value nested beyond MAX_JSON_DEPTH (+ a few levels of payload
+ * headroom — payload → metadata → value) is refused with E_SCHEMA rather than
+ * blowing the call stack (spec §6: resource guards are implementation policy).
  */
 export function stableStringify(value: unknown): string {
+  return stringify(value, 0);
+}
+
+const STRINGIFY_DEPTH_LIMIT = MAX_JSON_DEPTH + 4;
+
+function stringify(value: unknown, depth: number): string {
+  if (depth > STRINGIFY_DEPTH_LIMIT) {
+    throw new PracticeError('E_SCHEMA', `nesting exceeds ${MAX_JSON_DEPTH} levels — too deeply nested to hash (refused, spec §6)`);
+  }
   if (value === null) return 'null';
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map(v => stringify(v, depth + 1)).join(',')}]`;
   if (typeof value === 'object') {
     const obj = value as Record<string, unknown>;
     const keys = Object.keys(obj)
       .filter(k => obj[k] !== undefined)
       .sort(compareByCodePoint);
-    return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(',')}}`;
+    return `{${keys.map(k => `${JSON.stringify(k)}:${stringify(obj[k], depth + 1)}`).join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
 }
@@ -54,7 +67,7 @@ export function stableStringify(value: unknown): string {
 export type HashableNode = ActionNode | (Omit<PracticeNode, 'children'> & { children: HashableChild[] });
 export type HashableChild = { hash: string } | HashableNode;
 
-function childHash(c: HashableChild): string {
+function childHash(c: HashableChild, depth: number): string {
   if (isRecord(c) && 'hash' in c) {
     // A pin carries exactly one key; anything else masquerading as a pin is loud (§8).
     // Extra fields are E_SCHEMA, a malformed hash value is E_HASH_FORMAT (§6).
@@ -67,10 +80,23 @@ function childHash(c: HashableChild): string {
     }
     return c.hash;
   }
-  return computeNodeHash(c as HashableNode);
+  return hashNode(c as HashableNode, depth + 1);
 }
 
 export function computeNodeHash(node: HashableNode): string {
+  return hashNode(node, 0);
+}
+
+/**
+ * Depth-aware core (spec §6 resource guard): a caller may hand us a raw inline
+ * tree of arbitrary depth (computeNodeHash is a public entry point, not only the
+ * tail of parseDocument) — recursion past MAX_NODE_DEPTH is a typed refusal,
+ * never a stack RangeError.
+ */
+function hashNode(node: HashableNode, depth: number): string {
+  if (depth > MAX_NODE_DEPTH) {
+    throw new PracticeError('E_SCHEMA', `node nesting exceeds ${MAX_NODE_DEPTH} levels — the tree is too deep (refused, spec §6)`);
+  }
   const payload: Record<string, unknown> = {
     type: node.type,
     name: node.name,
@@ -102,7 +128,7 @@ export function computeNodeHash(node: HashableNode): string {
     //   whole tree (same hash ⇒ same content, everywhere, §3.3). A reference
     //   and an inline subtree of the same content contribute the same value,
     //   so the two forms are interchangeable (§1 rule 3).
-    payload.children = node.children.map(childHash);
+    payload.children = node.children.map(c => childHash(c, depth));
     if (node.loop !== undefined) payload.loop = node.loop;
     if (node.refines !== undefined && node.refines.trim() !== '') payload.refines = node.refines;
   }

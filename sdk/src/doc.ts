@@ -1,7 +1,7 @@
 import { PracticeError } from './errors.js';
 import { computeNodeHash } from './hash.js';
 import {
-  OPS, extractMediaRefs, isHashFormat, isRecord, jsonValueViolation, parseAttachmentItem, parseRevisions, presentString,
+  MAX_NODE_DEPTH, OPS, extractMediaRefs, isHashFormat, isRecord, jsonValueViolation, parseAttachmentItem, parseRevisions, presentString,
   rejectUnknownKeys,
   type ActionNode, type Attachment, type FlowItem, type LoopConfig, type Op,
   type PNode, type PracticeNode, type Revision,
@@ -117,9 +117,14 @@ function parseFlowField(v: unknown, kind: 'inputs' | 'outputs', nodePath: string
  * Parse a document node (recursive). children present → practice, absent → action;
  * a children entry is a ChildRef `{ hash }` (pinned reference to an already-stored
  * POP, §2.3) or an object (an inlined same-shaped node). Unrecognized fields are
- * rejected, never dropped (§8).
+ * rejected, never dropped (§8). Depth past MAX_NODE_DEPTH is a typed refusal —
+ * every later walk (labels, froms, persistence) recurses the same shape, so this
+ * guard bounds the whole pipeline (spec §6 resource guard).
  */
-export function plan(ctx: PlanCtx, raw: unknown, nodePath: string): Planned {
+export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): Planned {
+  if (depth > MAX_NODE_DEPTH) {
+    failDoc(nodePath, `node nesting exceeds ${MAX_NODE_DEPTH} levels — the tree is too deep`);
+  }
   if (!isRecord(raw)) failDoc(nodePath, 'a node must be a JSON object');
   rejectUnknownKeys(raw, NODE_FIELDS, nodePath);
   const name = optionalString(raw.name);
@@ -229,7 +234,7 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string): Planned {
         }
         return { kind: 'ref', hash: c.hash } as ChildEntry;
       }
-      return { kind: 'inline', node: plan(ctx, c, childPath) } as ChildEntry;
+      return { kind: 'inline', node: plan(ctx, c, childPath, depth + 1) } as ChildEntry;
     }),
     attachments: [],
     inputs: [],

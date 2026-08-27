@@ -152,6 +152,15 @@ export function presentString(v: unknown, field: string): string | undefined {
 export const HASH_PREFIX = "sha256:";
 export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
+/**
+ * Resource guards (spec §6: implementation policy, like blob size §5). Recursion
+ * is how every layer walks trees and JSON values, so unbounded nesting would
+ * surface as a stack RangeError instead of a typed error — beyond these limits
+ * the document is refused with E_SCHEMA, never silently truncated.
+ */
+export const MAX_NODE_DEPTH = 100;
+export const MAX_JSON_DEPTH = 100;
+
 export function isHashFormat(v: unknown): v is string {
   return typeof v === 'string' && HASH_RE.test(v);
 }
@@ -163,12 +172,15 @@ export function isHashFormat(v: unknown): v is string {
  * here: the canonical serializer would silently collapse them (a Date hashes
  * as {}, NaN as null), breaking "same hash ⇒ same content".
  */
-export function jsonValueViolation(v: unknown, where: string): string | undefined {
+export function jsonValueViolation(v: unknown, where: string, depth = 0): string | undefined {
+  if (depth > MAX_JSON_DEPTH) {
+    return `${where}: nesting exceeds ${MAX_JSON_DEPTH} levels — too deeply nested to hash (refused, spec §6)`;
+  }
   if (v === null || typeof v === 'string' || typeof v === 'boolean') return undefined;
   if (typeof v === 'number') return Number.isFinite(v) ? undefined : `${where}: non-finite number (.nan/.inf are not JSON — quote them as strings)`;
   if (Array.isArray(v)) {
     for (let i = 0; i < v.length; i++) {
-      const r = jsonValueViolation(v[i], `${where}[${i}]`);
+      const r = jsonValueViolation(v[i], `${where}[${i}]`, depth + 1);
       if (r !== undefined) return r;
     }
     return undefined;
@@ -181,7 +193,7 @@ export function jsonValueViolation(v: unknown, where: string): string | undefine
       return `${where}: a ${ctor.name} is not a JSON value — quote date-like strings`;
     }
     for (const [k, val] of Object.entries(v)) {
-      const r = jsonValueViolation(val, `${where}.${k}`);
+      const r = jsonValueViolation(val, `${where}.${k}`, depth + 1);
       if (r !== undefined) return r;
     }
     return undefined;

@@ -1,7 +1,7 @@
 /**
  * POP node comments — hub extension contract (2026-08-26).
  *
- * Comments are NOT part of the POP protocol: the spec (pop-spec.md 1.0.1) is
+ * Comments are NOT part of the POP protocol: the spec (pop-spec.md 1.0.2) is
  * untouched, and a hub without comments is fully protocol-compliant. These
  * types describe the hub *extension* endpoints the CLI talks to
  * (`/api/v1/pop/:ref/comments`, `/api/v1/comments/:id`, `/api/v1/comments/:id/report`)

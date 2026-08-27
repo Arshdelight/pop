@@ -6,7 +6,7 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 **Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding.
 
-**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.0.1. The spec covers only the protocol; everything else lives here.
+**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.0.2. The spec covers only the protocol; everything else lives here.
 
 ## Quick start
 
@@ -39,12 +39,12 @@ First-party tooling (`cli/`) depends on it; correctness is locked by the spec an
 
 ```bash
 npm run build -w @arshdelight/pop-sdk   # dist/ — importable as @arshdelight/pop-sdk
-npm test -w @arshdelight/pop-sdk        # vitest (80 cases, incl. Appendix A vector re-verification)
+npm test -w @arshdelight/pop-sdk        # vitest (incl. Appendix A vector re-verification)
 ```
 
 ## cli/ — @arshdelight/pop-cli (the `pop` command)
 
-A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider, stored credentials and the registered **direct** roots (indirect = every other node the direct pops reference).
+A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider and the registered **direct** roots (indirect = every other node the direct pops reference); credentials live separately in `pop.auth.json`, kept out of `pop.json` so the workspace stays commit-safe.
 
 ```bash
 pop blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
@@ -102,5 +102,6 @@ Semver from 1.0.0: evolution adds optional fields where possible (existing ident
 
 ## History
 
+- **1.0.2** (2026-08-27) — §9 no longer names a concrete auth mechanism: authentication and its scopes are hub policy, full stop. §6 clarifies that resource guards (nesting depth, payload size) are implementation policy — refuse with `E_SCHEMA`, never silently drop content. No format change; hashes are unaffected.
 - **1.0.1** (2026-08-25) — validation clarification (§5.1): inline code spans are code, never scanned for media syntax (fenced blocks already were). No format change; hashes are unaffected.
 - **1.0.0** (2026-08-22) — first release. Nodes carry no ids: the content hash is the only address, and the root hash is a Merkle root over the whole tree (same hash ⇒ same content, descendants included). Children may be inlined or referenced by `{ hash }` — interchangeable on identity. Attachments are content-addressed blobs with optional external urls.

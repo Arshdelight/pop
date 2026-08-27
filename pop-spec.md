@@ -1,6 +1,6 @@
 # POP — Protocol of Practice
 
-> This document normatively defines POP, **version 1.0.1**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
+> This document normatively defines POP, **version 1.0.2**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
 
 ## 1. Writing POP
 
@@ -239,6 +239,8 @@ Never validated (dangling tolerated — history pointers): `refines`, `revisions
 
 Codes beyond this table (e.g. `E_AMBIGUOUS`, `E_NOT_FOUND` for hash-prefix addressing) are implementation-local: the node library's storage and addressing are implementation-defined (§4).
 
+Resource guards are implementation policy, as blob size is (§5): an implementation may refuse a document that exceeds its limits — nesting depth, payload size — answering `E_SCHEMA`, but never silently dropping content to fit a limit.
+
 A hash-form `from` may name a node that contains an earlier version of the wiring node — existence-checked only; only label resolution detects dataflow cycles (§1 rule 4).
 
 ## 7. Aggregation (standard view)
@@ -260,7 +262,7 @@ When a practice is read, steps / attachments / flow / **declared inputs & output
 
 ## 9. Transport (POP-over-HTTP)
 
-Contract for hub implementations. The reference hub is Practihub; the `pop` CLI in this repo speaks this transport. Paths below are logical; a hub may prefix them (Practihub serves them under `/api/v1`). Public reads are anonymous; writes and private reads require authentication (Practihub uses OAuth 2.1 with PKCE and three scopes: `pop:read`, `pop:create`, `pop:publish` — details are hub policy, not protocol).
+Contract for hub implementations. The reference hub is Practihub; the `pop` CLI in this repo speaks this transport. Paths below are logical; a hub may prefix them (Practihub serves them under `/api/v1`). Public reads are anonymous; writes and private reads require authentication — the mechanism and its scopes are hub policy, not part of the protocol.
 
 | Operation | Semantics |
 |---|---|
