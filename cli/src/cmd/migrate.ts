@@ -8,6 +8,8 @@ import { isInitialized } from '../workspace.js';
 export interface MigrateOpts {
   dataDir?: string;
   positional: string[];
+  /** keep the old directory as <dir>.bak-<timestamp> instead of removing it */
+  keep?: boolean;
 }
 
 /** Convention location: where a fresh install's discovery chain lands (~/.practi). */
@@ -43,11 +45,13 @@ function fingerprint(root: string): Map<string, string> {
 }
 
 /**
- * practi migrate [path]：把整个 workspace 搬到新数据目录，四步协议——
+ * practi migrate [path] [--keep]：把整个 workspace 剪切到新数据目录，四步协议——
  *   pre      初始化/同名/占用/嵌套/指针一致性检查，任何一项不过即不动手
  *   copy     整目录复制（含凭证 practi.auth.json 与 practi.json）
  *   verify   源/目标逐文件 sha256 比对；失败即清除半成品——搬家未发生
- *   handover 旧目录改名 <dir>.bak-<timestamp> 留底；永不自动删除
+ *   handover 剪切语义：verify 已证明新副本与源逐字节一致，旧目录直接删除；
+ *            --keep 反转为改名 <dir>.bak-<timestamp> 留底（与 edit --keep 同族：
+ *            默认清理，显式保留）
  *   record   新家在约定位置（无参 → ~/.practi）则发现链天然命中、不写指针；
  *            否则写 ~/.practi-home 指针（自举约束：位置不能记在 workspace 里）
  * verify 通过而 handover 失败 = 新家完整、旧家未动：双库并存，提示手动收尾，
@@ -115,16 +119,24 @@ export function runMigrate(opts: MigrateOpts): number {
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   const backup = `${from}.bak-${stamp}`;
   try {
-    fs.renameSync(from, backup);
+    if (opts.keep === true) {
+      fs.renameSync(from, backup);
+    } else {
+      fs.rmSync(from, { recursive: true, force: true });
+    }
   } catch (e) {
-    console.error(`error: could not rename ${from} away (${(e as Error).message}).`);
+    console.error(`error: could not remove the old directory (${(e as Error).message}).`);
     console.error(`       The verified copy is complete at ${to}; resolve the old directory by hand, then re-point if needed.`);
     return 1;
   }
 
   // ---- record ----
   console.log(`migrated:  ${from} → ${to}  (${src.size} files verified)`);
-  console.log(`backup:    ${backup}  (delete it yourself once you trust the new location)`);
+  if (opts.keep === true) {
+    console.log(`backup:    ${backup}  (delete it yourself once you trust the new location)`);
+  } else {
+    console.log(`removed:   ${from}  (verified copy in place — pass --keep next time to retain a .bak)`);
+  }
   if (toIsConvention) {
     console.log(`next run:  the default data dir resolves to ${to} (convention location)`);
   } else {

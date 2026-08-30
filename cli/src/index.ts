@@ -48,10 +48,11 @@ usage:
   practi logout                     clear stored credentials (revokes on the server)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
   practi me                         show the authenticated practihub user
-  practi migrate [path]             move the workspace to a new data directory
-                                 (no arg = ~/.practi; a path is recorded in
-                                 ~/.practi-home and becomes the default; the old
-                                 directory is kept as <dir>.bak-<timestamp>)
+  practi migrate [path] [--keep]      move the workspace to a new data directory
+                                 (cut: the old directory is removed after per-file
+                                 verification; --keep retains it as <dir>.bak-<timestamp>;
+                                 no arg = ~/.practi; a path is recorded in
+                                 ~/.practi-home and becomes the default)
   practi new <file.json>            create a POP from a JSON document
        | practi new --json '<text>'
        | practi new < file.json
@@ -117,9 +118,13 @@ async function main(argv: string[]): Promise<number> {
       return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'migrate': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi migrate [path]   (move the workspace; no arg = ~/.practi, a path is recorded in ~/.practi-home as the default)'); return 0; }
-      return runMigrate({ dataDir: str(values['data-dir']), positional: positionals });
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, keep: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi migrate [path] [--keep]   (cut: the old directory is removed after per-file verification; --keep retains it as <dir>.bak-<timestamp>; no arg = ~/.practi, a path is recorded in ~/.practi-home as the default)'); return 0; }
+      return runMigrate({ dataDir: str(values['data-dir']), positional: positionals, keep: values.keep === true });
     }
     case 'ls': {
       const { values } = parseArgs({

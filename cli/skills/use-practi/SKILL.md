@@ -120,8 +120,9 @@ practi show <hash>           # aggregate view; --json machine view; --doc full d
 practi ls [-a]               # direct roots; -a adds indirect nodes
 practi search --local <q>    # offline search over every stored node (name/description/content; hash prefixes too)
 practi web                   # browse direct POPs in a local web UI
-practi migrate [path]        # move the workspace (no arg = ~/.practi; a path is recorded
-                             # in ~/.practi-home and becomes the default; old dir kept as .bak)
+practi migrate [path] [--keep] # cut: move the workspace (old dir removed after per-file
+                               #  verification; --keep retains a .bak; a path becomes the
+                               #  default via ~/.practi-home)
 ```
 
 - `practi new` validates through the SDK, persists the content-addressed tree, registers the root as direct, and prints the root hash with `status: valid, registered as direct`. On validation issues the tree is stored but **not** registered — read the printed `E_*` issues, fix the JSON, re-run.

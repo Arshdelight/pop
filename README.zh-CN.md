@@ -57,8 +57,9 @@ practi login [--no-open]          对 remote 的 OAuth 登录（打开浏览器�
 practi logout                     清除凭据（并在服务端撤销）
 practi ls [-a] [--json]           列出 direct POP（-a 连 indirect 节点一起列）
 practi me                         查看已认证的 remote 用户
-practi migrate [path]             把 workspace 迁移到新数据目录（无参 = ~/.practi；带路径则记入
-                                   ~/.practi-home 作为默认目录；旧目录留 .bak 备份）
+practi migrate [path] [--keep]      把 workspace 剪切到新数据目录（逐文件校验后删除旧目录；
+                                   --keep 保留为 .bak 备份；无参 = ~/.practi；带路径则记入
+                                   ~/.practi-home 作为默认目录）
 practi new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
 practi pull [hash]                从 remote 同步自己的认领（默认：我的全部）
 practi push [hash]                把本地新增认领推送到 remote（只推新的；存储为 PRIVATE）

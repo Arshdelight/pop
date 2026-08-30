@@ -29,7 +29,7 @@ const HOME_ENV = (home: string) => ({ HOME: home, USERPROFILE: home });
 const BARE_ENV = (home: string) => ({ ...HOME_ENV(home), PRACTI_HOME: undefined, POP_HOME: undefined });
 
 describe('practi migrate: the relocation protocol', () => {
-  it('moves the workspace, verifies every file, leaves a .bak, writes the pointer', async () => {
+  it('cuts the workspace over: verifies every file, then REMOVES the old directory', async () => {
     const dir = await seeded();
     const to = tempDataDir(); // exists and is empty — an allowed target
     const home = fakeHome();
@@ -37,19 +37,32 @@ describe('practi migrate: the relocation protocol', () => {
     const r = await pop(dir, ['migrate', to], { env: HOME_ENV(home) });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('migrated:');
-    expect(r.stdout).toContain('backup:');
+    expect(r.stdout).toContain('removed:');
 
     // the new home carries everything: state with the direct root, workspace files
     expect(readState(to).direct.length).toBe(1);
     expect(fs.existsSync(path.join(to, 'practice.yaml'))).toBe(true);
 
-    // handover: the old directory was renamed away, never deleted
-    const baks = fs.readdirSync(path.dirname(dir)).filter((n) => n.startsWith(`${path.basename(dir)}.bak-`));
-    expect(baks.length).toBe(1);
+    // handover: the old directory is gone, no .bak by default
+    expect(fs.existsSync(dir)).toBe(false);
 
     // record: an out-of-convention home persists in ~/.practi-home
     const pointer = fs.readFileSync(path.join(home, '.practi-home'), 'utf8').trim();
     expect(pointer).toBe(path.resolve(to));
+  });
+
+  it('--keep retains the old directory as a .bak instead of removing it', async () => {
+    const dir = await seeded();
+    const to = tempDataDir();
+    const home = fakeHome();
+
+    const r = await pop(dir, ['migrate', to, '--keep'], { env: HOME_ENV(home) });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('backup:');
+    expect(fs.existsSync(dir)).toBe(false); // the original path is still vacated
+    const baks = fs.readdirSync(path.dirname(dir)).filter((n) => n.startsWith(`${path.basename(dir)}.bak-`));
+    expect(baks.length).toBe(1);
+    expect(readState(path.join(path.dirname(dir), baks[0])).direct.length).toBe(1);
   });
 
   it('the migrated home stays functional and a bare run resolves via the pointer', async () => {
