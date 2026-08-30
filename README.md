@@ -57,6 +57,8 @@ practi login [--no-open]          OAuth login against the remote (opens the brow
 practi logout                     clear stored credentials (revokes on the server)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
 practi me                         show the authenticated remote user
+practi migrate [path]             move the workspace to a new data directory (no arg = ~/.practi;
+                                   a path is recorded in ~/.practi-home as the default; old dir kept as .bak)
 practi new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
 practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
 practi push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)

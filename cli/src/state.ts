@@ -19,24 +19,71 @@ export interface State {
   direct: string[];
 }
 
-/** Default data directory: $PRACTI_HOME (legacy $POP_HOME still honored), else
- *  ~/.practi on every platform. Deliberately NOT %APPDATA%\practi — that path
- *  belongs to the unrelated "practi" Electron app's data on Windows. When
- *  ~/.practi doesn't exist yet but a pre-rename workspace does (%APPDATA%\pop
- *  or ~/.pop), adopt it silently. */
-export function defaultDataDir(): string {
-  if (process.env.PRACTI_HOME) return path.resolve(process.env.PRACTI_HOME);
-  if (process.env.POP_HOME) return path.resolve(process.env.POP_HOME);
+/* --------------------------------------------------------------- */
+/* Data-directory resolution — one decision, four layers of intent  */
+/* --------------------------------------------------------------- */
+
+/**
+ * Persistent home pointer: `~/.practi-home`, a single absolute path. Written
+ * ONLY by `practi migrate <path>`, and only when the new home is outside the
+ * discovery chain — the workspace's location cannot be recorded inside the
+ * workspace itself (self-bootstrapping), so an out-of-band pointer in $HOME is
+ * the only record that survives relocation. Most users never have this file.
+ */
+export const POINTER_FILE = '.practi-home';
+
+export function pointerPath(home: string = os.homedir()): string {
+  return path.join(home, POINTER_FILE);
+}
+
+/** A pointer counts only when the file exists, is non-empty, and its target
+ *  directory exists; every other shape (stale/dangling) reads as no pointer. */
+export function readPointer(home: string = os.homedir()): string | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(pointerPath(home), 'utf8').trim();
+  } catch {
+    return null;
+  }
+  return raw !== '' && fs.existsSync(raw) ? raw : null;
+}
+
+export function writePointer(dir: string, home: string = os.homedir()): void {
+  fs.writeFileSync(pointerPath(home), `${path.resolve(dir)}\n`, 'utf8');
+}
+
+/**
+ * Single source of truth for "where do I work when nobody said anything".
+ * Layers, strongest intent first:
+ *   session     — $PRACTI_HOME (legacy $POP_HOME still honored); tests & CI
+ *   persisted   — ~/.practi-home pointer (`practi migrate <path>` writes it)
+ *   convention  — ~/.practi on every platform. Deliberately NOT
+ *                 %APPDATA%\practi — that path belongs to the unrelated
+ *                 "practi" Electron app's data on Windows. When ~/.practi
+ *                 doesn't exist yet but a pre-rename workspace does
+ *                 (%APPDATA%\pop or ~/.pop), adopt it silently.
+ * `--data-dir` outranks all layers but is per-invocation, so callers resolve
+ * it themselves (`opts.dataDir ?? defaultDataDir()`).
+ */
+export function dataDirResolution(): { dir: string; via: 'env' | 'pointer' | 'convention' } {
+  if (process.env.PRACTI_HOME) return { dir: path.resolve(process.env.PRACTI_HOME), via: 'env' };
+  if (process.env.POP_HOME) return { dir: path.resolve(process.env.POP_HOME), via: 'env' };
+  const pointer = readPointer();
+  if (pointer) return { dir: pointer, via: 'pointer' };
   const fresh = path.join(os.homedir(), '.practi');
-  if (fs.existsSync(fresh)) return fresh;
+  if (fs.existsSync(fresh)) return { dir: fresh, via: 'convention' };
   const legacyCandidates = [
     process.env.APPDATA ? path.join(process.env.APPDATA, 'pop') : null,
     path.join(os.homedir(), '.pop'),
   ].filter((p): p is string => p !== null);
   for (const legacy of legacyCandidates) {
-    if (fs.existsSync(legacy)) return legacy;
+    if (fs.existsSync(legacy)) return { dir: legacy, via: 'convention' };
   }
-  return fresh;
+  return { dir: fresh, via: 'convention' };
+}
+
+export function defaultDataDir(): string {
+  return dataDirResolution().dir;
 }
 
 export function statePath(dataDir: string): string {

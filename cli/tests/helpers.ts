@@ -26,17 +26,22 @@ export interface PopResult {
 export interface PopOptions {
   /** stdin for the child; empty by default so stdin-reading commands see EOF immediately, never hang */
   input?: string;
+  /** Extra/overridden child env. Applied last; an undefined value drops the key
+   *  (Node omits undefined-valued env entries) — how tests unset PRACTI_HOME to
+   *  exercise the pointer/convention resolution layers. */
+  env?: Record<string, string | undefined>;
 }
 
 /**
  * Data-dir isolation, doubly enforced (see src/state.ts + the --data-dir
  * option in src/index.ts): every invocation gets --data-dir AND a PRACTI_HOME
  * pointing at the per-test temp dir. PRACTI_HOME wins over %APPDATA%practi, so no
- * code path can fall through to the real default dir.
+ * code path can fall through to the real default dir. Passing dataDir=null
+ * spawns a bare run (no --data-dir, no PRACTI_HOME) for resolution-layer tests.
  */
-export async function pop(dataDir: string, args: string[], opts: PopOptions = {}): Promise<PopResult> {
+export async function pop(dataDir: string | null, args: string[], opts: PopOptions = {}): Promise<PopResult> {
   // --data-dir must come after the subcommand: index.ts dispatches on argv[0]
-  const argv = [...args, '--data-dir', dataDir];
+  const argv = dataDir === null ? [...args] : [...args, '--data-dir', dataDir];
   return new Promise((resolve, reject) => {
     const child = execFile(
       process.execPath,
@@ -44,9 +49,13 @@ export async function pop(dataDir: string, args: string[], opts: PopOptions = {}
       {
         // cwd = the cli package: `--import tsx` resolves from the cwd's node_modules (hoisted at the repo root)
         cwd: CLI_ROOT,
-        env: { ...process.env, PRACTI_HOME: dataDir },
+        env: {
+          ...process.env,
+          ...(dataDir === null ? {} : { PRACTI_HOME: dataDir }),
+          ...opts.env,
+        },
         windowsHide: true,
-        // a stuck child must fail the test, not hang it
+        // a stuck child must fail the test, not hang
         timeout: 60_000,
         killSignal: 'SIGKILL',
       },
@@ -57,7 +66,7 @@ export async function pop(dataDir: string, args: string[], opts: PopOptions = {}
       },
     );
     // execFile only feeds stdin for truthy `input`, so end it explicitly:
-    // commands that read stdin (`pop new < file.json`) always see EOF
+    // commands that read stdin (`pop new < file`) always see EOF
     child.stdin.on('error', () => {}); // EPIPE when the child never reads — fine
     child.stdin.end(opts.input ?? '');
   });

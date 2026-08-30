@@ -4,6 +4,7 @@ import { PracticeError } from '@arshdelight/pop-sdk';
 import { runInit } from './cmd/init.js';
 import { runConfig } from './cmd/config.js';
 import { runRemote } from './cmd/remote.js';
+import { runMigrate } from './cmd/migrate.js';
 import { runLs } from './cmd/ls.js';
 import { runNew } from './cmd/new.js';
 import { runEdit } from './cmd/edit.js';
@@ -47,6 +48,10 @@ usage:
   practi logout                     clear stored credentials (revokes on the server)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
   practi me                         show the authenticated practihub user
+  practi migrate [path]             move the workspace to a new data directory
+                                 (no arg = ~/.practi; a path is recorded in
+                                 ~/.practi-home and becomes the default; the old
+                                 directory is kept as <dir>.bak-<timestamp>)
   practi new <file.json>            create a POP from a JSON document
        | practi new --json '<text>'
        | practi new < file.json
@@ -110,6 +115,11 @@ async function main(argv: string[]): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi remote set <url> | show | remove'); return 0; }
       return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'migrate': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi migrate [path]   (move the workspace; no arg = ~/.practi, a path is recorded in ~/.practi-home as the default)'); return 0; }
+      return runMigrate({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'ls': {
       const { values } = parseArgs({
