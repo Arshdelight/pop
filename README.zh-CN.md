@@ -10,10 +10,10 @@
 
 ## 快速开始
 
-把这段提示词发给你的 AI agent——它会装好 [use-practi skill](skills/use-practi/SKILL.md)，其余一切由 skill 引导完成：`practi` CLI、[PractiHub](https://practihub.com) 登录，以及之后的每一次记录 / 检索 / 发布。
+把这段提示词发给你的 AI agent——它会装好 [use-practi skill](skills/use-practi/SKILL.md)，其余一切由 skill 引导完成：[PractiHub](https://practihub.com) 登录，以及之后的每一次记录 / 检索 / 发布。
 
 ```text
-安装 use-practi skill（practi skill install），读取它，并按它的指引为我配置好 practi + PractiHub。
+用 npm 全局安装 practi（npm install -g practi），然后用 practi skill install 安装 use-practi skill（若已安装则用 practi skill update 更新），读取它，并按它的指引为我配置好 practi + PractiHub。
 ```
 
 ## 仓库内容
