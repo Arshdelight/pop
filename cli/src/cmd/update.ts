@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { CLI_VERSION } from '../version.js';
 
 const PKG = '@arshdelight/practi';
@@ -58,6 +58,20 @@ export async function runUpdate(_opts: UpdateOpts): Promise<number> {
   }
 
   console.log(`updating: ${CLI_VERSION} → ${latest}`);
+  if (process.platform === 'win32') {
+    // Windows 自更新死锁：bin shim（practi.cmd/.ps1）正被调用方 shell 解释执行、
+    // 句柄开着（.js 无执行锁，锁的是 shim），npm 原地重写必 EPERM。脱钩一个后台
+    // npm 等本命令链退出后落盘——spawn 到 npm 实际写文件隔着 registry 往返（>1s），
+    // 而本进程链退出在百毫秒级，竞态余量充足。stdio 继承 console 句柄（conhost
+    // 进程组共享，父退出后 npm 输出仍可见）。
+    const child = spawn(NPM, ['install', '-g', `${PKG}@${latest}`], {
+      detached: true,
+      stdio: 'inherit',
+    });
+    child.unref();
+    console.log(`installing ${latest} in the background — verify with: practi --version`);
+    return 0;
+  }
   const r = spawnSync(NPM, ['install', '-g', `${PKG}@${latest}`], { stdio: 'inherit' });
   if (r.status !== 0) {
     console.error('error: npm install failed — run it manually:');
