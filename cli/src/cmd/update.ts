@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { CLI_VERSION } from '../version.js';
@@ -9,11 +10,28 @@ export interface UpdateOpts {
   dataDir?: string;
 }
 
-/** Windows 上 npm 是 npm.cmd（.cmd 必须免 shell 调用，否则触发 DEP0190） */
+/** npm.cmd only as a fallback — .cmd files need shell:true on modern Node (DEP0190) */
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
+/**
+ * How to invoke npm from this Node: DEP0190 (node ≥18.20/20.12) makes spawning
+ * .cmd/.bat without shell:true throw EINVAL, so on Windows we bypass the shim
+ * entirely and run the npm-cli.js that ships inside process.execPath's Node —
+ * exactly what the npm.cmd shim does internally. Non-standard layouts without
+ * that file fall back to npm.cmd with shell:true.
+ */
+export function npmInvocation(): { cmd: string; prefixArgs: string[]; shell: boolean } {
+  if (process.platform === 'win32') {
+    const cli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    if (fs.existsSync(cli)) return { cmd: process.execPath, prefixArgs: [cli], shell: false };
+    return { cmd: NPM, prefixArgs: [], shell: true };
+  }
+  return { cmd: NPM, prefixArgs: [], shell: false };
+}
+
 function npmOut(args: string[]): string {
-  const r = spawnSync(NPM, args, { encoding: 'utf8' });
+  const { cmd, prefixArgs, shell } = npmInvocation();
+  const r = spawnSync(cmd, [...prefixArgs, ...args], { encoding: 'utf8', shell });
   return (r.stdout ?? '').trim();
 }
 
@@ -31,6 +49,9 @@ function cmpSemver(a: string, b: string): number {
 /**
  * practi update：向 registry 查 latest，比当前新就 npm install -g 自更新。
  * dev 安装（npm link 的符号链接）会被 registry 安装覆盖——检测到时先警告。
+ * Windows 的安装是脱钩的后台进程：调用方 shell 正解释执行 practi 的 bin
+ * shim（句柄开着），原地 npm 重写必失败；后台进程等本命令链退出后落盘，
+ * 输出追加到临时目录日志（detached 进程不再共享 console，时序也不可靠）。
  */
 export async function runUpdate(_opts: UpdateOpts): Promise<number> {
   const registry = npmOut(['config', 'get', 'registry']) || 'https://registry.npmjs.org';
@@ -58,21 +79,26 @@ export async function runUpdate(_opts: UpdateOpts): Promise<number> {
   }
 
   console.log(`updating: ${CLI_VERSION} → ${latest}`);
+  const { cmd, prefixArgs, shell } = npmInvocation();
+  const installArgs = [...prefixArgs, 'install', '-g', `${PKG}@${latest}`];
   if (process.platform === 'win32') {
-    // Windows 自更新死锁：bin shim（practi.cmd/.ps1）正被调用方 shell 解释执行、
-    // 句柄开着（.js 无执行锁，锁的是 shim），npm 原地重写必 EPERM。脱钩一个后台
-    // npm 等本命令链退出后落盘——spawn 到 npm 实际写文件隔着 registry 往返（>1s），
-    // 而本进程链退出在百毫秒级，竞态余量充足。stdio 继承 console 句柄（conhost
-    // 进程组共享，父退出后 npm 输出仍可见）。
-    const child = spawn(NPM, ['install', '-g', `${PKG}@${latest}`], {
-      detached: true,
-      stdio: 'inherit',
-    });
-    child.unref();
-    console.log(`installing ${latest} in the background — verify with: practi --version`);
+    const log = path.join(os.tmpdir(), 'practi-update.log');
+    const out = fs.openSync(log, 'a');
+    try {
+      const child = spawn(cmd, installArgs, { detached: true, stdio: ['ignore', out, out], shell });
+      child.unref();
+    } catch (e) {
+      fs.closeSync(out);
+      console.error(`error: could not start the background installer — ${(e as Error).message}`);
+      console.error(`run it manually:  npm install -g ${PKG}@${latest}`);
+      return 1;
+    }
+    fs.closeSync(out);
+    console.log(`installing ${latest} in the background — log: ${log}`);
+    console.log(`verify with: practi --version`);
     return 0;
   }
-  const r = spawnSync(NPM, ['install', '-g', `${PKG}@${latest}`], { stdio: 'inherit' });
+  const r = spawnSync(cmd, installArgs, { stdio: 'inherit', shell });
   if (r.status !== 0) {
     console.error('error: npm install failed — run it manually:');
     console.error(`  npm install -g ${PKG}@${latest}`);
