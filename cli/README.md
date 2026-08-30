@@ -5,7 +5,7 @@ The `practi` command (formerly `pop` / `@arshdelight/pop-cli`): a local registry
 ## Install
 
 ```bash
-npm install -g practi
+npm install -g @arshdelight/practi
 ```
 
 ## Commands

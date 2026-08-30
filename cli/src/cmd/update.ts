@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { CLI_VERSION } from '../version.js';
 
-const PKG = 'practi';
+const PKG = '@arshdelight/practi';
 
 export interface UpdateOpts {
   dataDir?: string;

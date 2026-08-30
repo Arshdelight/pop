@@ -29,7 +29,7 @@ The data directory (default `~/.practi`) is the workspace: nodes content-address
 ## Setup
 
 ```bash
-npm install -g practi
+npm install -g @arshdelight/practi
 practi init          # initialize the workspace
 practi config        # data dir, remote, registry summary
 practi login         # OAuth in the browser; --no-open prints the URL for headless agents

@@ -13,7 +13,7 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 Paste this prompt to your AI agent — it installs the [use-practi skill](skills/use-practi/SKILL.md), and the skill walks the agent through everything else: [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
 
 ```text
-Install practi globally via npm (npm install -g practi), then run practi skill install to install the use-practi skill (or practi skill update if it is already installed), read it, and follow it to set me up with practi + PractiHub.
+Install practi globally via npm (npm install -g @arshdelight/practi), then run practi skill install to install the use-practi skill (or practi skill update if it is already installed), read it, and follow it to set me up with practi + PractiHub.
 ```
 
 ## What's in this repo
@@ -79,8 +79,8 @@ practi web [--port 4317]          browse direct POPs in a local web UI
 ```
 
 ```bash
-npm run build -w practi
-npm link -w practi   # installs the `practi` command globally
+npm run build -w @arshdelight/practi
+npm link -w @arshdelight/practi   # installs the `practi` command globally
 ```
 
 Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally).

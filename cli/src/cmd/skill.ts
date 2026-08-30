@@ -111,7 +111,7 @@ export function runSkill(opts: SkillOpts): number {
 
   const src = sourceDir();
   if (!fs.existsSync(src)) {
-    console.error(`error: bundled skill not found at ${src} — the cli package is broken; reinstall it (npm install -g practi)`);
+    console.error(`error: bundled skill not found at ${src} — the cli package is broken; reinstall it (npm install -g @arshdelight/practi)`);
     return 1;
   }
   if (opts.action === 'update' && !fs.existsSync(target)) {

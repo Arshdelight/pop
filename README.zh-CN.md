@@ -13,7 +13,7 @@
 把这段提示词发给你的 AI agent——它会装好 [use-practi skill](skills/use-practi/SKILL.md)，其余一切由 skill 引导完成：[PractiHub](https://practihub.com) 登录，以及之后的每一次记录 / 检索 / 发布。
 
 ```text
-用 npm 全局安装 practi（npm install -g practi），然后用 practi skill install 安装 use-practi skill（若已安装则用 practi skill update 更新），读取它，并按它的指引为我配置好 practi + PractiHub。
+用 npm 全局安装 practi（npm install -g @arshdelight/practi），然后用 practi skill install 安装 use-practi skill（若已安装则用 practi skill update 更新），读取它，并按它的指引为我配置好 practi + PractiHub。
 ```
 
 ## 仓库内容
@@ -79,8 +79,8 @@ practi web [--port 4317]          在本地 web UI 浏览 direct pop
 ```
 
 ```bash
-npm run build -w practi
-npm link -w practi   # 全局安装 `practi` 命令
+npm run build -w @arshdelight/practi
+npm link -w @arshdelight/practi   # 全局安装 `practi` 命令
 ```
 
 两个包同仓为 npm workspace（根目录 `npm install` 即本地互链）。

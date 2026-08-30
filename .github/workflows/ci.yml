@@ -40,10 +40,10 @@ jobs:
       # CLI integration tests: each test spawns the real CLI (node --import tsx)
       # into a per-test temp data dir (--data-dir + POP_HOME); no network.
       - name: Test CLI (integration tests spawn the real CLI)
-        run: npm test -w practi
+        run: npm test -w @arshdelight/practi
 
       - name: Build CLI (tsc typecheck)
-        run: npm run build -w practi
+        run: npm run build -w @arshdelight/practi
 
       - name: CLI smoke (version + spec print)
         run: |
