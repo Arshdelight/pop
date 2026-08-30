@@ -10,10 +10,10 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 ## Quick start
 
-Paste this prompt to your AI agent — it installs the [use-practi skill](skills/use-practi/SKILL.md), and the skill walks the agent through everything else: [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
+Paste this prompt to your AI agent — it points the agent at the agent-readable install guide ([install/practihub.md](https://practihub.com/install/practihub.md)), which installs the [use-practi skill](skills/use-practi/SKILL.md); the skill then walks the agent through everything else: [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
 
 ```text
-Install practi globally via npm (npm install -g @arshdelight/practi), then run practi skill install to install the use-practi skill (or practi skill update if it is already installed), read it, and follow it to set me up with practi + PractiHub.
+Read https://practihub.com/install/practihub.md and follow it to install and set up practi + PractiHub for me.
 ```
 
 ## What's in this repo
