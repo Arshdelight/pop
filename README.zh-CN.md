@@ -10,10 +10,10 @@
 
 ## 快速开始
 
-把这段提示词发给你的 AI agent——它会装好 [use-pop skill](skills/use-pop/SKILL.md)，其余一切由 skill 引导完成：`pop` CLI、[PractiHub](https://practihub.com) 登录，以及之后的每一次记录 / 检索 / 发布。
+把这段提示词发给你的 AI agent——它会装好 [use-practi skill](skills/use-practi/SKILL.md)，其余一切由 skill 引导完成：`practi` CLI、[PractiHub](https://practihub.com) 登录，以及之后的每一次记录 / 检索 / 发布。
 
 ```text
-安装 use-pop skill（npx skills add Arshdelight/pop -g -y），读取它，并按它的指引为我配置好 pop + PractiHub。
+安装 use-practi skill（practi skill install），读取它，并按它的指引为我配置好 practi + PractiHub。
 ```
 
 ## 仓库内容
@@ -21,7 +21,7 @@
 ```
 pop-spec.md              协议规范
 sdk/                     @arshdelight/pop-sdk——官方 SDK + 一致性测试套件
-cli/                     @arshdelight/pop-cli——`pop` 本地 registry CLI（基于 SDK）
+cli/                     practi——`practi` 本地 registry CLI（基于 SDK）
 skills/                  可安装的 agent skill（use-pop——`npx skills add Arshdelight/pop`）
 examples/                种子文档
 ```
@@ -42,45 +42,45 @@ npm run build -w @arshdelight/pop-sdk   # dist/——以 @arshdelight/pop-sdk �
 npm test -w @arshdelight/pop-sdk        # vitest（80 例，含 Appendix A 向量复验）
 ```
 
-## cli/ — @arshdelight/pop-cli（`pop` 命令）
+## cli/ — practi（`practi` 命令）
 
-POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`pop.json` 记录 remote 服务方与注册的 **direct** 根（indirect = direct pop 引用到的其余全部节点）。
+POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`practi.json` 记录 remote 服务方与注册的 **direct** 根（indirect = direct POP 引用到的其余全部节点）。
 
 ```bash
-pop blob add <file-or-url>     暂存附件（对字节算哈希，本地 blob 入库）
-pop config                     查看数据目录、remote、registry 概要
-pop clone <hash>               从 hub 取公开 pop 并认领（本地 direct + remote 认领）
-pop delete <hash>              删除自己在 remote 上的 direct 声明（必须给 hash）
-pop edit <hash> <file.json>    编辑 direct pop（产生新哈希；自动留 revision + 回收不可达节点）
-pop init [path]                初始化数据目录（默认： %APPDATA%\pop / ~/.pop）
-pop login [--no-open]          对 remote 的 OAuth 登录（打开浏览器）
-pop logout                     清除凭据（并在服务端撤销）
-pop ls [-a] [--json]           列出 direct pop（-a 连 indirect 节点一起列）
-pop me                         查看已认证的 remote 用户
-pop new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
-pop pull [hash]                从 remote 同步自己的认领（默认：我的全部）
-pop push [hash]                把本地新增认领推送到 remote（只推新的；存储为 PRIVATE）
-pop remote set <url>           设置 remote 服务方（如 https://practihub.com）
-pop remote show | remove       查看 / 清除 remote
-pop search [query...]          搜索 pop（默认搜 remote；--local 搜本地工作区）
+practi blob add <file-or-url>     暂存附件（对字节算哈希，本地 blob 入库）
+practi config                     查看数据目录、remote、registry 概要
+practi clone <hash>               从 hub 取公开 pop 并认领（本地 direct + remote 认领）
+practi delete <hash>              删除自己在 remote 上的 direct 声明（必须给 hash）
+practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；自动留 revision + 回收不可达节点）
+practi init [path]                初始化数据目录（默认： ~/.practi）
+practi login [--no-open]          对 remote 的 OAuth 登录（打开浏览器）
+practi logout                     清除凭据（并在服务端撤销）
+practi ls [-a] [--json]           列出 direct POP（-a 连 indirect 节点一起列）
+practi me                         查看已认证的 remote 用户
+practi new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
+practi pull [hash]                从 remote 同步自己的认领（默认：我的全部）
+practi push [hash]                把本地新增认领推送到 remote（只推新的；存储为 PRIVATE）
+practi remote set <url>           设置 remote 服务方（如 https://practihub.com）
+practi remote show | remove       查看 / 清除 remote
+practi search [query...]          搜索 pop（默认搜 remote；--local 搜本地工作区）
                                [--local] [--scope public|me|all] [--limit N] [--json]
-pop show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
-pop skill install               安装包内自带的 use-pop skill（默认：~/.agents/skills）
-pop skill update                刷新已安装的 use-pop skill（--dir 指定其它 skills 目录）
-pop skill uninstall             卸载已安装的 use-pop skill
-pop skill import <dir>          把 `pop skill export` 导出的目录回放成 POP（须带 sidecar；外来 skill 靠撰写进入 POP，不做机械导入）
-pop skill export <ref> [--dir]  把 POP 投影成可安装的技能目录（SKILL.md + 附件文件 + pop.doc.json sidecar）
-pop spec                       打印包内 pop-spec.md（无网络依赖）
-pop submit [hash]              提交 pop 进入公开审核（默认：全部 direct）
-pop unpublish [hash]           撤回审核 / 把已发布的撤出公开分发
-pop update                     经 npm 自更新（检查 registry 最新版）
-pop version | --version        查看 CLI 与 pop-spec 协议版本
-pop web [--port 4317]          在本地 web UI 浏览 direct pop
+practi show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
+practi skill install               安装包内自带的 use-practi skill（默认：~/.agents/skills）
+practi skill update                刷新已安装的 use-practi skill（--dir 指定其它 skills 目录）
+practi skill uninstall             卸载已安装的 use-practi skill
+practi skill import <dir>          把 `practi skill export` 导出的目录回放成 POP（须带 sidecar；外来 skill 靠撰写进入 POP，不做机械导入）
+practi skill export <ref> [--dir]  把 POP 投影成可安装的技能目录（SKILL.md + 附件文件 + pop.doc.json sidecar）
+practi spec                       打印包内 pop-spec.md（无网络依赖）
+practi submit [hash]              提交 pop 进入公开审核（默认：全部 direct）
+practi unpublish [hash]           撤回审核 / 把已发布的撤出公开分发
+practi update                     经 npm 自更新（检查 registry 最新版）
+practi version | --version        查看 CLI 与 pop-spec 协议版本
+practi web [--port 4317]          在本地 web UI 浏览 direct pop
 ```
 
 ```bash
-npm run build -w @arshdelight/pop-cli
-npm link -w @arshdelight/pop-cli   # 全局安装 `pop` 命令
+npm run build -w practi
+npm link -w practi   # 全局安装 `practi` 命令
 ```
 
 两个包同仓为 npm workspace（根目录 `npm install` 即本地互链）。

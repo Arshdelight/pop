@@ -19,12 +19,12 @@ export interface BlobOpts {
  *   the source url (bytes stay external, spec §5 — identity remains the hash).
  *
  * Attachments are immutable content: the emitted entry goes into the author's
- * document JSON (then `pop new`), never mutated onto an existing node.
+ * document JSON (then `practi new`), never mutated onto an existing node.
  */
 export async function runBlobAdd(opts: BlobOpts): Promise<number> {
   const target = opts.positional[0];
   if (!target) {
-    console.error('usage: pop blob add <file-or-url> [--name <name>]');
+    console.error('usage: practi blob add <file-or-url> [--name <name>]');
     return 1;
   }
   const dataDir = opts.dataDir ?? defaultDataDir();

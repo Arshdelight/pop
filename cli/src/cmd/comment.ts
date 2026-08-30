@@ -9,7 +9,7 @@ import {
 } from '@arshdelight/pop-sdk';
 
 /**
- * pop comment — POP 节点评论（hub 扩展端点，2026-08-26；不参与协议）。
+ * practi comment — POP 节点评论（hub 扩展端点，2026-08-26；不参与协议）。
  * 扁平评论、每节点每人 1 条、色彩必选默认中立、先发后审（阿里 Green）。
  * 看评论：整篇=该文档自己的评论（来源 scoping）；--node 看某节点的全网评论（DAG 放大视图）。
  */
@@ -33,15 +33,15 @@ const VALENCE_BADGE: Record<string, string> = {
   OPPOSE: '[反对]',
 };
 
-const USAGE = `usage: pop comment list|tally|add|edit|delete|report
-  pop comment list <hash> [--node <hash>] [--cursor <c>] [--limit N] [--json]
+const USAGE = `usage: practi comment list|tally|add|edit|delete|report
+  practi comment list <hash> [--node <hash>] [--cursor <c>] [--limit N] [--json]
                       看评论：整篇=该文档自己的评论；--node=某节点全网评论（含正反态度分布）
-  pop comment tally <hash> [--node <hash>] [--json]
+  practi comment tally <hash> [--node <hash>] [--json]
                       只看正反态度分布（支持/中立/反对计数）
-  pop comment add <hash> --node <hash> --valence support|neutral|oppose -m "<评论内容>"
-  pop comment edit <comment-id> -m "<新内容>"
-  pop comment delete <comment-id>
-  pop comment report <comment-id> --reason illegal|infringement|spam|other [--detail "..."]`;
+  practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "<评论内容>"
+  practi comment edit <comment-id> -m "<新内容>"
+  practi comment delete <comment-id>
+  practi comment report <comment-id> --reason illegal|infringement|spam|other [--detail "..."]`;
 
 function errDetail(body: { error?: string; message?: string }, status: number): string {
   return typeof body.message === 'string'
@@ -55,7 +55,7 @@ export async function runComment(opts: CommentOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   const sub = opts.positional[0];
@@ -86,7 +86,7 @@ async function listComments(
   hash?: string
 ): Promise<number> {
   if (!hash) {
-    console.error('usage: pop comment list <hash> [--node <hash>] [--json]');
+    console.error('usage: practi comment list <hash> [--node <hash>] [--json]');
     return 1;
   }
   const params = new URLSearchParams();
@@ -123,7 +123,7 @@ async function tallyComments(
   hash?: string
 ): Promise<number> {
   if (!hash) {
-    console.error('usage: pop comment tally <hash> [--node <hash>] [--json]');
+    console.error('usage: practi comment tally <hash> [--node <hash>] [--json]');
     return 1;
   }
   const params = new URLSearchParams({ limit: '1' });
@@ -161,7 +161,7 @@ async function addComment(
   hash?: string
 ): Promise<number> {
   if (!hash || !opts.node || !opts.message) {
-    console.error('usage: pop comment add <hash> --node <hash> --valence support|neutral|oppose -m "<评论内容>"');
+    console.error('usage: practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "<评论内容>"');
     return 1;
   }
   const valence = (opts.valence ?? 'neutral').toUpperCase();
@@ -194,7 +194,7 @@ async function editComment(
   commentId?: string
 ): Promise<number> {
   if (!commentId || !opts.message) {
-    console.error('usage: pop comment edit <comment-id> -m "<新内容>"');
+    console.error('usage: practi comment edit <comment-id> -m "<新内容>"');
     return 1;
   }
   const res = await authedFetch(dataDir, remote, `/api/v1/comments/${encodeURIComponent(commentId)}`, {
@@ -222,7 +222,7 @@ async function removeComment(
   commentId?: string
 ): Promise<number> {
   if (!commentId) {
-    console.error('usage: pop comment delete <comment-id>');
+    console.error('usage: practi comment delete <comment-id>');
     return 1;
   }
   const res = await authedFetch(dataDir, remote, `/api/v1/comments/${encodeURIComponent(commentId)}`, {
@@ -248,7 +248,7 @@ async function reportComment(
   commentId?: string
 ): Promise<number> {
   if (!commentId || !opts.reason) {
-    console.error('usage: pop comment report <comment-id> --reason illegal|infringement|spam|other [--detail "..."]');
+    console.error('usage: practi comment report <comment-id> --reason illegal|infringement|spam|other [--detail "..."]');
     return 1;
   }
   const reason = opts.reason.toLowerCase();

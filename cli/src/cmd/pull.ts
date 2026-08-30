@@ -9,16 +9,16 @@ export interface PullOpts {
 }
 
 /**
- * pop pull [hash]：把 hub 上「我的」认领同步到本地（git pull 语义）。
+ * practi pull [hash]：把 hub 上「我的」认领同步到本地（git pull 语义）。
  * - 分页取 hub 我的认领表（mine），diff 出本地还没认领的，逐个拉文档体并注册为 direct。
  * - 只碰「我的认领」——不涉及公共库，因此不需要归属判断（mine 里的都是自己的）。
- * - 带 hash：只同步 mine 中的那一个（不在 mine 里 → 公共内容请用 `pop clone`）。
+ * - 带 hash：只同步 mine 中的那一个（不在 mine 里 → 公共内容请用 `practi clone`）。
  */
 export async function runPull(opts: PullOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   const remote = state.remote.url;
@@ -37,7 +37,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
     const ref = opts.positional[0];
     const hit = mine.find((r) => r.root_hash === ref || (ref.startsWith('sha256:') && r.root_hash.startsWith(ref)));
     if (!hit) {
-      console.error(`error: ${ref} is not in your claims on the remote — for public content use \`pop clone\``);
+      console.error(`error: ${ref} is not in your claims on the remote — for public content use \`practi clone\``);
       return 1;
     }
     hashes = [hit.root_hash];
@@ -60,7 +60,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
   // 提示本地认领而 hub 还没有的（用 push 同步）
   const localOnly = [...local].filter((h) => !mine.some((r) => r.root_hash === h));
   if (localOnly.length > 0) {
-    console.log(`note: ${localOnly.length} direct pop(s) exist only locally — run \`pop push\` to sync`);
+    console.log(`note: ${localOnly.length} direct POP(s) exist only locally — run \`practi push\` to sync`);
   }
   return failed ? 1 : 0;
 }

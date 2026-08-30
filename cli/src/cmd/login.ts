@@ -1,5 +1,5 @@
 import { defaultDataDir, loadState } from '../state.js';
-import { saveCredentials, deleteCredentials, loadCredentials, isAccessTokenFresh } from '../credentials.js';
+import { saveCredentials, deleteCredentials, loadCredentials, isAccessTokenFresh, authPath } from '../credentials.js';
 import {
   cliResource,
   discoverAs,
@@ -21,15 +21,15 @@ export interface LoginOpts {
 }
 
 /**
- * pop login：OAuth 2.1 Authorization Code + PKCE（loopback 回调）登录 practihub。
- * 浏览器授权 → 换 access+refresh token → 凭证存 $dataDir/pop.auth.json（独立于 workspace 状态）。
+ * practi login：OAuth 2.1 Authorization Code + PKCE（loopback 回调）登录 practihub。
+ * 浏览器授权 → 换 access+refresh token → 凭证存 $dataDir/practi.auth.json（独立于 workspace 状态）。
  * 之后命令自动用 refresh token 续期（rotation），无需再次交互。
  */
 export async function runLogin(opts: LoginOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   const remote = state.remote.url;
@@ -41,18 +41,18 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
       console.error(`note: stored credentials were issued for ${existing.resource}, not ${resource} — clearing them`);
       deleteCredentials(dataDir);
     } else if (isAccessTokenFresh(existing)) {
-      console.error('error: already logged in — run `pop logout` first to re-authenticate');
+      console.error('error: already logged in — run `practi logout` first to re-authenticate');
       return 1;
     } else {
       // access 已过期：探一次 refresh。被拒=凭据已死，自动清除后继续；连不上=生死未知，保留并退出
       try {
         await validAccessToken(dataDir, remote);
-        console.error('error: already logged in — run `pop logout` first to re-authenticate');
+        console.error('error: already logged in — run `practi logout` first to re-authenticate');
         return 1;
       } catch (e) {
         if (e instanceof HubUnreachableError) {
           console.error(`error: already logged in, but the session cannot be verified — ${e.message}`);
-          console.error('        run `pop logout` to force re-login');
+          console.error('        run `practi logout` to force re-login');
           return 1;
         }
         console.error(`note: stored credentials are dead — clearing them (${(e as Error).message})`);
@@ -92,19 +92,19 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
       client_id: clientId,
       resource,
       scope: tokens.scope || LOGIN_SCOPES,
-      client_name: 'pop cli',
+      client_name: 'practi cli',
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: Date.now() + tokens.expires_in * 1000,
     });
-    console.log(`logged in to ${remote} — credentials stored in ${dataDir}/pop.auth.json`);
+    console.log(`logged in to ${remote} — credentials stored in ${authPath(dataDir)}`);
     return 0;
   } finally {
     session.close();
   }
 }
 
-/** pop logout：服务端 revoke（best-effort）+ 删除本地凭证 */
+/** practi logout：服务端 revoke（best-effort）+ 删除本地凭证 */
 export async function runLogout(opts: { dataDir?: string }): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
@@ -121,12 +121,12 @@ export interface MeOpts {
   dataDir?: string;
 }
 
-/** pop me：校验登录态，显示当前用户/角色/scope */
+/** practi me：校验登录态，显示当前用户/角色/scope */
 export async function runMe(opts: MeOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   const res = await authedFetch(dataDir, state.remote.url, '/api/auth/me');

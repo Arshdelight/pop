@@ -30,7 +30,7 @@ export function runLs(opts: LsOpts): number {
   }
 
   if (direct.length === 0) {
-    console.log('(no direct pops — create one with `pop new <file.json>` or `pop new --json \'{...}\'`)');
+    console.log('(no direct pops — create one with `practi new <file.json>` or `practi new --json \'{...}\'`)');
   }
   for (const h of direct) {
     const view = aggregateView(h, ws.nodes);

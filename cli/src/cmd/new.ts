@@ -15,7 +15,7 @@ function readStdin(): string {
 }
 
 /**
- * Create a pop from a JSON document: --json '<text>', <file.json>, or stdin
+ * Create a POP from a JSON document: --json '<text>', <file.json>, or stdin
  * (all machine/AI friendly — no editor loop). Validates through the SDK,
  * persists the content-addressed tree, and registers the root as direct.
  */
@@ -27,7 +27,7 @@ export function runNew(opts: NewOpts): number {
   else if (!process.stdin.isTTY) text = readStdin();
 
   if (text === undefined || text.trim() === '') {
-    console.error('usage: pop new <file.json> | pop new --json \'<json text>\' | pop new < file.json');
+    console.error('usage: practi new <file.json> | practi new --json \'<json text>\' | practi new < file.json');
     return 1;
   }
 

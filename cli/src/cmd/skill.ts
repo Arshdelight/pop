@@ -7,15 +7,15 @@ import { defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 
 /**
- * pop skill 子命令：
- * - install|update|uninstall：管理随 CLI 打包的 use-pop agent skill。
- *   源：包内 skills/use-pop（package.json files 已含）。仓库根 skills/use-pop 是标准
- *   （npx skills 从仓库安装），CI 锁两份逐字节一致。
- *   注意：该 skill 目录本身就是一份 POP 的导出物（SKILL.md 是投影，pop.doc.json
- *   是源文档）——维护时改 POP 再重新 export，不手改 SKILL.md。
+ * practi skill 子命令：
+ * - install|update|uninstall：管理随 CLI 打包的 use-practi agent skill。
+ *   源：包内 skills/use-practi（package.json files 已含）。仓库根 skills/use-practi
+ *   是标准（npx skills 从仓库安装），CI 锁两份逐字节一致。
+ *   该 skill 是手写维护的（SKILL.md 即源，无 pop.doc.json sidecar，不从 POP 导出）。
  *   目标：默认 ~/.agents/skills（跨 agent 约定目录，与 npx skills 的落点相同），
- *   --dir <skills-dir> 覆盖；安装形态 <skills-dir>/use-pop/SKILL.md。
- *   install 幂等同步（含清理源里已不存在的陈旧文件）；update 要求已安装；uninstall 删整个目录。
+ *   --dir <skills-dir> 覆盖；安装形态 <skills-dir>/use-practi/SKILL.md。
+ *   install 幂等同步（含清理源里已不存在的陈旧文件），并顺带移除改名前安装的
+ *   旧 use-pop 目录（CLI 自管产物）；update 要求已安装；uninstall 删整个目录。
  * - import|export：skill ⇄ POP 转换（spec §1/§8）。
  *   export 把 workspace 里的 POP 投影成可安装的技能目录（SKILL.md + 附件 +
  *   pop.doc.json sidecar）；import 是它的逆运算——sidecar 精确回放（附件文件
@@ -23,20 +23,21 @@ import { openWorkspace } from '../workspace.js';
  *   外来 skill 靠重新撰写进入 POP，不做机械压平。
  */
 
-const SKILL_NAME = 'use-pop';
+const SKILL_NAME = 'use-practi';
+const LEGACY_SKILL_NAME = 'use-pop';
 
 export interface SkillOpts {
   action: 'install' | 'update' | 'uninstall' | 'import' | 'export';
   dir?: string;
-  /** import/export 的 pop 数据目录（默认 $POP_HOME / %APPDATA%\pop / ~/.pop） */
+  /** import/export 的 pop 数据目录（默认 $PRACTI_HOME / ~/.practi / ~/.practi） */
   dataDir?: string;
   /** import：技能源目录；export：节点引用（hash 或唯一前缀） */
   positional?: string;
 }
 
 function sourceDir(): string {
-  // dist/cmd/skill.js → 包根 → skills/use-pop（源码运行与 npm 安装布局同构）
-  return fileURLToPath(new URL('../../skills/use-pop', import.meta.url));
+  // dist/cmd/skill.js → 包根 → skills/use-practi（源码运行与 npm 安装布局同构）
+  return fileURLToPath(new URL('../../skills/use-practi', import.meta.url));
 }
 
 function listFiles(dir: string, base: string = dir, out: string[] = []): string[] {
@@ -110,11 +111,11 @@ export function runSkill(opts: SkillOpts): number {
 
   const src = sourceDir();
   if (!fs.existsSync(src)) {
-    console.error(`error: bundled skill not found at ${src} — the cli package is broken; reinstall it (npm install -g @arshdelight/pop-cli)`);
+    console.error(`error: bundled skill not found at ${src} — the cli package is broken; reinstall it (npm install -g practi)`);
     return 1;
   }
   if (opts.action === 'update' && !fs.existsSync(target)) {
-    console.error(`error: ${SKILL_NAME} is not installed in ${skillsDir} — run \`pop skill install\` first`);
+    console.error(`error: ${SKILL_NAME} is not installed in ${skillsDir} — run \`practi skill install\` first`);
     return 1;
   }
 
@@ -125,6 +126,12 @@ export function runSkill(opts: SkillOpts): number {
   } else {
     const verb = existed ? 'updated' : 'installed';
     console.log(`${verb}: ${SKILL_NAME} → ${target} (${written} written, ${unchanged} unchanged${pruned > 0 ? `, ${pruned} pruned` : ''})`);
+  }
+  // 改名迁移：旧 CLI 装的 use-pop 是本 CLI 自管产物，装新版时顺带移除，避免两份并存
+  const legacyTarget = path.join(skillsDir, LEGACY_SKILL_NAME);
+  if (fs.existsSync(path.join(legacyTarget, 'SKILL.md'))) {
+    fs.rmSync(legacyTarget, { recursive: true });
+    console.log(`removed:   ${LEGACY_SKILL_NAME} → ${legacyTarget}  (replaced by ${SKILL_NAME})`);
   }
   return 0;
 }
@@ -139,10 +146,10 @@ function slugOrHash(name: string, hash: string): string {
   return slug !== '' ? slug : hash.slice('sha256:'.length, 'sha256:'.length + 12);
 }
 
-/** pop skill import <dir>：回放 `pop skill export` 导出的目录（sidecar 精确复放，附件重新入库）+ 注册 direct */
+/** practi skill import <dir>：回放 `practi skill export` 导出的目录（sidecar 精确复放，附件重新入库）+ 注册 direct */
 function runSkillImport(opts: SkillOpts): number {
   if (!opts.positional) {
-    console.error('usage: pop skill import <skill-dir> [--data-dir <dir>]');
+    console.error('usage: practi skill import <skill-dir> [--data-dir <dir>]');
     return 1;
   }
   const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : defaultDataDir();
@@ -172,10 +179,10 @@ function runSkillImport(opts: SkillOpts): number {
   return 0;
 }
 
-/** pop skill export <ref> [--dir <out>]：POP → 技能目录（SKILL.md 投影 + 附件 + sidecar） */
+/** practi skill export <ref> [--dir <out>]：POP → 技能目录（SKILL.md 投影 + 附件 + sidecar） */
 function runSkillExport(opts: SkillOpts): number {
   if (!opts.positional) {
-    console.error('usage: pop skill export <ref> [--dir <out-dir>] [--data-dir <dir>]');
+    console.error('usage: practi skill export <ref> [--dir <out-dir>] [--data-dir <dir>]');
     return 1;
   }
   const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : defaultDataDir();

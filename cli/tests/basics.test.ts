@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { init, pop, tempDataDir } from './helpers.js';
 
-describe('pop basics: version, help, unknown commands', () => {
+describe('practi basics: version, help, unknown commands', () => {
   it('--version and `version` exit 0 and print CLI + spec versions', async () => {
     for (const args of [['--version'], ['version'], ['-v']]) {
       const r = await pop(tempDataDir(), args);
       expect(r.code).toBe(0);
-      expect(r.stdout).toMatch(/^pop-cli\s+\d+\.\d+/m);
+      expect(r.stdout).toMatch(/^practi\s+\d+\.\d+/m);
       expect(r.stdout).toMatch(/^pop-spec\s+\d+\.\d+/m);
     }
   });
 
   it('help flags exit 0 printing the usage', async () => {
-    // (bare `pop` is not exercised here: the helper always appends --data-dir,
+    // (bare `practi` is not exercised here: the helper always appends --data-dir,
     // which would become argv[0]; `help` hits the same branch in index.ts)
     for (const args of [['help'], ['--help'], ['-h']]) {
       const r = await pop(tempDataDir(), args);
@@ -34,14 +34,14 @@ describe('pop basics: version, help, unknown commands', () => {
     await init(dir);
     const r = await pop(dir, ['blob', 'add']);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('usage: pop blob add');
+    expect(r.stderr).toContain('usage: practi blob add');
   });
 
   it('commands outside an initialized data dir fail with typed E_NOT_INITIALIZED', async () => {
     const r = await pop(tempDataDir(), ['ls']);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/error \[E_NOT_INITIALIZED\]/);
-    expect(r.stderr).toContain('run `pop init');
+    expect(r.stderr).toContain('run `practi init');
   });
 
   it('spec prints the bundled pop-spec offline (no data dir needed)', async () => {

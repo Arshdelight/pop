@@ -23,7 +23,7 @@ describe('pop new: three input channels, one content-addressed result', () => {
     expect(r.stdout).toMatch(/^nodes:\s+1$/m);
     expect(r.stdout).toContain('status:   valid, registered as direct');
 
-    // the node file is named by the content hash; pop.json carries the registration
+    // the node file is named by the content hash; pop state carries the registration
     expect(fs.existsSync(nodeFile(dir, root))).toBe(true);
     expect(readState(dir).direct).toEqual([root]);
   });
@@ -141,6 +141,6 @@ describe('pop new: typed error surface', () => {
     await init(dir);
     const r = await pop(dir, ['new'], { input: '' });
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('usage: pop new');
+    expect(r.stderr).toContain('usage: practi new');
   });
 });

@@ -31,7 +31,7 @@ export function runWeb(opts: WebOpts): number {
   });
 
   server.listen(opts.port, '127.0.0.1', () => {
-    console.log(`pop web: ${url}`);
+    console.log(`practi web: ${url}`);
     console.log(`data dir: ${dataDir}`);
     console.log('press Ctrl-C to stop');
     if (opts.open) openBrowser(url);

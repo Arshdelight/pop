@@ -14,7 +14,7 @@ describe('pop delete: remote-only by design', () => {
     await init(dir);
     const r = await pop(dir, ['delete']);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain('usage: pop delete');
+    expect(r.stdout).toContain('usage: practi delete');
     expect(r.stderr).toBe('');
   });
 
@@ -29,7 +29,7 @@ describe('pop delete: remote-only by design', () => {
     // requireCredentials throws before any HTTP call — no network dependency in the test
     expect(r.stderr).toContain('not logged in');
 
-    // the local direct registration is untouched (delete never edits pop.json)
+    // the local direct registration is untouched (delete never edits practi.json)
     const ls = await pop(dir, ['ls', '--json']);
     expect(JSON.parse(ls.stdout).direct.map((v: { hash: string }) => v.hash)).toEqual([root]);
   });

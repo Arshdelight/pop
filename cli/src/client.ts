@@ -13,7 +13,7 @@ export class HubUnreachableError extends Error {}
 
 /**
  * 登录态之上的远程请求层：保证请求带有效 Bearer access token。
- * - access token 已过期 → 用 refresh token 换新对（rotation，回写 pop.auth.json）
+ * - access token 已过期 → 用 refresh token 换新对（rotation，回写 practi.auth.json）
  * - 401（token 被服务端撤销/aud 不符）→ 刷新一次并重试
  * 刷新失败（refresh 也被撤销/过期）→ 抛错提示重新 `pop login`。
  */

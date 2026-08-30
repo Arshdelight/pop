@@ -10,10 +10,10 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 ## Quick start
 
-Paste this prompt to your AI agent — it installs the [use-pop skill](skills/use-pop/SKILL.md), and the skill walks the agent through everything else: the `pop` CLI, [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
+Paste this prompt to your AI agent — it installs the [use-practi skill](skills/use-practi/SKILL.md), and the skill walks the agent through everything else: the `practi` CLI, [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
 
 ```text
-Install the use-pop skill (npx skills add Arshdelight/pop -g -y), read it, and follow it to set me up with pop + PractiHub.
+Install the use-practi skill (practi skill install), read it, and follow it to set me up with practi + PractiHub.
 ```
 
 ## What's in this repo
@@ -21,7 +21,7 @@ Install the use-pop skill (npx skills add Arshdelight/pop -g -y), read it, and f
 ```
 pop-spec.md              the specification
 sdk/                     @arshdelight/pop-sdk — the official SDK + its conformance test suite
-cli/                     @arshdelight/pop-cli — the `pop` local registry CLI (built on the SDK)
+cli/                     practi — the `practi` local registry CLI (built on the SDK)
 skills/                  installable agent skill (use-pop — `npx skills add Arshdelight/pop`)
 examples/                seed documents
 ```
@@ -42,45 +42,45 @@ npm run build -w @arshdelight/pop-sdk   # dist/ — importable as @arshdelight/p
 npm test -w @arshdelight/pop-sdk        # vitest (incl. Appendix A vector re-verification)
 ```
 
-## cli/ — @arshdelight/pop-cli (the `pop` command)
+## cli/ — practi (the `practi` command)
 
-A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `pop.json` records the remote provider and the registered **direct** roots (indirect = every other node the direct pops reference); credentials live separately in `pop.auth.json`, kept out of `pop.json` so the workspace stays commit-safe.
+A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the remote provider and the registered **direct** roots (indirect = every other node the direct POPs reference); credentials live separately in `pop.auth.json`, kept out of `pop.json` so the workspace stays commit-safe.
 
 ```bash
-pop blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
-pop config                     show data dir, remote, registry summary
-pop clone <hash>               fetch a public pop and claim it (local direct + remote claim)
-pop delete <hash>              remove your direct claim on the remote
-pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC of unreachable nodes)
-pop init [path]                initialize a data directory (default: %APPDATA%\pop / ~/.pop)
-pop login [--no-open]          OAuth login against the remote (opens the browser)
-pop logout                     clear stored credentials (revokes on the server)
-pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
-pop me                         show the authenticated remote user
-pop new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
-pop pull [hash]                sync YOUR claims from the remote (default: all of mine)
-pop push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)
-pop remote set <url>           set the remote provider (e.g. https://practihub.com)
-pop remote show | remove       inspect / clear the remote
-pop search [query...]          search pops (remote by default; --local the workspace)
+practi blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
+practi config                     show data dir, remote, registry summary
+practi clone <hash>               fetch a public pop and claim it (local direct + remote claim)
+practi delete <hash>              remove your direct claim on the remote
+practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi init [path]                initialize a data directory (default: ~/.practi)
+practi login [--no-open]          OAuth login against the remote (opens the browser)
+practi logout                     clear stored credentials (revokes on the server)
+practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
+practi me                         show the authenticated remote user
+practi new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
+practi push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)
+practi remote set <url>           set the remote provider (e.g. https://practihub.com)
+practi remote show | remove       inspect / clear the remote
+practi search [query...]          search pops (remote by default; --local the workspace)
                                [--local] [--scope public|me|all] [--limit N] [--json]
-pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
-pop skill install               install the bundled use-pop skill (default: ~/.agents/skills)
-pop skill update                refresh the installed use-pop skill (--dir to target another dir)
-pop skill uninstall             remove the installed use-pop skill
-pop skill import <dir>          replay a `pop skill export` directory back into a POP (sidecar required; foreign skills enter POP by authoring, not import)
-pop skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + attachment files + pop.doc.json sidecar)
-pop spec                       print the bundled pop-spec.md (no network fetch)
-pop submit [hash]              submit pops for public review (default: all direct)
-pop unpublish [hash]           withdraw a submission / unpublish
-pop update                     self-update via npm (checks the registry's latest)
-pop version | --version        show CLI + pop-spec versions
-pop web [--port 4317]          browse direct pops in a local web UI
+practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
+practi skill update                refresh the installed use-practi skill (--dir to target another dir)
+practi skill uninstall             remove the installed use-practi skill
+practi skill import <dir>          replay a `practi skill export` directory back into a POP (sidecar required; foreign skills enter POP by authoring, not import)
+practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + attachment files + pop.doc.json sidecar)
+practi spec                       print the bundled pop-spec.md (no network fetch)
+practi submit [hash]              submit pops for public review (default: all direct)
+practi unpublish [hash]           withdraw a submission / unpublish
+practi update                     self-update via npm (checks the registry's latest)
+practi version | --version        show CLI + pop-spec versions
+practi web [--port 4317]          browse direct POPs in a local web UI
 ```
 
 ```bash
-npm run build -w @arshdelight/pop-cli
-npm link -w @arshdelight/pop-cli   # installs the `pop` command globally
+npm run build -w practi
+npm link -w practi   # installs the `practi` command globally
 ```
 
 Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally).

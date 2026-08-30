@@ -9,7 +9,7 @@ export interface PushOpts {
 }
 
 /**
- * pop push [hash]：把本地认领增量推送到 practihub（git push 的对象协商语义）。
+ * practi push [hash]：把本地认领增量推送到 practihub（git push 的对象协商语义）。
  * - 先分页取 hub 上「我的」认领表（mine），diff 出本地认领而 hub 我还没认领的，
  *   只传这些（带 hash 只推该 direct；不带推全部 direct）——不再全量 POST。
  * - 走 POST /api/v1/pop（内容寻址幂等）：hub 没有就存，有则 idempotent 不重复写，
@@ -19,7 +19,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   const ws = openWorkspace(dataDir);

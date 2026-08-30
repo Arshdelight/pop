@@ -23,59 +23,59 @@ import { runSkill } from './cmd/skill.js';
 import { CLI_VERSION, POP_SPEC_VERSION } from './version.js';
 
 function printVersion(): number {
-  console.log(`pop-cli  ${CLI_VERSION}`);
+  console.log(`practi   ${CLI_VERSION}`);
   console.log(`pop-spec ${POP_SPEC_VERSION}  (via @arshdelight/pop-sdk)`);
   return 0;
 }
 
-const USAGE = `pop — local registry for POP (Protocol of Practice)
+const USAGE = `practi — local registry for POP (Protocol of Practice), syncing to PractiHub
 
 usage:
-  pop blob add <file-or-url>     stage an attachment; emits the attachment entry
+  practi blob add <file-or-url>     stage an attachment; emits the attachment entry
                                  (hashes the bytes, stores local blobs in the workspace)
-  pop clone <hash>               fetch a public pop and claim it (fork: local direct + remote claim)
-  pop comment list|tally|add|edit|delete|report
+  practi clone <hash>               fetch a public POP and claim it (fork: local direct + remote claim)
+  practi comment list|tally|add|edit|delete|report
                                  node comments on the remote (hub extension; source-scoped list,
                                  --node for a shared node's full view; --json for agents)
-  pop config                     show data dir, remote, registry summary
-  pop delete <hash>              remove your direct claim on the remote (hash required)
-  pop edit <hash> <file.json>    replace a direct pop (new hash; auto-revision + GC)
-       | pop edit <hash> --json '<text>' | pop edit <hash> < file.json
+  practi config                     show data dir, remote, registry summary
+  practi delete <hash>              remove your direct claim on the remote (hash required)
+  practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
+       | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
        [--message <text>] [--no-revision] [--keep]
-  pop init [path]                initialize a data directory (default: %APPDATA%\\pop / ~/.pop)
-  pop login [--no-open]          OAuth login in the browser (--no-open prints the URL only)
-  pop logout                     clear stored credentials (revokes on the server)
-  pop ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
-  pop me                         show the authenticated practihub user
-  pop new <file.json>            create a pop from a JSON document
-       | pop new --json '<text>'
-       | pop new < file.json
-  pop pull [hash]                sync YOUR claims from the remote (default: all of mine)
-  pop push [hash]                push new local claims to the remote (git-style: only new ones)
-  pop remote set <url>           set the remote provider (e.g. https://practihub.com)
-  pop remote show | remove       inspect / clear the remote
-  pop search [query...]          search pops (remote by default; --local the workspace)
+  practi init [path]                initialize a data directory (default: ~/.practi)
+  practi login [--no-open]          OAuth login in the browser (--no-open prints the URL only)
+  practi logout                     clear stored credentials (revokes on the server)
+  practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
+  practi me                         show the authenticated practihub user
+  practi new <file.json>            create a POP from a JSON document
+       | practi new --json '<text>'
+       | practi new < file.json
+  practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
+  practi push [hash]                push new local claims to the remote (git-style: only new ones)
+  practi remote set <url>           set the remote provider (e.g. https://practihub.com)
+  practi remote show | remove       inspect / clear the remote
+  practi search [query...]          search pops (remote by default; --local the workspace)
        [--local] [--scope public|me|all] [--limit N] [--json]
-  pop show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
-  pop skill install               install the bundled use-pop skill (default: ~/.agents/skills)
-  pop skill update                refresh the installed use-pop skill (--dir to override)
-  pop skill uninstall             remove the installed use-pop skill
-  pop skill import <dir>          replay a pop skill export directory back into a POP (sidecar required;
+  practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+  practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
+  practi skill update                refresh the installed use-practi skill (--dir to override)
+  practi skill uninstall             remove the installed use-practi skill
+  practi skill import <dir>          replay a practi skill export directory back into a POP (sidecar required;
                                   foreign skills enter POP by authoring, not import)
-  pop skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
-  pop spec                       print pop-spec.md (bundled with the SDK; no network)
-  pop submit [hash]              submit pops for public review (default: all direct)
-  pop unpublish [hash]           withdraw a submission / take one back out of public
-  pop update                     self-update via npm (checks the registry's latest)
-  pop version | --version        show CLI + pop-spec versions
-  pop web [--port 4317] [--no-open]  browse direct pops in a local web UI
+  practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
+  practi spec                       print pop-spec.md (bundled with the SDK; no network)
+  practi submit [hash]              submit pops for public review (default: all direct)
+  practi unpublish [hash]           withdraw a submission / take one back out of public
+  practi update                     self-update via npm (checks the registry's latest)
+  practi version | --version        show CLI + pop-spec versions
+  practi web [--port 4317] [--no-open]  browse direct pops in a local web UI
 
 options:
   --data-dir <path>              target data directory (same default as init)
 
 the data directory is a POP workspace: nodes are content-addressed (nodes/*.md),
-pop.json records the remote and registered direct roots; login credentials live
-in pop.auth.json (kept out of pop.json so the workspace stays commit-safe).
+practi.json records the remote and registered direct roots; login credentials live
+in practi.auth.json (kept out of practi.json so the workspace stays commit-safe).
 `;
 
 const COMMON = {
@@ -98,17 +98,17 @@ async function main(argv: string[]): Promise<number> {
   switch (cmd) {
     case 'init': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop init [path]'); return 0; }
+      if (values.help) { console.log('usage: practi init [path]'); return 0; }
       return runInit({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'config': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop config'); return 0; }
+      if (values.help) { console.log('usage: practi config'); return 0; }
       return runConfig({ dataDir: str(values['data-dir']) });
     }
     case 'remote': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop remote set <url> | show | remove'); return 0; }
+      if (values.help) { console.log('usage: practi remote set <url> | show | remove'); return 0; }
       return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'ls': {
@@ -117,7 +117,7 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, all: { type: 'boolean' as const, short: 'a' }, json: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop ls [-a] [--json]'); return 0; }
+      if (values.help) { console.log('usage: practi ls [-a] [--json]'); return 0; }
       return runLs({ dataDir: str(values['data-dir']), all: values.all === true, json: values.json === true });
     }
     case 'new': {
@@ -126,7 +126,7 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, json: { type: 'string' as const }, file: { type: 'string' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop new <file.json> | pop new --json \'<text>\' | pop new < file.json'); return 0; }
+      if (values.help) { console.log('usage: practi new <file.json> | practi new --json \'<text>\' | practi new < file.json'); return 0; }
       return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, positional: positionals });
     }
     case 'edit': {
@@ -142,7 +142,7 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop edit <hash> <file.json> [--message <text>] [--no-revision] [--keep]'); return 0; }
+      if (values.help) { console.log('usage: practi edit <hash> <file.json> [--message <text>] [--no-revision] [--keep]'); return 0; }
       return runEdit({
         dataDir: str(values['data-dir']),
         json: values.json,
@@ -159,7 +159,7 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, json: { type: 'boolean' as const }, doc: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help || positionals.length === 0) { console.log('usage: pop show <hash> [--json] [--doc]'); return 0; }
+      if (values.help || positionals.length === 0) { console.log('usage: practi show <hash> [--json] [--doc]'); return 0; }
       return runShow({ dataDir: str(values['data-dir']), hash: positionals[0], json: values.json === true, doc: values.doc === true });
     }
     case 'web': {
@@ -173,7 +173,7 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop web [--port 4317] [--no-open]'); return 0; }
+      if (values.help) { console.log('usage: practi web [--port 4317] [--no-open]'); return 0; }
       const port = values.port ? Number(values.port) : 4317;
       return runWeb({ dataDir: str(values['data-dir']), port: Number.isInteger(port) && port > 0 ? port : 4317, open: values['no-open'] !== true });
     }
@@ -183,32 +183,32 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, 'no-open': { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop login [--no-open]'); return 0; }
+      if (values.help) { console.log('usage: practi login [--no-open]'); return 0; }
       return runLogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true });
     }
     case 'logout': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop logout'); return 0; }
+      if (values.help) { console.log('usage: practi logout'); return 0; }
       return runLogout({ dataDir: str(values['data-dir']) });
     }
     case 'me': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop me'); return 0; }
+      if (values.help) { console.log('usage: practi me'); return 0; }
       return runMe({ dataDir: str(values['data-dir']) });
     }
     case 'push': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop push [hash]'); return 0; }
+      if (values.help) { console.log('usage: practi push [hash]'); return 0; }
       return runPush({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'pull': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop pull [hash]'); return 0; }
+      if (values.help) { console.log('usage: practi pull [hash]'); return 0; }
       return runPull({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'clone': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help || positionals.length === 0) { console.log('usage: pop clone <hash>'); return 0; }
+      if (values.help || positionals.length === 0) { console.log('usage: practi clone <hash>'); return 0; }
       return runClone({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'comment': {
@@ -228,7 +228,7 @@ async function main(argv: string[]): Promise<number> {
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: pop comment list|tally|add|edit|delete|report   (see `pop comment` help)');
+        console.log('usage: practi comment list|tally|add|edit|delete|report   (see `practi comment` help)');
         return 0;
       }
       return runComment({
@@ -256,7 +256,7 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop search [query...] [--local] [--scope public|me|all] [--limit N] [--json]'); return 0; }
+      if (values.help) { console.log('usage: practi search [query...] [--local] [--scope public|me|all] [--limit N] [--json]'); return 0; }
       const limit = values.limit ? Number(values.limit) : 20;
       return runSearch({
         dataDir: str(values['data-dir']),
@@ -269,17 +269,17 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'submit': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop submit [hash]   (default: all direct pops)'); return 0; }
+      if (values.help) { console.log('usage: practi submit [hash]   (default: all direct pops)'); return 0; }
       return runSubmit({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'unpublish': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop unpublish [hash]   (default: all direct pops)'); return 0; }
+      if (values.help) { console.log('usage: practi unpublish [hash]   (default: all direct pops)'); return 0; }
       return runUnpublish({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'delete': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help || positionals.length === 0) { console.log('usage: pop delete <hash>   (explicit hash required)'); return 0; }
+      if (values.help || positionals.length === 0) { console.log('usage: practi delete <hash>   (explicit hash required)'); return 0; }
       return runDelete({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'blob': {
@@ -289,11 +289,11 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, name: { type: 'string' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: pop blob add <file-or-url> [--name <name>]'); return 0; }
+      if (values.help) { console.log('usage: practi blob add <file-or-url> [--name <name>]'); return 0; }
       if (sub === 'add') {
         return runBlobAdd({ dataDir: str(values['data-dir']), name: values.name, positional: positionals });
       }
-      console.error('usage: pop blob add <file-or-url> [--name <name>]');
+      console.error('usage: practi blob add <file-or-url> [--name <name>]');
       return 1;
     }
     case 'skill': {
@@ -306,21 +306,21 @@ async function main(argv: string[]): Promise<number> {
       const known = ['install', 'update', 'uninstall', 'import', 'export'] as const;
       const action = known.find((k) => k === sub);
       if (values.help || action === undefined) {
-        console.log('usage: pop skill install|update|uninstall [--dir <skills-dir>]   (default dir: ~/.agents/skills)');
-        console.log('       pop skill import <skill-dir> [--data-dir <dir>]          replay a `pop skill export` directory (sidecar required)');
-        console.log('       pop skill export <ref> [--dir <out-dir>] [--data-dir <dir>]  POP → skill directory');
+        console.log('usage: practi skill install|update|uninstall [--dir <skills-dir>]   (default dir: ~/.agents/skills)');
+        console.log('       practi skill import <skill-dir> [--data-dir <dir>]          replay a `practi skill export` directory (sidecar required)');
+        console.log('       practi skill export <ref> [--dir <out-dir>] [--data-dir <dir>]  POP → skill directory');
         return sub !== undefined && !values.help ? 1 : 0;
       }
       return runSkill({ action, dir: values.dir, dataDir: str(values['data-dir']), positional: positionals[0] });
     }
     case 'spec': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop spec   (print the bundled pop-spec.md)'); return 0; }
+      if (values.help) { console.log('usage: practi spec   (print the bundled pop-spec.md)'); return 0; }
       return runSpec({ dataDir: str(values['data-dir']) });
     }
     case 'update': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: pop update   (self-update via npm; checks the registry\'s latest)'); return 0; }
+      if (values.help) { console.log('usage: practi update   (self-update via npm; checks the registry\'s latest)'); return 0; }
       return await runUpdate({ dataDir: str(values['data-dir']) });
     }
     case 'help':

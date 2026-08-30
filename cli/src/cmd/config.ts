@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { defaultDataDir, loadState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { loadCredentials, authPath } from '../credentials.js';
+import { loadCredentials, existingAuthFile, authPath } from '../credentials.js';
 import { CLI_VERSION, POP_SPEC_VERSION } from '../version.js';
 
 export interface ConfigOpts {
@@ -20,14 +20,14 @@ export function runConfig(opts: ConfigOpts): number {
   const direct = state.direct.length;
   const indirect = ws ? ws.nodes.size - direct : 0;
   const creds = loadCredentials(dataDir);
-  console.log(`pop-cli:    ${CLI_VERSION}   pop-spec: ${POP_SPEC_VERSION}`);
+  console.log(`practi:    ${CLI_VERSION}   pop-spec: ${POP_SPEC_VERSION}`);
   console.log(`data dir:   ${path.resolve(dataDir)}`);
   console.log(`remote:     ${state.remote ? state.remote.url : '(not set)'}`);
-  console.log(`auth:       ${creds ? `logged in as ${creds.client_name ?? 'pop cli'} (${authPath(dataDir)})` : '(not logged in)'}`);
+  console.log(`auth:       ${creds ? `logged in as ${creds.client_name ?? 'practi cli'} (${existingAuthFile(dataDir) ?? authPath(dataDir)})` : '(not logged in)'}`);
   console.log(`direct:     ${direct}`);
   console.log(`indirect:   ${indirect}`);
   if (ws && ws.parseIssues.length > 0) {
-    console.log(`warnings:   ${ws.parseIssues.length} parse issue(s) — run \`pop ls\` to see them`);
+    console.log(`warnings:   ${ws.parseIssues.length} parse issue(s) — run \`practi ls\` to see them`);
   }
   return 0;
 }

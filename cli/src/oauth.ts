@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { openBrowser } from './web.js';
 
 /**
- * OAuth 2.1 client（pop cli ↔ practihub 的 Authorization Server）：
+ * OAuth 2.1 client（practi cli ↔ practihub 的 Authorization Server）：
  * 发现 AS metadata → DCR 注册 loopback client → PKCE S256 → 浏览器授权 →
  * loopback 回调收 code → token 端点换 access/refresh。全部走标准端点。
  *
@@ -80,7 +80,7 @@ export async function registerClient(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      client_name: 'pop cli',
+      client_name: 'practi cli',
       redirect_uris: [redirectUri],
       token_endpoint_auth_method: 'none',
       grant_types: ['authorization_code', 'refresh_token'],

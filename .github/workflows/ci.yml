@@ -29,10 +29,10 @@ jobs:
       - name: Spec sync (root ⇄ sdk/spec)
         run: cmp pop-spec.md sdk/spec/pop-spec.md
 
-      # skill 一致性：仓库根 skills/use-pop 是标准（npx skills 从仓库装），
-      # CLI 包内副本是 pop skill install 的安装源，必须逐字节一致。
+      # skill 一致性：仓库根 skills/use-practi 是标准（npx skills 从仓库装），
+      # CLI 包内副本是 practi skill install 的安装源，必须逐字节一致。
       - name: Skill sync (root ⇄ cli/skills)
-        run: diff -r skills/use-pop cli/skills/use-pop
+        run: diff -r skills/use-practi cli/skills/use-practi
 
       - name: Build & test SDK (conformance + spec-sync tests)
         run: npm test -w @arshdelight/pop-sdk
@@ -40,10 +40,10 @@ jobs:
       # CLI integration tests: each test spawns the real CLI (node --import tsx)
       # into a per-test temp data dir (--data-dir + POP_HOME); no network.
       - name: Test CLI (integration tests spawn the real CLI)
-        run: npm test -w @arshdelight/pop-cli
+        run: npm test -w practi
 
       - name: Build CLI (tsc typecheck)
-        run: npm run build -w @arshdelight/pop-cli
+        run: npm run build -w practi
 
       - name: CLI smoke (version + spec print)
         run: |

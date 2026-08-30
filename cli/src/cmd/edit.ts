@@ -54,7 +54,7 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
 }
 
 /**
- * pop edit <hash>：非交互编辑一个 direct 根——新文档（file/--json/stdin）→ 新哈希换注册。
+ * practi edit <hash>：非交互编辑一个 direct 根——新文档（file/--json/stdin）→ 新哈希换注册。
  * 编辑即修订：根节点自动追加 revisions（from = 旧根哈希；spec §2.2 历史指针，允许悬空、永不校验）。
  * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
  * 纯本地操作：远端旧版仍在，结束时提示 push + delete 同步。
@@ -68,7 +68,7 @@ export function runEdit(opts: EditOpts): number {
   else if (!process.stdin.isTTY) text = readStdin();
 
   if (!ref || text === undefined || text.trim() === '') {
-    console.error("usage: pop edit <hash> <file.json> | pop edit <hash> --json '<text>' | pop edit <hash> < file.json");
+    console.error("usage: practi edit <hash> <file.json> | practi edit <hash> --json '<text>' | practi edit <hash> < file.json");
     console.error('       [--message <text>] [--no-revision] [--keep]');
     return 1;
   }
@@ -79,7 +79,7 @@ export function runEdit(opts: EditOpts): number {
   const oldRoot = resolveNodeRef(ws, ref);
   if (!state.direct.includes(oldRoot)) {
     console.error(`error: ${oldRoot} is not one of your direct pops — edit swaps a direct root;`);
-    console.error('       for anything else fork it instead (pop show <hash> --doc, change, pop new)');
+    console.error('       for anything else fork it instead (practi show <hash> --doc, change, practi new)');
     return 1;
   }
 
@@ -101,7 +101,7 @@ export function runEdit(opts: EditOpts): number {
     if (!already) {
       revisions.push({
         when: new Date().toISOString().slice(0, 10),
-        what: opts.message ?? 'edited via pop edit',
+        what: opts.message ?? 'edited via practi edit',
         from: oldRoot,
       });
       doc.revisions = revisions;
@@ -137,6 +137,6 @@ export function runEdit(opts: EditOpts): number {
       `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(short).join(', ')}` : ''}`
     );
   }
-  console.log(`remote:   the hub still holds the old version — sync with \`pop push\` then \`pop delete ${oldRoot}\``);
+  console.log(`remote:   the hub still holds the old version — sync with \`practi push\` then \`practi delete ${oldRoot}\``);
   return 0;
 }

@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * 登录凭证（refresh/access token 等），独立于 workspace 状态（pop.json）存放：
- * 数据目录是 POP workspace，可能在 git 仓库里，pop.json 不应携带密钥。
- * 存在 $dataDir/pop.auth.json；POSIX 上 chmod 600（Windows 依赖用户级目录权限）。
+ * 登录凭证（refresh/access token 等），独立于 workspace 状态（practi.json）存放：
+ * 数据目录是 POP workspace，可能在 git 仓库里，practi.json 不应携带密钥。
+ * 存在 $dataDir/practi.auth.json；POSIX 上 chmod 600（Windows 依赖用户级目录权限）。
+ * 旧名 pop.auth.json 仍可读（读旧写新）——改名前的登录不失效。
  */
 
-export const AUTH_FILE = 'pop.auth.json';
+export const AUTH_FILE = 'practi.auth.json';
+const LEGACY_AUTH_FILE = 'pop.auth.json';
 
 export interface Credentials {
   schema: 1;
@@ -31,9 +33,22 @@ export function authPath(dataDir: string): string {
   return path.join(dataDir, AUTH_FILE);
 }
 
+function findAuthFile(dataDir: string): string | null {
+  const p = path.join(dataDir, AUTH_FILE);
+  if (fs.existsSync(p)) return p;
+  const legacy = path.join(dataDir, LEGACY_AUTH_FILE);
+  if (fs.existsSync(legacy)) return legacy;
+  return null;
+}
+
+/** 实际存放凭证的文件（practi.auth.json，或改名前的 pop.auth.json）——显示用 */
+export function existingAuthFile(dataDir: string): string | null {
+  return findAuthFile(dataDir);
+}
+
 export function loadCredentials(dataDir: string): Credentials | null {
-  const p = authPath(dataDir);
-  if (!fs.existsSync(p)) return null;
+  const p = findAuthFile(dataDir);
+  if (p === null) return null;
   try {
     const rec: unknown = JSON.parse(fs.readFileSync(p, 'utf8'));
     if (typeof rec === 'object' && rec !== null && typeof (rec as Record<string, unknown>).refresh_token === 'string') {
@@ -59,8 +74,9 @@ export function saveCredentials(dataDir: string, creds: Credentials): void {
 }
 
 export function deleteCredentials(dataDir: string): void {
-  const p = authPath(dataDir);
-  if (fs.existsSync(p)) fs.unlinkSync(p);
+  for (const f of [authPath(dataDir), path.join(dataDir, LEGACY_AUTH_FILE)]) {
+    if (fs.existsSync(f)) fs.unlinkSync(f);
+  }
 }
 
 /** access token 是否仍有效（未过期 + 有值） */

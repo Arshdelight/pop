@@ -32,10 +32,10 @@ interface LocalHit {
 }
 
 /**
- * pop search <query...>：在 remote 上检索 POP（GET /api/v1/pop/search）。
+ * practi search <query...>：在 remote 上检索 POP（GET /api/v1/pop/search）。
  * - 标题与内容都参与匹配，标题命中优先（服务端排序）。
  * - --scope public=公开库（默认，仅 PUBLISHED）；me=自己 direct 认领（全状态）；all=并集。
- * - 空 q（`pop search`）返回最近文档，可当浏览用。
+ * - 空 q（`practi search`）返回最近文档，可当浏览用。
  */
 export async function runSearch(opts: SearchOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -44,7 +44,7 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
 
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   if (!['public', 'me', 'all'].includes(opts.scope)) {
@@ -81,7 +81,7 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
     console.log(`  ${shortHash(r.root_hash)}  [${r.status}]  ${r.name}${desc}${author}`);
     console.log(`    ${r.root_hash}`);
   }
-  console.log(`\n${results.length} shown (total ${body.total ?? results.length}, scope: ${opts.scope}) — fetch one with \`pop pull <hash>\``);
+  console.log(`\n${results.length} shown (total ${body.total ?? results.length}, scope: ${opts.scope}) — fetch one with \`practi pull <hash>\``);
   return 0;
 }
 
@@ -161,7 +161,7 @@ function runLocalSearch(opts: SearchOpts, dataDir: string, q: string): number {
     console.log(`  ${shortHash(hit.hash)}  ${tag}  ${hit.name}`);
     console.log(`    ${where}`);
   }
-  const label = needle ? `${shown.length} matched` : `${shown.length} direct pop(s), ${ws.nodes.size} nodes`;
-  console.log(`\n${label} (local workspace) — inspect with \`pop show <hash>\``);
+  const label = needle ? `${shown.length} matched` : `${shown.length} direct POP(s), ${ws.nodes.size} nodes`;
+  console.log(`\n${label} (local workspace) — inspect with \`practi show <hash>\``);
   return 0;
 }

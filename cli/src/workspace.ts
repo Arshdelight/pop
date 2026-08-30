@@ -1,17 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PracticeError, initWorkspace, loadWorkspace, type Workspace } from '@arshdelight/pop-sdk';
-import { statePath } from './state.js';
+import { statePath, legacyStatePath } from './state.js';
 
-/** A data dir is initialized when it carries both the CLI state and the POP workspace marker */
+/** A data dir is initialized when it carries both the CLI state (practi.json,
+ *  legacy pop.json counts) and the POP workspace marker */
 export function isInitialized(dataDir: string): boolean {
-  return fs.existsSync(statePath(dataDir)) && fs.existsSync(path.join(dataDir, 'practice.yaml'));
+  const hasState = fs.existsSync(statePath(dataDir)) || fs.existsSync(legacyStatePath(dataDir));
+  return hasState && fs.existsSync(path.join(dataDir, 'practice.yaml'));
 }
 
 export function requireDataDir(dataDir: string): void {
   if (!isInitialized(dataDir)) {
-    throw new PracticeError('E_NOT_INITIALIZED', `no pop data directory at ${dataDir}`, {
-      hint: 'run `pop init <path>` first (or pass --data-dir)',
+    throw new PracticeError('E_NOT_INITIALIZED', `no practi data directory at ${dataDir}`, {
+      hint: 'run `practi init <path>` first (or pass --data-dir)',
     });
   }
 }

@@ -8,7 +8,7 @@ describe('pop blob add: stage an attachment into the workspace blob channel', ()
     const dir = tempDataDir();
     await init(dir);
 
-    const bytes = Buffer.from('fake png bytes for pop-cli integration tests');
+    const bytes = Buffer.from('fake png bytes for practi integration tests');
     const file = path.join(dir, 'fig.png');
     fs.writeFileSync(file, bytes);
 
@@ -51,7 +51,7 @@ describe('attachment pointers validate against the stored blob', () => {
     const dir = tempDataDir();
     await init(dir);
 
-    const bytes = Buffer.from('fake png bytes for pop-cli integration tests');
+    const bytes = Buffer.from('fake png bytes for practi integration tests');
     const file = path.join(dir, 'fig.png');
     fs.writeFileSync(file, bytes);
     const staged = await pop(dir, ['blob', 'add', file]);

@@ -16,7 +16,7 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
     case 'set': {
       const url = opts.positional[1];
       if (!url) {
-        console.error('usage: pop remote set <url>   e.g. pop remote set https://practihub.com');
+        console.error('usage: practi remote set <url>   e.g. practi remote set https://practihub.com');
         return 1;
       }
       if (!/^https?:\/\/\S+$/i.test(url)) {
@@ -32,7 +32,7 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
         const oldOrigin = creds.resource.replace(/\/cli$/, '');
         if (oldOrigin) await revokeToken(oldOrigin, creds.client_id, creds.refresh_token, 'refresh_token');
         deleteCredentials(dataDir);
-        console.log(`note: cleared credentials issued by ${oldOrigin} — run \`pop login\` against ${state.remote.url}`);
+        console.log(`note: cleared credentials issued by ${oldOrigin} — run \`practi login\` against ${state.remote.url}`);
       }
       return 0;
     }
@@ -47,7 +47,7 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
       return 0;
     }
     default:
-      console.error(`usage: pop remote set <url> | show | remove`);
+      console.error(`usage: practi remote set <url> | show | remove`);
       return 1;
   }
 }

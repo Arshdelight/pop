@@ -1,10 +1,10 @@
 {
-  "name": "@arshdelight/pop-cli",
-  "version": "0.8.1",
-  "description": "Local registry CLI for POP (Protocol of Practice): manage a personal, content-addressed collection of practice documents on top of @arshdelight/pop-sdk.",
+  "name": "practi",
+  "version": "0.9.0",
+  "description": "Local registry CLI for POP (Protocol of Practice): manage a personal, content-addressed collection of practice documents on top of @arshdelight/pop-sdk. Syncs to PractiHub.",
   "type": "module",
   "bin": {
-    "pop": "dist/index.js"
+    "practi": "dist/index.js"
   },
   "files": [
     "dist",
@@ -12,6 +12,8 @@
   ],
   "license": "MIT",
   "keywords": [
+    "practi",
+    "practihub",
     "pop",
     "practice",
     "cli",

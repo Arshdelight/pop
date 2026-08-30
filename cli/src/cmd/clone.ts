@@ -9,22 +9,22 @@ export interface CloneOpts {
 }
 
 /**
- * pop clone <hash>：从 hub 取一个文档并认领它（git clone / fork 语义）。
+ * practi clone <hash>：从 hub 取一个文档并认领它（git clone / fork 语义）。
  * - 只用于公共（PUBLISHED）或你本就可读的内容；POP 认领制「能拿到即可认领」。
  * - 本地：落 workspace + 注册为 direct；远端：POST /api/v1/pop（内容寻址幂等）→
- *   你也获得 hub 认领——本地/hub 双向一致，之后 `pop pull` 能拉回。
+ *   你也获得 hub 认领——本地/hub 双向一致，之后 `practi pull` 能拉回。
  * - 已在你的认领里 → 幂等返回。
  */
 export async function runClone(opts: CloneOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
   const ref = opts.positional[0];
   if (!ref) {
-    console.error('usage: pop clone <hash>');
+    console.error('usage: practi clone <hash>');
     return 1;
   }
   const remote = state.remote.url;

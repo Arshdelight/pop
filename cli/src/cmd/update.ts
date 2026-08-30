@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { CLI_VERSION } from '../version.js';
 
-const PKG = '@arshdelight/pop-cli';
+const PKG = 'practi';
 
 export interface UpdateOpts {
   dataDir?: string;
@@ -29,7 +29,7 @@ function cmpSemver(a: string, b: string): number {
 }
 
 /**
- * pop update：向 registry 查 latest，比当前新就 npm install -g 自更新。
+ * practi update：向 registry 查 latest，比当前新就 npm install -g 自更新。
  * dev 安装（npm link 的符号链接）会被 registry 安装覆盖——检测到时先警告。
  */
 export async function runUpdate(_opts: UpdateOpts): Promise<number> {

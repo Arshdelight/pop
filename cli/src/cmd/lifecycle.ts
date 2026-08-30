@@ -7,7 +7,7 @@ export interface LifecycleOpts {
 }
 
 /**
- * pop submit [hash]：提交公开审核（PRIVATE → PENDING_REVIEW，自动机审通过后 PUBLISHED；此前已过审免二审）。
+ * practi submit [hash]：提交公开审核（PRIVATE → PENDING_REVIEW，自动机审通过后 PUBLISHED；此前已过审免二审）。
  * POST /api/v1/pop/:ref/submit。不带 hash 默认提交全部 direct roots（逐个尝试，非 PRIVATE 的跳过并计失败）。
  */
 export async function runSubmit(opts: LifecycleOpts): Promise<number> {
@@ -15,7 +15,7 @@ export async function runSubmit(opts: LifecycleOpts): Promise<number> {
 }
 
 /**
- * pop unpublish [hash]：撤回待审 / 下架已公开（PENDING_REVIEW|PUBLISHED → PRIVATE，退出公开检索）。
+ * practi unpublish [hash]：撤回待审 / 下架已公开（PENDING_REVIEW|PUBLISHED → PRIVATE，退出公开检索）。
  * POST /api/v1/pop/:ref/unpublish。
  */
 export async function runUnpublish(opts: LifecycleOpts): Promise<number> {
@@ -23,13 +23,13 @@ export async function runUnpublish(opts: LifecycleOpts): Promise<number> {
 }
 
 /**
- * pop delete <hash>：删除自己在 remote 上的 DIRECT 认领（无认领的文档被硬删除）。
+ * practi delete <hash>：删除自己在 remote 上的 DIRECT 认领（无认领的文档被硬删除）。
  * DELETE /api/v1/pop/:ref。必须显式给 hash（不做默认全删）；纯远端操作，本地工作区不动，
  * 再次 push 同内容会重建（新行，PRIVATE）。
  */
 export async function runDelete(opts: LifecycleOpts): Promise<number> {
   if (opts.positional.length === 0) {
-    console.error('usage: pop delete <hash>   (explicit hash required — no default)');
+    console.error('usage: practi delete <hash>   (explicit hash required — no default)');
     return 1;
   }
   return runLifecycle(opts, undefined, 'deleted');
@@ -43,7 +43,7 @@ async function runLifecycle(
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
-    console.error('error: no remote configured — run `pop remote set <url>` first');
+    console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
 
@@ -51,7 +51,7 @@ async function runLifecycle(
   if (refs.length === 0) {
     console.error(action
       ? 'error: no direct pops to ' + action + ' (none registered)'
-      : 'usage: pop delete <hash>');
+      : 'usage: practi delete <hash>');
     return 1;
   }
 

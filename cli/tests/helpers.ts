@@ -30,8 +30,8 @@ export interface PopOptions {
 
 /**
  * Data-dir isolation, doubly enforced (see src/state.ts + the --data-dir
- * option in src/index.ts): every invocation gets --data-dir AND a POP_HOME
- * pointing at the per-test temp dir. POP_HOME wins over %APPDATA%\pop, so no
+ * option in src/index.ts): every invocation gets --data-dir AND a PRACTI_HOME
+ * pointing at the per-test temp dir. PRACTI_HOME wins over %APPDATA%practi, so no
  * code path can fall through to the real default dir.
  */
 export async function pop(dataDir: string, args: string[], opts: PopOptions = {}): Promise<PopResult> {
@@ -44,7 +44,7 @@ export async function pop(dataDir: string, args: string[], opts: PopOptions = {}
       {
         // cwd = the cli package: `--import tsx` resolves from the cwd's node_modules (hoisted at the repo root)
         cwd: CLI_ROOT,
-        env: { ...process.env, POP_HOME: dataDir },
+        env: { ...process.env, PRACTI_HOME: dataDir },
         windowsHide: true,
         // a stuck child must fail the test, not hang it
         timeout: 60_000,
@@ -65,7 +65,7 @@ export async function pop(dataDir: string, args: string[], opts: PopOptions = {}
 
 /** Per-test temp data dir — nothing here ever touches the user's real data dir */
 export function tempDataDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'pop-cli-test-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'practi-test-'));
 }
 
 export async function init(dataDir: string): Promise<PopResult> {
@@ -79,7 +79,7 @@ export function nodeFile(dataDir: string, hash: string): string {
 
 /** The CLI state file inside the data dir */
 export function stateFile(dataDir: string): string {
-  return path.join(dataDir, 'pop.json');
+  return path.join(dataDir, 'practi.json');
 }
 
 export function readState(dataDir: string): { schema: number; direct: string[]; remote?: { url: string } } {
