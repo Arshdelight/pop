@@ -12,8 +12,46 @@ export interface PullOpts {
  * practi pull [hash]：把 hub 上「我的」认领同步到本地（git pull 语义）。
  * - 分页取 hub 我的认领表（mine），diff 出本地还没认领的，逐个拉文档体并注册为 direct。
  * - 只碰「我的认领」——不涉及公共库，因此不需要归属判断（mine 里的都是自己的）。
- * - 带 hash：只同步 mine 中的那一个（不在 mine 里 → 公共内容请用 `practi clone`）。
+ * - 带 hash：只同步 mine 中的那一个；ref 口径与 show 的节点寻址一致
+ *   （sha256: 前缀可选、≥4 hex 唯一前缀，见 matchClaimRef）。不在 mine 里 → 公共内容请用 `practi clone`。
  */
+
+/** matchClaimRef 的失败分层：ref 形态不合法 / 合法但认领表无命中 / 前缀歧义 */
+export type ClaimRefMatch =
+  | { ok: true; rootHash: string }
+  | { ok: false; code: 'format' | 'not-found' | 'ambiguous'; message: string };
+
+/**
+ * 在远程认领表里按 ref 定位 root_hash——口径对齐 SDK resolveNodeRef（§3 节点寻址）：
+ * sha256: 前缀可选、大小写不敏感、≥4 hex 唯一前缀、歧义列候选。
+ * 格式不合法 ≠ 认领不存在：分层报错，别把「没接受这个 ref」误报成「不是你的认领」。
+ */
+export function matchClaimRef(mine: { root_hash: string }[], ref: string): ClaimRefMatch {
+  const hex = ref.replace(/^sha256:/i, '').toLowerCase();
+  if (!/^[0-9a-f]{4,64}$/.test(hex)) {
+    return {
+      ok: false,
+      code: 'format',
+      message: `"${ref}" is not a hash ref — use the full sha256 root hash or a unique prefix (≥4 hex digits)`,
+    };
+  }
+  const hits = mine
+    .map((r) => r.root_hash)
+    .filter((h) => h.slice('sha256:'.length).toLowerCase().startsWith(hex));
+  if (hits.length === 1) return { ok: true, rootHash: hits[0] };
+  if (hits.length > 1) {
+    return {
+      ok: false,
+      code: 'ambiguous',
+      message: `hash prefix "${ref}" matches ${hits.length} of your claims — lengthen the prefix: ${hits.slice(0, 5).join(', ')}`,
+    };
+  }
+  return {
+    ok: false,
+    code: 'not-found',
+    message: `${ref} is not in your claims on the remote — for public content use \`practi clone\``,
+  };
+}
 export async function runPull(opts: PullOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
@@ -34,13 +72,12 @@ export async function runPull(opts: PullOpts): Promise<number> {
 
   let hashes: string[];
   if (opts.positional[0]) {
-    const ref = opts.positional[0];
-    const hit = mine.find((r) => r.root_hash === ref || (ref.startsWith('sha256:') && r.root_hash.startsWith(ref)));
-    if (!hit) {
-      console.error(`error: ${ref} is not in your claims on the remote — for public content use \`practi clone\``);
+    const match = matchClaimRef(mine, opts.positional[0]);
+    if (!match.ok) {
+      console.error(`error: ${match.message}`);
       return 1;
     }
-    hashes = [hit.root_hash];
+    hashes = [match.rootHash];
   } else {
     hashes = mine.map((r) => r.root_hash);
   }
