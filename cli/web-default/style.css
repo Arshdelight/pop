@@ -86,9 +86,9 @@ ol.io-list li { padding: 2px 0; }
 button.child-card { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 button.child-card:hover { border-color: var(--brand); color: var(--brand); }
 .child-desc { font-size: 12px; color: var(--brand-40); margin-top: 2px; display: block; }
-/* 选项卡：无字母圈，内容竖直居中，主黑字（同 practi 品牌），hover 转主题蓝系 */
-.choice-card { display: flex; align-items: center; width: 100%; text-align: left; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; background: #fff; cursor: pointer; font: inherit; color: var(--primary); }
-.choice-card:hover { border-color: var(--brand); color: var(--brand); background: rgba(0, 51, 102, .04); }
+/* 选项卡：无字母圈，内容竖直居中；选项名=大标题同色（--brand），描述回落全局 child-desc 浅色 */
+.choice-card { display: flex; align-items: center; width: 100%; text-align: left; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; background: #fff; cursor: pointer; font: inherit; color: var(--brand); }
+.choice-card:hover { border-color: var(--brand); background: rgba(0, 51, 102, .04); }
 /* 底部导航固定在视口底部：位置恒定，不随内容高度漂移；内行与正文列同宽对齐 */
 /* 底部操作区：固定视口底悬浮于内容列上方，无分界线（仅极轻投影托起），行与正文列同宽 */
 .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #fff; padding: 10px 24px; box-shadow: 0 -1px 8px rgba(0, 51, 102, .03); }

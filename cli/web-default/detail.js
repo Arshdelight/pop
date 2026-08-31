@@ -269,10 +269,8 @@ function childrenHtml(node) {
   var items = kids.map(function (k, i) {
     var body = (i + 1) + '. ' + escapeHtml(k.name) +
       (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
-    // seq/loop 的序号卡是预告+跳转入口（可点直达）；par 仍是纯预告
-    return (node.op === 'seq' || node.op === 'loop')
-      ? '<button type="button" class="child-card" data-idx="' + i + '">' + body + '</button>'
-      : '<div class="child-card">' + body + '</div>';
+    // 序号卡一律=预告+跳转入口（seq/par/loop 全可点直达）
+    return '<button type="button" class="child-card" data-idx="' + i + '">' + body + '</button>';
   }).join('');
   return head + items;
 }
