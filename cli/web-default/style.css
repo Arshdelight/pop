@@ -14,6 +14,8 @@
   --hover-bg: #f9fafb;
 }
 * { box-sizing: border-box; }
+/* 常驻滚动条水槽：内容超长时滚动条出现不再挤压视口，居中元素（操作区等）不左右平移 */
+html { scrollbar-gutter: stable; }
 body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; color: var(--brand); background: #fff; }
 header { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; padding: 10px 24px; }
 .brand-link { display: inline-flex; align-items: center; gap: 10px; }
@@ -52,10 +54,6 @@ a:hover { text-decoration: underline; }
 
 /* ── 详情页（向导模式）：一次一节点，op 决定呈现 ── */
 .detail { max-width: 48rem; padding-bottom: 110px; }
-/* 顶部：图标返回钮（原路径面包屑已删，定位职责在左侧大纲） */
-.detail-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; min-height: 34px; }
-.back-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--brand-40); }
-.back-btn:hover { color: var(--brand); border-color: #d1d5db; background: var(--hover-bg); }
 .node-title { font-size: 22px; font-weight: 700; color: var(--brand); margin: 8px 0 4px; }
 .node-desc { color: var(--brand-60); margin: 0 0 12px; }
 .op-note { font-size: 13px; color: var(--brand-40); font-style: italic; margin: 0 0 8px; }
@@ -70,6 +68,8 @@ a:hover { text-decoration: underline; }
 /* action 管道读序：inputs → 正文 → outputs，各占一块有序列表；io 条目与正文同字体同字号 */
 ol.io-list { margin: 0; padding-left: 24px; font-size: 16px; line-height: 1.75; color: var(--brand); }
 ol.io-list li { padding: 2px 0; }
+/* spec 独立成行放在名字下方（弃括号内联），小一号弱化 */
+.io-spec { display: block; font-size: 13px; line-height: 1.5; color: var(--brand-40); }
 .io-from, .att-meta { color: var(--brand-30); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
 /* from 反解命中的 #编号引用：小号等宽+点状下划线提示可悬停（title=来源节点名） */
 /* 通用悬停气泡（同 hub Tooltip 观感）：任何带 data-tip 的元素悬停弹深色气泡 */
@@ -124,10 +124,15 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
   /* 操作区只覆盖内容列：left 让出侧栏，侧栏档案区完整可见 */
   .nav { left: 16rem; }
 }
-/* 机器视图出口：文档级，钉在侧栏底仓最底（原 header 右位已撤；窄屏随侧栏隐藏） */
-.side-machine { margin-top: 12px; padding-top: 10px; font-size: 12px; color: var(--brand-40); }
-.side-machine a { display: block; padding: 3px 0; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.side-machine a:hover { color: var(--brand); text-decoration: underline; }
+/* 视图三 tab（侧栏最顶）：向导正文 / StandardView / document，切换内容区形态 */
+.side-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.side-tab { flex: 1; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--brand-40); font: inherit; font-size: 12px; padding: 5px 0; cursor: pointer; }
+.side-tab:hover { color: var(--brand); }
+.side-tab.on { background: rgba(0, 51, 102, .08); color: var(--brand); font-weight: 500; border-color: rgba(0, 51, 102, .2); }
+/* JSON 视图：pretty 渲染，当前节点/其子树 steps 高亮浅蓝底 */
+.json-pre { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.6; color: var(--brand); overflow-x: auto; white-space: pre; }
+.json-pre .jk { color: var(--brand-60); }
+.json-pre .hl { background: rgba(0, 51, 102, .08); border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 /* revisions 折叠：节点自己的变更史，默认收起，好奇点开 */
 /* revisions 折叠已删：revisions/refines 汇总挪到左侧大纲底部（.side-sec） */
 

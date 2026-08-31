@@ -8,6 +8,8 @@ var doc = null;
 var path = [];    // 当前节点 = 从根出发的 children 下标路径；[] = 根
 var navStack = []; // 走过的路径栈，Prev 回退用（避开只读全局 window.history）
 var nodeIndex = null; // 哈希→树内路径登记簿（数据窗 nodeIndex），inputs.from 反解用
+var view = 'wizard';  // 内容区视图：wizard | sv | doc（侧栏顶部三 tab）
+var svJson = null;    // StandardView JSON 缓存（首次切到该 tab 才拉取）
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -58,9 +60,91 @@ function shortHash(h) {
 function render() {
   var app = document.getElementById('app');
   var node = walk(path);
-  app.innerHTML = topHtml() + nodeHtml(node) + navHtml();
+  // 三视图：向导正文 / StandardView JSON / document JSON——侧栏大纲始终是导航脊柱，
+  // 底部 Prev/Next 也常驻（在 JSON 视图里换节点=高亮跟着走）
+  app.innerHTML = (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
+  updateTabs();
   markSide();
   window.scrollTo(0, 0);
+}
+
+// ── JSON 视图：pretty 渲染 + 当前节点高亮 ──
+// document 视图：树即嵌套对象，当前节点 = walk(path) 的对象引用，按引用相等高亮（双胞胎只亮所在那份）
+// StandardView 视图：practice 容器不进 steps，按「子树 steps 区段」高亮（steps 顺序与树遍历一致）；
+// set 孩子的后代不递归聚合、天生不在视图里——老实不高亮
+
+function jsonSectionHtml() {
+  if (view === 'doc') {
+    return '<div class="section-sm"><div class="label">document JSON</div>' +
+      '<pre class="json-pre">' + jsonHtml(doc, markDoc) + '</pre></div>';
+  }
+  if (svJson === null) {
+    return '<div class="section-sm"><div class="label">StandardView JSON</div><p class="op-note">loading…</p></div>';
+  }
+  return '<div class="section-sm"><div class="label">StandardView JSON</div>' +
+    '<pre class="json-pre">' + jsonHtml(svJson, markSv) + '</pre></div>';
+}
+
+/** 按对象引用高亮：document 视图的目标就是当前节点对象本身 */
+function markDoc(container, key, index, child) {
+  return child === walk(path);
+}
+
+/** StandardView 高亮：复算 steps 遍历顺序（action/set 直接孩子=一步；其余 practice 递归），
+ *  当前节点的子树 steps（含自身）全部高亮 */
+function markSv(container, key, index, child) {
+  if (!svJson || container !== svJson.steps) return false;
+  var hits = svMarkedSteps();
+  for (var i = 0; i < hits.length; i++) if (svJson.steps[hits[i]] === child) return true;
+  return false;
+}
+
+function svMarkedSteps() {
+  var marks = [];
+  var idx = 0;
+  (function w(n, p, parentIsSet) {
+    (n.children || []).forEach(function (c, i) {
+      var cp = p.concat([i]);
+      // 聚合口径：action 叶子成一步；set 的直接孩子无论类型都成条目；其余 practice 递归
+      var isStep = parentIsSet || c.type === 'action';
+      if (isStep) {
+        // 当前路径是该 step 路径的前缀（含相等）= 此 step 落在当前节点子树内
+        if (cp.length >= path.length && path.every(function (v, k) { return cp[k] === v; })) marks.push(idx);
+        idx++;
+        return;
+      }
+      w(c, cp, c.op === 'set');
+    });
+  })(doc, [], false);
+  return marks;
+}
+
+/** JSON → HTML：标准 pretty（2 空格缩进），markChild(container,key,index,child) 决定该孩子是否高亮 */
+function jsonHtml(value, markChild) {
+  function esc(s) { return escapeHtml(s); }
+  function w(v, depth, hl, container, key, index) {
+    var pad = new Array(depth + 1).join('  ');
+    var padIn = new Array(depth + 2).join('  ');
+    var open = hl ? '<span class="hl">' : '';
+    var close = hl ? '</span>' : '';
+    if (v === null) return open + 'null' + close;
+    if (Array.isArray(v)) {
+      if (v.length === 0) return open + '[]' + close;
+      var items = v.map(function (x, i) { return padIn + w(x, depth + 1, markChild(v, null, i, x), v, null, i); });
+      return open + '[\n' + items.join(',\n') + '\n' + pad + ']' + close;
+    }
+    if (typeof v === 'object') {
+      var keys = Object.keys(v);
+      if (!keys.length) return open + '{}' + close;
+      var lines = keys.map(function (k) {
+        return padIn + '<span class="jk">' + esc(JSON.stringify(k)) + '</span>: ' +
+          w(v[k], depth + 1, markChild(v, k, null, v[k]), v, k, null);
+      });
+      return open + '{\n' + lines.join(',\n') + '\n' + pad + '}' + close;
+    }
+    return open + (typeof v === 'string' ? esc(JSON.stringify(v)) : String(v)) + close;
+  }
+  return w(value, 0, false, null, null, null);
 }
 
 // ── 左侧大纲（学 hub /pop 详情侧栏）：根的直接孩子成节（1、2…）递归（1.1），
@@ -73,8 +157,13 @@ function countActions(n) {
 
 function sideHtml() {
   var total = countActions(doc);
-  // root 不占编号（与 fromRef 坐标系一致：引用编号从根的孩子起算），作为大纲锚头置顶
-  var html = '<p class="side-count">' + total + (total === 1 ? ' step' : ' steps') + '</p>' +
+  // 视图三 tab 钉在侧栏最顶：向导正文 / StandardView JSON / document JSON（内容区随之换形态）
+  var html = '<div class="side-tabs">' +
+    '<button type="button" class="side-tab" data-view="wizard">wizard</button>' +
+    '<button type="button" class="side-tab" data-view="sv">StandardView</button>' +
+    '<button type="button" class="side-tab" data-view="doc">document</button>' +
+    '</div>' +
+    '<p class="side-count">' + total + (total === 1 ? ' step' : ' steps') + '</p>' +
     '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + '</a>';
   (function walkSide(n, prefix, depth, p) {
     (n.children || []).forEach(function (c, i) {
@@ -116,11 +205,14 @@ function sideHtml() {
           escapeHtml(v.name) + '</span>' + tail + '</div>';
       }).join('') + '</div>';
   }
-  // 机器视图出口常驻侧栏最底（档案区空时它独占底仓），两行各一条
-  foot += '<div class="side-machine">' +
-    '<a href="/pop/' + encodeURIComponent(HASH) + '.json">StandardView JSON</a>' +
-    '<a href="/doc/' + encodeURIComponent(HASH) + '.json">document JSON</a></div>';
-  return html + '<div class="side-foot">' + foot + '</div>';
+  return html + (foot ? '<div class="side-foot">' + foot + '</div>' : '');
+}
+
+function updateTabs() {
+  var tabs = document.querySelectorAll('.side-tab');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].classList.toggle('on', tabs[i].getAttribute('data-view') === view);
+  }
 }
 
 function markSide() {
@@ -133,13 +225,7 @@ function markSide() {
   }
 }
 
-// 顶部：图标返回钮。原路径面包屑已删——「在哪」的职责交给左侧大纲（编号+高亮）
-var BACK_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';
-
-function topHtml() {
-  return '<div class="detail-top">' +
-    '<a class="back-btn" href="/" aria-label="back to directory" title="All practices">' + BACK_ICON + '</a></div>';
-}
+// 顶部区已撤：返回职责归 header 左上角 brand-link（回目录），定位职责归左侧大纲
 
 function nodeHtml(node) {
   var html = '<h1 class="node-title">' + escapeHtml(node.name) + '</h1>';
@@ -231,7 +317,8 @@ function fromRef(from) {
 }
 
 function ioItem(f) {
-  return '<li>' + escapeHtml(f.name) + (f.spec ? '（' + escapeHtml(f.spec) + '）' : '') + fromRef(f.from) + '</li>';
+  return '<li>' + escapeHtml(f.name) + fromRef(f.from) +
+    (f.spec ? '<span class="io-spec">' + escapeHtml(f.spec) + '</span>' : '') + '</li>';
 }
 
 function inputsHtml(node) {
@@ -311,9 +398,7 @@ function navHtml() {
   } else if (next) {
     html += '<button type="button" class="btn btn-primary" data-act="next">Next</button>';
   } else {
-    html += '<span class="finish">end of practice</span>' +
-      '<button type="button" class="btn" data-act="restart">Restart</button>' +
-      '<a class="btn" href="/">All practices</a>';
+    html += '<span class="finish">end of practice</span>';
   }
   html += '</div></div>';
   return html;
@@ -322,6 +407,18 @@ function navHtml() {
 // ── 事件（委托：innerHTML 重渲染不需要重复绑监听） ──
 
 document.addEventListener('click', function (e) {
+  var tab = e.target.closest('[data-view]');
+  if (tab) {
+    view = tab.getAttribute('data-view');
+    if (view === 'sv' && svJson === null) {
+      // StandardView 首切拉取一次即缓存；期间先渲染 loading，到了再重绘
+      fetch('/pop/' + encodeURIComponent(HASH) + '.json')
+        .then(function (r) { return r.json(); })
+        .then(function (j) { svJson = j; if (view === 'sv') render(); });
+    }
+    render();
+    return;
+  }
   var jump = e.target.closest('[data-idx]');
   if (jump) {
     goTo(path.concat([Number(jump.getAttribute('data-idx'))]));
@@ -345,8 +442,6 @@ document.addEventListener('click', function (e) {
       path = navStack.pop();
       render();
     }
-  } else if (a === 'restart') {
-    goTo([]);
   }
 });
 
