@@ -1,19 +1,19 @@
 // practi web 详情页（向导模式）：一次只显示一个节点，从根出发，Next 逐步走。
-// op 决定呈现：seq=顺序列表预告；par=并行徽章+双列卡片；choice=可点选项卡（必须
+// op 决定呈现：seq=顺序列表预告（可点直达）；par=双列网格卡片；choice=可点选项卡（必须
 // 择一才继续，选过的分支走完自动翻过整个 choice）；set=目录链接自由跳转；
-// loop=循环徽章+条件旁注。数据走 /doc/<hash>.json（文档树，children 递归内联）。
+// loop=条件旁注。数据走 /doc/<hash>.json（文档树，children 递归内联）。
 'use strict';
 
 var doc = null;
 var path = [];    // 当前节点 = 从根出发的 children 下标路径；[] = 根
 var navStack = []; // 走过的路径栈，Prev 回退用（避开只读全局 window.history）
+var nodeIndex = null; // 哈希→树内路径登记簿（数据窗 nodeIndex），inputs.from 反解用
 
-var OP_META = {
-  seq: { label: 'sequence', cls: 'b-seq', note: null },
-  par: { label: 'parallel', cls: 'b-par', note: 'the steps below run in parallel — order does not matter' },
-  choice: { label: 'choice', cls: 'b-choice', note: 'pick one branch to continue' },
-  set: { label: 'catalog', cls: 'b-set', note: 'independent sections — jump freely, no ordering' },
-  loop: { label: 'loop', cls: 'b-loop', note: null },
+// op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
+var OP_NOTES = {
+  par: 'the tasks below run in parallel — order does not matter',
+  choice: 'pick one branch to continue',
+  set: 'independent sections — jump freely, no ordering',
 };
 
 function escapeHtml(s) {
@@ -28,9 +28,6 @@ function walk(p) {
   return n;
 }
 
-function pathNum(p) {
-  return p.length ? p.map(function (i) { return i + 1; }).join('.') : '·';
-}
 
 // 下一个节点：有孩子且非 choice → 首个孩子；否则向上找下一个兄弟。
 // choice 的其他选项是「未选的分支」，不算下一步——选过的分支走完直接翻过整个 choice
@@ -61,57 +58,104 @@ function shortHash(h) {
 function render() {
   var app = document.getElementById('app');
   var node = walk(path);
-  // 机器视图链接留在流内（正文末尾），固定底栏只放 Prev/Next
-  app.innerHTML = topHtml() + nodeHtml(node) +
-    '<div class="machine-links"><a href="/pop/' + encodeURIComponent(HASH) + '.json">StandardView JSON</a> · ' +
-    '<a href="/doc/' + encodeURIComponent(HASH) + '.json">document JSON</a></div>' + navHtml();
+  app.innerHTML = topHtml() + nodeHtml(node) + navHtml();
+  markSide();
   window.scrollTo(0, 0);
 }
 
-// 顶部：图标返回钮 + 路径面包屑（只列当前以上的节点，当前名字只出现在大标题里，
-// 根节点带文档图标锚定「在哪篇实践里」；在根时面包屑区留空）
+// ── 左侧大纲（学 hub /pop 详情侧栏）：根的直接孩子成节（1、2…）递归（1.1），
+// 与 fromRef 的 #编号同一坐标系；点击 goTo 跳转，当前节点高亮 ──
+
+function countActions(n) {
+  if (n.type === 'action') return 1;
+  return (n.children || []).reduce(function (s, c) { return s + countActions(c); }, 0);
+}
+
+function sideHtml() {
+  var total = countActions(doc);
+  // root 不占编号（与 fromRef 坐标系一致：引用编号从根的孩子起算），作为大纲锚头置顶
+  var html = '<p class="side-count">' + total + (total === 1 ? ' step' : ' steps') + '</p>' +
+    '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + '</a>';
+  (function walkSide(n, prefix, depth, p) {
+    (n.children || []).forEach(function (c, i) {
+      var num = prefix + (i + 1);
+      var cp = p.concat([i]);
+      html += '<a href="#" class="side-item" data-path="' + cp.join(',') + '" style="padding-left:' + (14 + depth * 14) + 'px">' +
+        '<span class="side-num">' + num + '</span>' + escapeHtml(c.name) + '</a>';
+      if (c.children && c.children.length) walkSide(c, num + '.', depth + 1, cp);
+    });
+  })(doc, '', 0, []);
+
+  // 底部附加区：全文档 revisions（新→旧，点击跳到所属节点）+ refines 边
+  // （目标在文档内 → #编号跳转；悬空 → 短哈希）；两段空则整段不出现。
+  // 包在 .side-foot（margin-top:auto）里钉在侧栏最底，不贴着大纲
+  var foot = '';
+  var revs = [];
+  var refs = [];
+  (function w(n, p) {
+    (n.revisions || []).forEach(function (r) { revs.push({ p: p, name: n.name, r: r }); });
+    if (n.type === 'practice' && n.refines) refs.push({ p: p, name: n.name, target: n.refines });
+    (n.children || []).forEach(function (c, i) { w(c, p.concat([i])); });
+  })(doc, []);
+  if (revs.length) {
+    revs.sort(function (a, b) { return a.r.when < b.r.when ? 1 : -1; });
+    foot += '<div class="side-sec"><p class="side-count">revisions (' + revs.length + ')</p>' +
+      revs.map(function (v) {
+        return '<a href="#" class="side-note" data-path="' + v.p.join(',') + '" data-tip="' + escapeHtml(v.name) + '">' +
+          escapeHtml(String(v.r.when).slice(0, 10)) + ' — ' + escapeHtml(v.r.what) + '</a>';
+      }).join('') + '</div>';
+  }
+  if (refs.length) {
+    foot += '<div class="side-sec"><p class="side-count">refines (' + refs.length + ')</p>' +
+      refs.map(function (v) {
+        var tp = nodeIndex && nodeIndex[v.target];
+        var tail = tp
+          ? '<a href="#" class="side-note mono" data-path="' + tp.join(',') + '">→ #' + tp.map(function (i) { return i + 1; }).join('.') + '</a>'
+          : '<span class="side-note mono plain">→ ' + escapeHtml(shortHash(v.target)) + '</span>';
+        return '<div class="side-note-row"><span class="side-note plain" data-tip="' + escapeHtml(v.name) + '">' +
+          escapeHtml(v.name) + '</span>' + tail + '</div>';
+      }).join('') + '</div>';
+  }
+  // 机器视图出口常驻侧栏最底（档案区空时它独占底仓），两行各一条
+  foot += '<div class="side-machine">' +
+    '<a href="/pop/' + encodeURIComponent(HASH) + '.json">StandardView JSON</a>' +
+    '<a href="/doc/' + encodeURIComponent(HASH) + '.json">document JSON</a></div>';
+  return html + '<div class="side-foot">' + foot + '</div>';
+}
+
+function markSide() {
+  var cur = path.join(',');
+  var items = document.querySelectorAll('.side-item');
+  for (var i = 0; i < items.length; i++) {
+    // root 条目不参与 selected——点击前后观感一致，hover 仍可用
+    if (items[i].classList.contains('side-root')) continue;
+    items[i].classList.toggle('on', items[i].getAttribute('data-path') === cur);
+  }
+}
+
+// 顶部：图标返回钮。原路径面包屑已删——「在哪」的职责交给左侧大纲（编号+高亮）
 var BACK_ICON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';
-var DOC_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>';
 
 function topHtml() {
-  var html = '<div class="detail-top">' +
-    '<a class="back-btn" href="/" aria-label="back to directory" title="All practices">' + BACK_ICON + '</a>';
-  if (path.length > 0) {
-    html += '<div class="path-crumbs">' +
-      '<a href="#" data-path="" class="crumb-root">' + DOC_ICON + '<span class="crumb-name">' + escapeHtml(doc.name) + '</span></a>';
-    for (var i = 0; i < path.length - 1; i++) {
-      var anc = walk(path.slice(0, i));
-      html += '<span class="sep">›</span>' +
-        '<a href="#" data-path="' + path.slice(0, i + 1).join(',') + '"><span class="crumb-name">' + escapeHtml(anc.children[path[i]].name) + '</span></a>';
-    }
-    html += '</div>';
-  }
-  html += '</div>';
-  return html;
+  return '<div class="detail-top">' +
+    '<a class="back-btn" href="/" aria-label="back to directory" title="All practices">' + BACK_ICON + '</a></div>';
 }
 
 function nodeHtml(node) {
-  var html = '<div class="node-head">';
-  if (node.type === 'practice') {
-    var meta = OP_META[node.op] || OP_META.seq;
-    html += '<span class="badge ' + meta.cls + '">' + meta.label + '</span>';
-  } else {
-    html += '<span class="badge b-action">action</span>';
-  }
-  html += '<span class="node-num">#' + pathNum(path) + '</span></div>';
-  html += '<h1 class="node-title">' + escapeHtml(node.name) + '</h1>';
+  var html = '<h1 class="node-title">' + escapeHtml(node.name) + '</h1>';
   if (node.description) html += '<p class="node-desc">' + escapeHtml(node.description) + '</p>';
 
   if (node.type === 'practice') {
-    var meta2 = OP_META[node.op] || OP_META.seq;
-    var note = node.op === 'loop' ? loopNote(node) : meta2.note;
+    // loop 的 repeat 条件已升为循环体小节头，不再另发旁注
+    var note = OP_NOTES[node.op];
     if (note) html += '<p class="op-note">' + escapeHtml(note) + '</p>';
   }
 
+  if (node.type === 'action') html += inputsHtml(node);
   html += proseHtml(node);
-  if (node.type === 'action') html += ioHtml(node) + attHtml(node);
+  if (node.type === 'action') html += outputsHtml(node) + attHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
-  html += revisionsHtml(node);
+  // revisions 已挪到左侧大纲底部（全文档汇总）；refines 同处
   return html;
 }
 
@@ -148,9 +192,10 @@ function proseHtml(node) {
   }
   parts.push(paraHtml(prose.slice(last)));
   var out = parts.join('');
-  return '<div class="prose">' + out.replace(/\u0000B(\d+)\u0000/g, function (_, i) {
-    return '<pre>' + escapeHtml(blocks[Number(i)]) + '</pre>';
-  }) + '</div>';
+  return '<div class="section-sm"><div class="label">content</div><div class="prose">' +
+    out.replace(/\u0000B(\d+)\u0000/g, function (_, i) {
+      return '<pre>' + escapeHtml(blocks[Number(i)]) + '</pre>';
+    }) + '</div></div>';
 }
 
 function paraHtml(text) {
@@ -173,20 +218,32 @@ function mediaUrl(target, node) {
   return null;
 }
 
-// ── action 字段：输入/输出双栏 + 附件表 ──
+// ── action 字段：管道读序 inputs → 正文 → outputs，有序列表；空缺的块整个不出现 ──
 
-function ioHtml(node) {
+// from 反解（同 hub 口径）：命中登记簿 → #编号引用（可点跳转 data-path 委托、
+// 悬停气泡 data-tip=来源节点名）；未命中/无登记簿/指向根 → 短哈希（可验真）
+function fromRef(from) {
+  if (!from) return '';
+  var p = nodeIndex && nodeIndex[from];
+  if (!p) return ' <span class="io-from">← ' + escapeHtml(shortHash(from)) + '</span>';
+  var num = p.map(function (i) { return i + 1; }).join('.');
+  return ' <a href="#" class="io-ref" data-path="' + p.join(',') + '" data-tip="' + escapeHtml(walk(p).name) + '">← #' + num + '</a>';
+}
+
+function ioItem(f) {
+  return '<li>' + escapeHtml(f.name) + (f.spec ? '（' + escapeHtml(f.spec) + '）' : '') + fromRef(f.from) + '</li>';
+}
+
+function inputsHtml(node) {
   var ins = node.inputs || [];
+  if (!ins.length) return '';
+  return '<div class="section-sm"><div class="label">inputs</div><ol class="io-list">' + ins.map(ioItem).join('') + '</ol></div>';
+}
+
+function outputsHtml(node) {
   var outs = node.outputs || [];
-  if (!ins.length && !outs.length) return '';
-  function item(f) {
-    return '<li>' + escapeHtml(f.name) + (f.spec ? '（' + escapeHtml(f.spec) + '）' : '') +
-      (f.from ? ' <span class="io-from">← ' + escapeHtml(shortHash(f.from)) + '</span>' : '') + '</li>';
-  }
-  return '<div class="io-grid">' +
-    '<div class="io-col"><div class="label">inputs</div><ul>' + (ins.length ? ins.map(item).join('') : '<li class="none">none</li>') + '</ul></div>' +
-    '<div class="io-col"><div class="label">outputs</div><ul>' + (outs.length ? outs.map(item).join('') : '<li class="none">none</li>') + '</ul></div>' +
-    '</div>';
+  if (!outs.length) return '';
+  return '<div class="section-sm"><div class="label">outputs</div><ol class="io-list">' + outs.map(ioItem).join('') + '</ol></div>';
 }
 
 function attHtml(node) {
@@ -205,55 +262,56 @@ function attHtml(node) {
 function childrenHtml(node) {
   var kids = node.children || [];
   if (!kids.length || node.op === 'choice' || node.op === 'set') return '';
-  var head = node.op === 'seq' ? '<div class="section-sm"><div class="label">steps (' + kids.length + ')</div></div>' : '';
+  // 小节头：seq=steps(N)、par=tasks(N)、loop=repeat 条件本身当头（旁注不再重复）
+  var head = node.op === 'loop'
+    ? '<div class="section-sm"><div class="label">' + escapeHtml(loopNote(node)) + '</div></div>'
+    : '<div class="section-sm"><div class="label">' + (node.op === 'seq' ? 'steps' : 'tasks') + ' (' + kids.length + ')</div></div>';
   var items = kids.map(function (k, i) {
-    return '<div class="child-card">' + (i + 1) + '. ' + escapeHtml(k.name) +
-      (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '') + '</div>';
+    var body = (i + 1) + '. ' + escapeHtml(k.name) +
+      (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
+    // seq/loop 的序号卡是预告+跳转入口（可点直达）；par 仍是纯预告
+    return (node.op === 'seq' || node.op === 'loop')
+      ? '<button type="button" class="child-card" data-idx="' + i + '">' + body + '</button>'
+      : '<div class="child-card">' + body + '</div>';
   }).join('');
-  return head + (node.op === 'par' ? '<div class="child-grid">' + items + '</div>' : items);
+  return head + items;
 }
 
 function choiceHtml(node) {
   if (node.op !== 'choice') return '';
-  return (node.children || []).map(function (k, i) {
-    return '<button type="button" class="choice-card" data-idx="' + i + '">' +
-      '<span class="choice-letter">' + String.fromCharCode(65 + i) + '</span>' +
-      '<span class="choice-body">' + escapeHtml(k.name) +
-      (k.description ? '<span class="child-desc">' + escapeHtml(k.description) + '</span>' : '') + '</span></button>';
-  }).join('');
+  var kids = node.children || [];
+  return '<div class="section-sm"><div class="label">options (' + kids.length + ')</div></div>' +
+    kids.map(function (k, i) {
+      return '<button type="button" class="choice-card" data-idx="' + i + '">' +
+        '<span class="choice-body">' + escapeHtml(k.name) +
+        (k.description ? '<span class="child-desc">' + escapeHtml(k.description) + '</span>' : '') + '</span></button>';
+    }).join('');
 }
 
 function setHtml(node) {
   if (node.op !== 'set') return '';
-  return (node.children || []).map(function (k, i) {
-    return '<button type="button" class="set-link" data-idx="' + i + '">› ' + escapeHtml(k.name) +
-      (k.description ? ' <span class="child-desc">' + escapeHtml(k.description) + '</span>' : '') + '</button>';
-  }).join('');
-}
-
-function revisionsHtml(node) {
-  var revs = node.revisions || [];
-  if (!revs.length) return '';
-  return '<div class="section-sm"><div class="label">revisions</div><ul class="att-list">' +
-    revs.map(function (r) {
-      return '<li>' + escapeHtml(r.when) + ' — ' + escapeHtml(r.what) +
-        (r.from ? ' <span class="att-meta">← ' + escapeHtml(shortHash(r.from)) + '</span>' : '') + '</li>';
-    }).join('') + '</ul></div>';
+  var kids = node.children || [];
+  return '<div class="section-sm"><div class="label">items (' + kids.length + ')</div></div>' +
+    kids.map(function (k, i) {
+      var body = (i + 1) + '. ' + escapeHtml(k.name) +
+        (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
+      return '<button type="button" class="child-card" data-idx="' + i + '">' + body + '</button>';
+    }).join('');
 }
 
 // ── 导航 ──
 
-// 底部导航：固定在视口底部（钉死位置，不随内容高度漂移），内容与正文列同宽对齐
+// 底部操作区：固定在视口底（悬浮于内容列上方，宽屏 left 让出侧栏），无分界线
 function navHtml() {
   var node = walk(path);
   var next = nextOf(path);
   var choiceGate = node.type === 'practice' && node.op === 'choice';
   var html = '<div class="nav"><div class="nav-row">';
-  html += navStack.length ? '<button type="button" class="btn" data-act="prev">← Prev</button>' : '<span></span>';
+  html += navStack.length ? '<button type="button" class="btn" data-act="prev">Prev</button>' : '<span></span>';
   if (choiceGate) {
     html += '<span class="nav-hint">choose a branch to continue</span>';
   } else if (next) {
-    html += '<button type="button" class="btn btn-primary" data-act="next">Next →</button>';
+    html += '<button type="button" class="btn btn-primary" data-act="next">Next</button>';
   } else {
     html += '<span class="finish">end of practice</span>' +
       '<button type="button" class="btn" data-act="restart">Restart</button>' +
@@ -271,10 +329,10 @@ document.addEventListener('click', function (e) {
     goTo(path.concat([Number(jump.getAttribute('data-idx'))]));
     return;
   }
-  var crumb = e.target.closest('[data-path]');
-  if (crumb) {
+  var jump = e.target.closest('[data-path]');
+  if (jump) {
     e.preventDefault();
-    var raw = crumb.getAttribute('data-path');
+    var raw = jump.getAttribute('data-path');
     goTo(raw ? raw.split(',').map(Number) : []);
     return;
   }
@@ -304,7 +362,10 @@ fetch('/doc/' + encodeURIComponent(HASH) + '.json')
     return r.json();
   })
   .then(function (d) {
+    // 数据窗=加法演进：树字段在顶层，nodeIndex 是后加的兄弟键（老响应没有它 → 哈希兜底）
     doc = d;
+    nodeIndex = d.nodeIndex || null;
+    document.getElementById('side').innerHTML = sideHtml();
     render();
   })
   .catch(function (err) {

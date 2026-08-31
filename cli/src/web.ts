@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { aggregateView, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
+import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
 
@@ -131,7 +131,11 @@ function handle(
     const hash = decodeURIComponent(doc[1]).replace(/\.json$/, '');
     const node = ws.nodes.get(resolveNodeRef(ws, hash));
     if (node) {
-      send(res, 200, 'application/json; charset=utf-8', JSON.stringify(exportSubtree(node, ws.nodes), null, 2));
+      // 加法演进：树字段仍在顶层（老前端照常读），nodeIndex 是新增兄弟键（新前端才消费）。
+      // 前端文件热更可能跑在服务器 dist 前面、用户覆盖的 web/ 也可能落后 CLI 升级——
+      // 数据窗任何改动都必须新旧两端互容，不能用信封换结构
+      const tree = exportSubtree(node, ws.nodes);
+      send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ ...tree, nodeIndex: buildNodeIndex(tree) }, null, 2));
       return;
     }
   }
@@ -144,8 +148,22 @@ function handle(
   send(res, 404, 'text/plain; charset=utf-8', 'not found');
 }
 
-function send(res: http.ServerResponse, code: number, type: string, body: string): void {
-  res.writeHead(code, { 'content-type': type });
+/** 节点指纹登记簿（哈希→树内 children 下标路径），/doc 数据窗附带：前端把 inputs.from
+ *  反解成 #编号引用用。与 hub 的 node_index 物化列同一思路——内容寻址下哈希不在树里，
+ *  引用靠旁路登记。根（空路径）不成节、无编号，不登记（from 指向根按未命中回落哈希）。 */
+function buildNodeIndex(tree: Record<string, unknown>): Record<string, number[]> {
+  const index: Record<string, number[]> = {};
+  type Hashable = Parameters<typeof computeNodeHash>[0];
+  const visit = (n: Record<string, unknown>, p: number[]): void => {
+    if (p.length > 0) index[computeNodeHash(n as Hashable)] = p;
+    const kids = Array.isArray(n.children) ? (n.children as Record<string, unknown>[]) : [];
+    kids.forEach((c, i) => visit(c, [...p, i]));
+  };
+  visit(tree, []);
+  return index;
+}
+
+function send(res: http.ServerResponse, code: number, type: string, body: string): void {  res.writeHead(code, { 'content-type': type });
   res.end(body);
 }
 
