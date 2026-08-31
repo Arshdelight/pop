@@ -1,14 +1,41 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { aggregateView, exportSubtree, readBlob, resolveNodeRef, PracticeError, type PNode, type StandardView } from '@arshdelight/pop-sdk';
+import { aggregateView, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
-import { openWorkspace } from './workspace.js';
-import { nodeTag, shortHash } from './render.js';
+import { nodeFileTime, openWorkspace } from './workspace.js';
 
 export interface WebOpts {
   dataDir?: string;
   port: number;
   open: boolean;
+}
+
+/** 内置默认前端（随包分发的普通文件）：dist/../web-default 与 src/../web-default 都指向 cli/web-default */
+const DEFAULT_WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web-default');
+
+/** workspace 里的覆盖目录名：里面的文件按文件级覆盖默认前端（不存在的文件回落默认） */
+const WEB_OVERRIDE_DIR = 'web';
+
+const STATIC_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
+
+/** live reload 客户端：连 SSE、收到 reload 事件整页刷新（只读浏览器无状态，整刷即热更） */
+const LR_SCRIPT = "(function(){var es=new EventSource('/_lr');es.addEventListener('reload',function(){location.reload()});})();";
+
+function injectLiveReload(html: string): string {
+  const tag = '<script src="/_lr.js" defer></script>';
+  return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${tag}</body>`) : html + tag;
 }
 
 export function runWeb(opts: WebOpts): number {
@@ -17,9 +44,18 @@ export function runWeb(opts: WebOpts): number {
   const ws = openWorkspace(dataDir);
   const url = `http://127.0.0.1:${opts.port}/`;
 
+  // live reload：SSE 客户端池 + 文件/数据监听。监听面 = 整个 data dir（nodes/、
+  // 覆盖目录 web/、practi.json 全覆盖：另一终端 practi new/pull 页面也会自动跟新）
+  // + 内置默认前端目录（CLI 开发期改默认文件也即时生效）
+  const clients = new Set<http.ServerResponse>();
+  watchLive([dataDir, DEFAULT_WEB_DIR], clients);
+
+  const overrideDir = path.join(dataDir, WEB_OVERRIDE_DIR);
+  console.log(`frontend: ${fs.existsSync(overrideDir) ? `workspace override ${overrideDir} (missing files fall back to built-in)` : `built-in default (drop files into ${overrideDir}${path.sep} to customize)`}`);
+
   const server = http.createServer((req, res) => {
     try {
-      handle(req, res, dataDir, ws);
+      handle(req, res, dataDir, ws, clients);
     } catch (e) {
       if (e instanceof PracticeError) {
         send(res, 404, 'text/plain; charset=utf-8', `${e.code}: ${e.message}`);
@@ -39,12 +75,31 @@ export function runWeb(opts: WebOpts): number {
   return 0;
 }
 
-function handle(req: http.IncomingMessage, res: http.ServerResponse, dataDir: string, ws: ReturnType<typeof openWorkspace>): void {
+function handle(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  dataDir: string,
+  ws: ReturnType<typeof openWorkspace>,
+  clients: Set<http.ServerResponse>,
+): void {
   const pathname = (req.url ?? '/').split('?')[0];
   const state = loadState(dataDir);
 
+  if (pathname === '/_lr') {
+    sseHandshake(req, res, clients);
+    return;
+  }
+  if (pathname === '/_lr.js') {
+    send(res, 200, 'text/javascript; charset=utf-8', LR_SCRIPT);
+    return;
+  }
+  if (pathname === '/api/directs') {
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(directsPayload(dataDir, ws, state), null, 2));
+    return;
+  }
   if (pathname === '/' || pathname === '/index.html') {
-    send(res, 200, 'text/html; charset=utf-8', indexHtml(ws, state.direct));
+    if (serveStatic(res, 'index.html', dataDir)) return;
+    send(res, 500, 'text/plain; charset=utf-8', 'built-in web frontend missing — reinstall the CLI');
     return;
   }
   const pop = pathname.match(/^\/pop\/(.+)$/);
@@ -56,8 +111,9 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, dataDir: st
       send(res, 200, 'application/json; charset=utf-8', JSON.stringify(view, null, 2));
       return;
     }
-    const view = aggregateView(resolved, ws.nodes, { full: true });
-    send(res, 200, 'text/html; charset=utf-8', detailHtml(ws, view));
+    if (!serveStatic(res, 'detail.html', dataDir)) {
+      send(res, 500, 'text/plain; charset=utf-8', 'built-in web frontend missing — reinstall the CLI');
+    }
     return;
   }
   const blob = pathname.match(/^\/blobs\/(sha256:[0-9a-f]{64})$/);
@@ -83,12 +139,98 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse, dataDir: st
     send(res, 200, 'text/plain', 'ok');
     return;
   }
+  // 静态资产兜底（style.css / app.js / 自定义前端文件）：放在最后，不与 /pop /blobs /doc 抢路由
+  if (serveStatic(res, pathname.slice(1), dataDir)) return;
   send(res, 404, 'text/plain; charset=utf-8', 'not found');
 }
 
 function send(res: http.ServerResponse, code: number, type: string, body: string): void {
   res.writeHead(code, { 'content-type': type });
   res.end(body);
+}
+
+/** 静态文件：workspace 的 web/ 按文件覆盖，缺失文件回落内置默认。
+ *  拒绝 `..` 段做路径遍历防护；HTML 响应注入 live reload 脚本（对默认与自定义前端一视同仁） */
+function serveStatic(res: http.ServerResponse, rel: string, dataDir: string): boolean {
+  const parts = rel.split('/').filter(Boolean);
+  if (parts.length === 0 || parts.includes('..')) return false;
+  const file = [path.join(dataDir, WEB_OVERRIDE_DIR, ...parts), path.join(DEFAULT_WEB_DIR, ...parts)]
+    .find(f => fs.existsSync(f) && fs.statSync(f).isFile());
+  if (!file) return false;
+  const type = STATIC_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
+  const body = fs.readFileSync(file);
+  res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache' });
+  if (type.startsWith('text/html')) {
+    res.end(injectLiveReload(body.toString('utf8')));
+  } else {
+    res.end(body);
+  }
+  return true;
+}
+
+/** 目录数据窗：direct 列表的名称/描述/统计 + 数据目录路径（前端头部展示用）。
+ *  claimedAt=声明值（state.claims 盖戳）；addedAt=生效值，未盖戳的老数据回落节点文件
+ *  mtime（推测值，前端弱化显示）——声明与推测不混装一个字段 */
+function directsPayload(dataDir: string, ws: ReturnType<typeof openWorkspace>, state: ReturnType<typeof loadState>): unknown {
+  const docs = state.direct
+    .filter(h => ws.nodes.has(h))
+    .map(h => {
+      const v = aggregateView(h, ws.nodes);
+      const claimedAt = state.claims?.[h] ?? null;
+      return {
+        hash: v.hash,
+        name: v.name,
+        description: v.description,
+        type: v.type,
+        op: v.type === 'practice' ? v.op : null,
+        steps: v.steps.length,
+        outputs: v.outputs.length,
+        claimedAt,
+        addedAt: claimedAt ?? nodeFileTime(dataDir, h),
+      };
+    });
+    return { dataDir, docs };
+}
+
+function sseHandshake(req: http.IncomingMessage, res: http.ServerResponse, clients: Set<http.ServerResponse>): void {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  res.write('retry: 1000\n\n');
+  clients.add(res);
+  req.on('close', () => clients.delete(res));
+}
+
+/** 监听 roots（递归；平台不支持时降级单层，再失败静默跳过——live reload 是锦上添花，不致命）。
+ *  事件去抖：一次保存或一条 practi 命令会喷一串文件事件，合并成一次 reload */
+function watchLive(roots: string[], clients: Set<http.ServerResponse>): void {
+  let timer: NodeJS.Timeout | null = null;
+  const onChange = () => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (clients.size === 0) return;
+      for (const res of clients) res.write('event: reload\ndata: 1\n\n');
+    }, 150);
+  };
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    try {
+      fs.watch(root, { recursive: true }, onChange);
+    } catch {
+      try {
+        fs.watch(root, onChange);
+      } catch {
+        // fs.watch 完全不可用：live reload 静默失效，其余功能不受影响
+      }
+    }
+  }
+  // 保活注释行：防空闲 SSE 连接被掐（本地一般无此问题，防御性）
+  setInterval(() => {
+    for (const res of clients) res.write(': ping\n\n');
+  }, 25000).unref();
 }
 
 function sendBytes(res: http.ServerResponse, type: string, body: Buffer): void {
@@ -122,136 +264,3 @@ export function openBrowser(url: string): void {
   spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
 }
 
-const CSS = `
-  :root { color-scheme: light; }
-  * { box-sizing: border-box; }
-  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; color: #1a1a1a; background: #fafafa; }
-  header { background: #111; color: #fff; padding: 14px 24px; display: flex; gap: 16px; align-items: baseline; }
-  header .brand { font-weight: 700; letter-spacing: .5px; }
-  header .sub { color: #999; font-size: 13px; }
-  main { max-width: 860px; margin: 24px auto; padding: 0 24px 60px; }
-  a { color: #0b57d0; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .card { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 14px 18px; margin-bottom: 12px; }
-  .card .title { font-weight: 600; font-size: 16px; }
-  .tag { font-size: 12px; color: #666; background: #f0f0f0; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
-  .hash { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; color: #888; }
-  pre { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 14px; overflow-x: auto; font-size: 13px; }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; }
-  th { color: #666; font-weight: 600; }
-  .muted { color: #888; }
-  .breadcrumb { margin-bottom: 12px; font-size: 13px; }
-  .section { margin-top: 22px; }
-  .section h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .4px; color: #666; margin: 0 0 8px; }
-  .step { padding: 2px 0; }
-  .step .n { color: #999; }
-  .stepbody { margin: 6px 0 12px 0; padding-left: 20px; }
-  .prose { font-size: 14px; color: #333; }
-  .prose figure { margin: 10px 0; }
-  .prose img { max-width: 100%; border: 1px solid #e3e3e3; border-radius: 6px; }
-  .prose figcaption { font-size: 12px; color: #888; text-align: center; margin-top: 4px; }
-`;
-
-function page(title: string, body: string, dataDir: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title>
-<style>${CSS}</style></head><body>
-<header><span class="brand">POP</span><span class="sub">local registry</span><span class="sub">${dataDir}</span></header>
-<main>${body}</main></body></html>`;
-}
-
-function indexHtml(ws: ReturnType<typeof openWorkspace>, direct: string[]): string {
-  const roots = direct.filter(h => ws.nodes.has(h));
-  const cards = roots
-    .map(h => {
-      const view = aggregateView(h, ws.nodes);
-      return `<div class="card">
-        <div class="title"><a href="/pop/${encodeURIComponent(h)}">${escapeHtml(view.name)}</a><span class="tag">${view.type === 'practice' ? `practice·${view.op}` : 'action'}</span></div>
-        <div class="hash">${view.hash}</div>
-        ${view.description ? `<div class="muted">${escapeHtml(view.description)}</div>` : ''}
-        <div class="muted">${view.steps.length} step${view.steps.length === 1 ? '' : 's'} · ${view.flow.length} flow edge${view.flow.length === 1 ? '' : 's'} · ${view.outputs.length} output${view.outputs.length === 1 ? '' : 's'}</div>
-      </div>`;
-    })
-    .join('\n');
-  const empty = roots.length === 0 ? '<p class="muted">no direct pops — create one with <code>pop new</code></p>' : '';
-  return page('POP — local registry', `<h1>Direct pops</h1>${empty}${cards}`, ws.root);
-}
-
-function detailHtml(ws: ReturnType<typeof openWorkspace>, view: StandardView): string {
-  const esc = escapeHtml;
-  const steps = view.steps
-    .map(s => {
-      const n: PNode | undefined = ws.nodes.get(s.refHash);
-      const tag = n ? nodeTag(n) : '';
-      const body = s.content && s.content.trim() ? `<div class="stepbody">${renderContent(s.content, n, ws)}</div>` : '';
-      return `<div class="step"><span class="n">${'&nbsp;&nbsp;'.repeat(s.depth)}</span>${esc(s.name)} ${tag ? `<span class="tag">${esc(tag)}</span>` : ''}${s.note ? ` <span class="muted">(${esc(s.note)})</span>` : ''}${body}</div>`;
-    })
-    .join('\n');
-  const flowRows = view.flow
-    .map(e => `<tr><td>${esc(e.name)}</td><td class="hash">${shortHash(e.fromHash)}</td><td>${esc(e.fromName)}</td><td class="hash">${shortHash(e.toHash)}</td><td>${esc(e.toName)}</td></tr>`)
-    .join('\n');
-  const inputs = view.inputs.map(d => `<tr><td>${esc(d.name)}</td><td>${d.spec ? esc(d.spec) : ''}</td><td class="hash">${shortHash(d.refHash)}</td></tr>`).join('\n');
-  const outputs = view.outputs.map(d => `<tr><td>${esc(d.name)}</td><td>${d.spec ? esc(d.spec) : ''}</td><td class="hash">${shortHash(d.refHash)}</td></tr>`).join('\n');
-  const atts = view.attachments.map(a => `<tr><td>${esc(a.name)}</td><td>${a.mime ? esc(a.mime) : ''}</td><td>${a.size ?? ''}</td><td class="hash">${shortHash(a.hash)}</td></tr>`).join('\n');
-  const revs = (view.revisions ?? []).map(r => `<tr><td>${esc(r.when)}</td><td>${esc(r.what)}</td>${r.from ? `<td class="hash">${shortHash(r.from)}</td>` : '<td></td>'}</tr>`).join('\n');
-
-  return page(`${view.name} — POP`, `
-    <div class="breadcrumb"><a href="/">← all pops</a></div>
-    <h1>${esc(view.name)} <span class="tag">${view.type === 'practice' ? `practice·${view.op}` : 'action'}</span></h1>
-    <div class="hash">${view.hash}</div>
-    ${view.description ? `<p>${esc(view.description)}</p>` : ''}
-    ${view.content && view.content.trim() ? `<div class="section"><h2>Content</h2>${renderContent(view.content, ws.nodes.get(view.hash), ws)}</div>` : ''}
-    <div class="section"><h2>Steps (${view.steps.length})</h2>${steps || '<p class="muted">—</p>'}</div>
-    ${flowRows ? `<div class="section"><h2>Flow (${view.flow.length})</h2><table><tr><th>name</th><th>from</th><th></th><th>to</th><th></th></tr>${flowRows}</table></div>` : ''}
-    ${inputs ? `<div class="section"><h2>Declared inputs (needs)</h2><table><tr><th>name</th><th>spec</th><th>node</th></tr>${inputs}</table></div>` : ''}
-    ${outputs ? `<div class="section"><h2>Declared outputs (produces)</h2><table><tr><th>name</th><th>spec</th><th>node</th></tr>${outputs}</table></div>` : ''}
-    ${atts ? `<div class="section"><h2>Attachments</h2><table><tr><th>name</th><th>mime</th><th>size</th><th>hash</th></tr>${atts}</table></div>` : ''}
-    ${revs ? `<div class="section"><h2>Revisions</h2><table><tr><th>when</th><th>what</th><th>from</th></tr>${revs}</table></div>` : ''}
-    <div class="section"><h2>Links</h2>
-      <a href="/pop/${encodeURIComponent(view.hash)}.json">StandardView JSON</a> ·
-      <a href="/doc/${encodeURIComponent(view.hash)}.json">document JSON</a>
-    </div>
-  `, ws.root);
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-}
-
-/**
- * Render action content for the web UI: markdown image refs `![caption](name)`
- * become real <figure><img> (name → attachment url or a local /blobs/:hash);
- * http(s) URL targets are used as-is (external refs, spec §5.1); unresolved
- * refs stay literal. Fenced code blocks are treated as prose-exempt (§5.1).
- */
-function renderContent(content: string, node: PNode | undefined, ws: ReturnType<typeof openWorkspace>): string {
-  const blocks: string[] = [];
-  const prose = content.replace(/```[\s\S]*?```/g, m => {
-    blocks.push(m);
-    return `\u0000B${blocks.length - 1}\u0000`;
-  });
-  const parts: string[] = [];
-  let last = 0;
-  for (const m of prose.matchAll(/!\[([^\]]*)\]\(([^)]*)\)/g)) {
-    parts.push(escapeHtml(prose.slice(last, m.index)));
-    const caption = m[1];
-    const target = m[2];
-    const url = mediaUrl(target, node, ws);
-    if (url === null) {
-      parts.push(escapeHtml(m[0]));
-    } else {
-      const cap = escapeHtml(caption);
-      parts.push(`<figure><img src="${escapeHtml(url)}" alt="${cap}"><figcaption>${cap}</figcaption></figure>`);
-    }
-    last = m.index + m[0].length;
-  }
-  parts.push(escapeHtml(prose.slice(last)));
-  return `<div class="prose">${parts.join('').replace(/\u0000B(\d+)\u0000/g, (_, i) => `<pre>${escapeHtml(blocks[Number(i)])}</pre>`)}</div>`;
-}
-
-function mediaUrl(target: string, node: PNode | undefined, ws: ReturnType<typeof openWorkspace>): string | null {
-  if (/^https?:\/\//i.test(target)) return target;
-  if (!node || node.type !== 'action') return null;
-  const a = (node.attachments ?? []).find(x => x.name === target);
-  return a ? (a.url ?? `/blobs/${a.hash}`) : null;
-}

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportSkill, importSkill, PracticeError, resolveNodeRef } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 
 /**
@@ -168,8 +168,7 @@ function runSkillImport(opts: SkillOpts): number {
   }
 
   const state = loadState(dataDir);
-  if (!state.direct.includes(res.root)) {
-    state.direct.push(res.root);
+  if (claimDirect(state, res.root)) {
     saveState(dataDir, state);
   }
 

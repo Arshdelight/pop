@@ -1,5 +1,5 @@
 import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { authedFetch, fetchMine } from '../client.js';
 
@@ -138,8 +138,7 @@ async function pullOne(dataDir: string, remote: string, ref: string): Promise<nu
   const { root } = createFromDoc(ws, body.document);
 
   const state = loadState(dataDir);
-  if (!state.direct.includes(root)) {
-    state.direct.push(root);
+  if (claimDirect(state, root)) {
     saveState(dataDir, state);
   }
   console.log(`pulled:  ${root}  (${body.status ?? 'PUBLISHED'})  [direct]`);

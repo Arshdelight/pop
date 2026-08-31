@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 
 export interface NewOpts {
@@ -45,8 +45,7 @@ export function runNew(opts: NewOpts): number {
   const issues = validateWorkspace(loadWorkspace(dataDir));
 
   const state = loadState(dataDir);
-  if (issues.length === 0 && !state.direct.includes(root)) {
-    state.direct.push(root);
+  if (issues.length === 0 && claimDirect(state, root)) {
     saveState(dataDir, state);
   }
 

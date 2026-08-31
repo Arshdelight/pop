@@ -1,5 +1,5 @@
 import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { authedFetch } from '../client.js';
 
@@ -70,8 +70,7 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   const alreadyMine = body.ownership?.mine === true;
 
   const localState = loadState(dataDir);
-  if (!localState.direct.includes(rootHash)) {
-    localState.direct.push(rootHash);
+  if (claimDirect(localState, rootHash)) {
     saveState(dataDir, localState);
   }
 

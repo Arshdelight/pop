@@ -18,6 +18,8 @@ practi init [path]                initialize a data directory (default: ~/.pract
 practi config                     show data dir, remote, registry summary
 practi remote set <url>           set the remote provider (e.g. https://practihub.com)
 practi remote show | remove       inspect / clear the remote
+practi repair                     backfill missing claim timestamps from node file times
+                               (idempotent; stamped claims are never touched)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
 practi new <file.json>            create a POP from a JSON document (or --json '<text>', or stdin)
 practi clone <hash>               fetch a public POP and claim it (local direct + remote claim)
@@ -39,7 +41,7 @@ practi blob add <file-or-url>     stage an attachment; emits the attachment entr
                                (hashes the bytes, stores local blobs in the workspace)
 ```
 
-The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the remote provider and the registered **direct** roots (indirect = every other node the direct POPs reference).
+The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the remote provider and the registered **direct** roots, each with a claim timestamp (time lives on the claim event, never inside content-addressed nodes — the git refs/reflog split; indirect = every other node the direct POPs reference).
 
 ### Login to PractiHub
 
@@ -69,6 +71,14 @@ Editing is replacing: content addressing means an edit produces a **new root has
 - `practi search <query...>` searches the remote via `GET /api/v1/pop/search` — both title and content match, **title hits rank first**; an empty query browses the newest documents.
 - `--scope public` (default) searches the published library; `--scope me` searches your own documents in **any status** (including PRIVATE); `--scope all` is the union — your visible universe.
 - `--json` dumps the raw API response. Fetch any result with `practi clone <hash>`.
+
+### Web
+
+`practi web` serves a read-only local UI on `127.0.0.1` (default port 4317). Data and presentation are separated:
+
+- **Data window** — plain JSON endpoints backed by the workspace: `GET /api/directs` (directory list: hash, name, description, step/output counts), `GET /pop/<hash>.json` (§7 standard view), `GET /doc/<hash>.json` (document tree), `GET /blobs/<hash>` (attachment bytes).
+- **Frontend files** — the UI is plain HTML/CSS/JS served from the CLI's bundled `web-default/`. To customize, drop files into `<data-dir>/web/` — files there **override the built-in ones file-by-file** (missing files fall back to the default). Delete a file to return to the built-in version.
+- **Live reload** — the server watches the data dir and the frontend directories; every page (built-in or custom) auto-reloads in the browser when a frontend file changes or when another terminal runs `practi new` / `practi pull`. Editing the frontend is a save-and-see loop, no rebuild, no restart.
 
 ### Lifecycle (submit / unpublish / delete)
 

@@ -1,0 +1,110 @@
+/* practi web 默认前端样式（与 hub 视觉语言同源）。
+   本文件位于 CLI 安装包内；把拷贝放进 <数据目录>/web/ 即可按文件覆盖自定义。 */
+:root {
+  color-scheme: light;
+  --brand: #003366;
+  --brand-60: rgba(0, 51, 102, .6);
+  --brand-50: rgba(0, 51, 102, .5);
+  --brand-40: rgba(0, 51, 102, .4);
+  --brand-30: rgba(0, 51, 102, .3);
+  --brand-15: rgba(0, 51, 102, .15);
+  --primary: #111827;
+  --border: #e5e7eb;
+  --border-light: #f3f4f6;
+  --hover-bg: #f9fafb;
+}
+* { box-sizing: border-box; }
+body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; color: var(--brand); background: #fff; }
+header { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--border); display: flex; gap: 10px; align-items: center; padding: 10px 24px; }
+.brand-link { display: inline-flex; align-items: center; gap: 10px; }
+.brand-link:hover { text-decoration: none; }
+.brand-link:hover .logo { opacity: .8; }
+header .logo { width: 28px; height: 28px; color: var(--primary); flex: none; }
+header .brand { font-weight: 700; letter-spacing: .2px; font-size: 16px; }
+header .sub { color: var(--brand-40); font-size: 13px; }
+header .dir { margin-left: auto; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; color: var(--brand-40); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+main { max-width: 72rem; margin: 0 auto; padding: 40px 24px 64px; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.page-title { font-size: 16px; font-weight: 600; margin: 0 0 16px; }
+/* 目录表（对齐 hub DataTable 形态）：表头小字弱化、行底细线、末行无线。
+   fixed 布局是必须的：hash 是无空格长串，auto 布局下 max-width 失效会把表撑出横向滚动 */
+.doc-table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+.doc-table th { padding: 8px 16px; font-size: 12px; font-weight: 500; color: var(--brand-50); text-align: left; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.doc-table th.col-steps { width: 8ch; }
+.doc-table th.col-added { width: 22ch; }
+.doc-table td { padding: 12px 16px; vertical-align: middle; border-bottom: 1px solid var(--border-light); overflow: hidden; text-overflow: ellipsis; }
+.doc-table tr:last-child td { border-bottom: none; }
+.doc-name { font-weight: 500; color: var(--brand); }
+.doc-desc { font-size: 12px; color: var(--brand-40); margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-steps { font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; }
+.doc-date { font-size: 12px; color: var(--brand-40); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.doc-date.derived { opacity: .6; }
+.count-row { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; font-size: 14px; color: var(--brand-60); }
+.pager { display: flex; gap: 8px; }
+.pager button { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 8px; color: var(--brand-60); font-size: 14px; background: #fff; cursor: pointer; }
+.pager button:hover { background: var(--hover-bg); }
+.empty { text-align: center; padding: 64px 0; }
+.empty svg { color: var(--brand-15); margin-bottom: 16px; }
+.empty .lead { font-size: 14px; color: var(--brand-50); margin: 0; }
+.empty .hint { font-size: 12px; color: var(--brand-40); margin: 12px 0 0; }
+.empty code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+/* ── 详情页（向导模式）：一次一节点，op 决定呈现 ── */
+.detail { max-width: 48rem; padding-bottom: 110px; }
+/* 顶部：图标返回钮 + 路径面包屑（当前节点不在其中，只在大标题出现一次） */
+.detail-top { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; min-height: 34px; }
+.back-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--brand-40); }
+.back-btn:hover { color: var(--brand); border-color: #d1d5db; background: var(--hover-bg); }
+.path-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--brand-40); min-width: 0; }
+.path-crumbs a { display: inline-flex; align-items: center; gap: 5px; color: var(--brand-40); min-width: 0; }
+.path-crumbs a:hover { color: var(--brand); }
+.path-crumbs .crumb-root { color: var(--brand-60); font-weight: 500; }
+.path-crumbs .crumb-root:hover { color: var(--brand); }
+.path-crumbs .crumb-root svg { color: var(--brand-30); }
+.crumb-name { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.path-crumbs .sep { color: var(--brand-15); }
+.badge { display: inline-block; font-size: 12px; font-weight: 500; padding: 2px 10px; border-radius: 999px; }
+.b-action, .b-seq { background: var(--border-light); color: var(--brand-60); }
+.b-par { background: #f0f9ff; color: #0369a1; }
+.b-choice { background: #fffbeb; color: #b45309; }
+.b-set { background: #f5f3ff; color: #6d28d9; }
+.b-loop { background: #fff1f2; color: #be123c; }
+.node-head { display: flex; align-items: center; gap: 10px; }
+.node-num { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; color: var(--brand-30); }
+.node-title { font-size: 22px; font-weight: 700; color: var(--brand); margin: 8px 0 4px; }
+.node-desc { color: var(--brand-60); margin: 0 0 12px; }
+.op-note { font-size: 13px; color: var(--brand-40); font-style: italic; margin: 0 0 8px; }
+.prose { font-size: 14px; line-height: 1.7; color: var(--brand); }
+.prose p { margin: 10px 0; }
+.prose pre { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
+.prose figure { margin: 14px 0; }
+.prose img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; }
+.prose figcaption { font-size: 12px; color: var(--brand-40); text-align: center; margin-top: 4px; }
+.io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 16px 0; }
+.io-col ul, .att-list { list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--brand-60); }
+.io-col li { padding: 3px 0; }
+.io-col .none { color: var(--brand-30); }
+.io-from, .att-meta { color: var(--brand-30); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+.section-sm { margin-top: 18px; }
+.io-col .label, .section-sm .label { font-size: 12px; font-weight: 600; color: var(--brand-50); margin-bottom: 6px; }
+.att-list li { padding: 4px 0; }
+.child-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 14px; color: var(--brand-60); background: #fff; }
+.child-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.child-desc { font-size: 12px; color: var(--brand-40); margin-top: 2px; display: block; }
+.choice-card { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; background: #fff; cursor: pointer; font: inherit; color: var(--brand); }
+.choice-card:hover { border-color: #f59e0b; background: #fffbeb; }
+.choice-letter { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid #f59e0b; color: #b45309; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.set-link { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 14px; color: var(--primary); cursor: pointer; padding: 6px 2px; }
+.set-link:hover { text-decoration: underline; }
+/* 底部导航固定在视口底部：位置恒定，不随内容高度漂移；内行与正文列同宽对齐 */
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #fff; border-top: 1px solid var(--border); padding: 10px 24px; box-shadow: 0 -1px 8px rgba(0, 51, 102, .03); }
+.nav-row { max-width: 48rem; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.btn { padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: var(--brand-60); font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; }
+.btn:hover { background: var(--hover-bg); text-decoration: none; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:hover { background: #1f2937; }
+.nav-hint { font-size: 13px; color: var(--brand-40); }
+.finish { font-size: 13px; color: var(--brand-40); }
+.machine-links { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--border-light); font-size: 12px; }
+.machine-links a { color: var(--brand-40); }

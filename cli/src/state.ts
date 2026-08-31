@@ -17,6 +17,21 @@ export interface State {
   remote?: { url: string };
   /** Root hashes the user created/imported themselves (own uploads, §9.1 "direct") */
   direct: string[];
+  /** 认领时刻（collapsed reflog）：hash → ISO 时间。节点是内容寻址的、内容不携带时间，
+   *  时间属于引用内容的事件——与 git 的 refs/reflog 分工同构（direct=refs，本表=侧挂日志）。
+   *  只由 claimDirect 盖戳；saveState 修剪不在 direct 里的孤儿。旧文件无此表=未盖戳，
+   *  读取侧（web /api/directs）回落节点文件 mtime 并标注是推测值。 */
+  claims?: Record<string, string>;
+}
+
+/** 注册 direct 认领的唯一咽喉点：入列 + 盖认领时刻。幂等——已在列则不动，
+ *  首次认领时间得以保留（删掉重认领才会重盖）。new/edit/clone/pull/skill 一律走这里，
+ *  别处直接 push state.direct 会绕过盖戳。 */
+export function claimDirect(state: State, hash: string): boolean {
+  if (state.direct.includes(hash)) return false;
+  state.direct.push(hash);
+  (state.claims ??= {})[hash] = new Date().toISOString();
+  return true;
 }
 
 /* --------------------------------------------------------------- */
@@ -119,6 +134,14 @@ export function loadState(dataDir: string): State {
     if (Array.isArray(rec.direct)) {
       state.direct = rec.direct.filter((x): x is string => typeof x === 'string' && HASH_RE.test(x));
     }
+    const claims = asRecord(rec.claims);
+    if (claims) {
+      const valid: Record<string, string> = {};
+      for (const [k, v] of Object.entries(claims)) {
+        if (HASH_RE.test(k) && typeof v === 'string') valid[k] = v;
+      }
+      state.claims = valid;
+    }
     return state;
   } catch {
     return base;
@@ -126,5 +149,14 @@ export function loadState(dataDir: string): State {
 }
 
 export function saveState(dataDir: string, state: State): void {
+  // 修剪孤儿认领时刻：hash 已不在 direct（edit 换根/删除）→ 时间随之失效，
+  // 不留陈旧条目。修剪放在写盘口，命令层怎么改 direct 都不会漏
+  if (state.claims) {
+    const live = new Set(state.direct);
+    for (const h of Object.keys(state.claims)) {
+      if (!live.has(h)) delete state.claims[h];
+    }
+    if (Object.keys(state.claims).length === 0) delete state.claims;
+  }
   fs.writeFileSync(statePath(dataDir), JSON.stringify(state, null, 2) + '\n', 'utf8');
 }

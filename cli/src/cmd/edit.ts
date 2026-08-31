@@ -7,7 +7,7 @@ import {
   nodeFilePath,
   type Workspace,
 } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 
 export interface EditOpts {
@@ -124,7 +124,7 @@ export function runEdit(opts: EditOpts): number {
   }
 
   state.direct = state.direct.filter((h) => h !== oldRoot);
-  if (!state.direct.includes(newRoot)) state.direct.push(newRoot);
+  claimDirect(state, newRoot);
   saveState(dataDir, state);
   console.log(`edited:   ${oldRoot} -> ${newRoot}  (${count} nodes)`);
 

@@ -4,6 +4,7 @@ import { PracticeError } from '@arshdelight/pop-sdk';
 import { runInit } from './cmd/init.js';
 import { runConfig } from './cmd/config.js';
 import { runRemote } from './cmd/remote.js';
+import { runRepair } from './cmd/repair.js';
 import { runMigrate } from './cmd/migrate.js';
 import { runLs } from './cmd/ls.js';
 import { runNew } from './cmd/new.js';
@@ -60,6 +61,8 @@ usage:
   practi push [hash]                push new local claims to the remote (git-style: only new ones)
   practi remote set <url>           set the remote provider (e.g. https://practihub.com)
   practi remote show | remove       inspect / clear the remote
+  practi repair                     backfill missing claim timestamps from node file times
+                                 (idempotent; stamped claims are never touched)
   practi search [query...]          search pops (remote by default; --local the workspace)
        [--local] [--scope public|me|all] [--limit N] [--json]
   practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
@@ -116,6 +119,11 @@ async function main(argv: string[]): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi remote set <url> | show | remove'); return 0; }
       return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'repair': {
+      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi repair   (backfill missing claim timestamps; idempotent)'); return 0; }
+      return runRepair({ dataDir: str(values['data-dir']) });
     }
     case 'migrate': {
       const { values, positionals } = parseArgs({
