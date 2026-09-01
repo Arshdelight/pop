@@ -13,9 +13,9 @@ var svJson = null;    // StandardView JSON 缓存（首次切到该 tab 才拉�
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
-  par: 'the tasks below run in parallel — order does not matter',
-  choice: 'pick one branch to continue',
-  set: 'independent sections — jump freely, no ordering',
+  par: function () { return POP_I18N.t('opPar'); },
+  choice: function () { return POP_I18N.t('opChoice'); },
+  set: function () { return POP_I18N.t('opSet'); },
 };
 
 function escapeHtml(s) {
@@ -88,7 +88,7 @@ function jsonSectionHtml() {
       '<pre class="json-pre">' + jsonHtml(doc, markDoc) + '</pre></div>';
   }
   if (svJson === null) {
-    return '<div class="section-sm"><div class="label">StandardView JSON</div><p class="op-note">loading…</p></div>';
+    return '<div class="section-sm"><div class="label">StandardView JSON</div><p class="op-note">' + POP_I18N.t('loading') + '</p></div>';
   }
   return '<div class="section-sm"><div class="label">StandardView JSON</div>' +
     '<pre class="json-pre">' + jsonHtml(svJson, markSv) + '</pre></div>';
@@ -185,7 +185,7 @@ function sideHtml() {
     '<button type="button" class="side-tab" data-view="sv">StandardView</button>' +
     '<button type="button" class="side-tab" data-view="doc">Document</button>' +
     '</div>' +
-    '<p class="side-count">' + total + (total === 1 ? ' step' : ' steps') + '</p>' +
+    '<p class="side-count">' + POP_I18N.t('stepCount', total) + '</p>' +
     '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + '</a>';
   (function walkSide(n, prefix, depth, p) {
     (n.children || []).forEach(function (c, i) {
@@ -210,14 +210,14 @@ function sideHtml() {
   })(doc, []);
   if (revs.length) {
     revs.sort(function (a, b) { return a.r.when < b.r.when ? 1 : -1; });
-    foot += '<div class="side-sec"><p class="side-count">revisions (' + revs.length + ')</p>' +
+    foot += '<div class="side-sec"><p class="side-count">' + POP_I18N.t('revisions', revs.length) + '</p>' +
       revs.map(function (v) {
         return '<a href="#" class="side-note" data-path="' + v.p.join(',') + '" data-tip="' + escapeHtml(v.name) + '">' +
           escapeHtml(String(v.r.when).slice(0, 10)) + ' — ' + escapeHtml(v.r.what) + '</a>';
       }).join('') + '</div>';
   }
   if (refs.length) {
-    foot += '<div class="side-sec"><p class="side-count">refines (' + refs.length + ')</p>' +
+    foot += '<div class="side-sec"><p class="side-count">' + POP_I18N.t('refines', refs.length) + '</p>' +
       refs.map(function (v) {
         var tp = nodeIndex && nodeIndex[v.target];
         var tail = tp
@@ -256,7 +256,7 @@ function nodeHtml(node) {
   if (node.type === 'practice') {
     // loop 的 repeat 条件已升为循环体小节头，不再另发旁注
     var note = OP_NOTES[node.op];
-    if (note) html += '<p class="op-note">' + escapeHtml(note) + '</p>';
+    if (note) html += '<p class="op-note">' + escapeHtml(note()) + '</p>';
   }
 
   if (node.type === 'action') html += inputsHtml(node);
@@ -268,9 +268,9 @@ function nodeHtml(node) {
 }
 
 function loopNote(node) {
-  if (node.loop && node.loop.mode === 'count') return 'repeat ×' + node.loop.count;
-  if (node.loop && node.loop.mode === 'until') return 'repeat until: ' + node.loop.until;
-  return 'repeat';
+  if (node.loop && node.loop.mode === 'count') return POP_I18N.t('repeatX', node.loop.count);
+  if (node.loop && node.loop.mode === 'until') return POP_I18N.t('repeatUntil', node.loop.until);
+  return POP_I18N.t('repeat');
 }
 
 // ── 正文（markdown-lite：围栏代码块 + 图片引用，其余按段落转义） ──
@@ -300,7 +300,7 @@ function proseHtml(node) {
   }
   parts.push(paraHtml(prose.slice(last)));
   var out = parts.join('');
-  return '<div class="section-sm"><div class="label">content</div><div class="prose">' +
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secContent') + '</div><div class="prose">' +
     out.replace(/\u0000B(\d+)\u0000/g, function (_, i) {
       return '<pre>' + escapeHtml(blocks[Number(i)]) + '</pre>';
     }) + '</div></div>';
@@ -346,19 +346,19 @@ function ioItem(f) {
 function inputsHtml(node) {
   var ins = node.inputs || [];
   if (!ins.length) return '';
-  return '<div class="section-sm"><div class="label">inputs</div><ol class="io-list">' + ins.map(ioItem).join('') + '</ol></div>';
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secInputs') + '</div><ol class="io-list">' + ins.map(ioItem).join('') + '</ol></div>';
 }
 
 function outputsHtml(node) {
   var outs = node.outputs || [];
   if (!outs.length) return '';
-  return '<div class="section-sm"><div class="label">outputs</div><ol class="io-list">' + outs.map(ioItem).join('') + '</ol></div>';
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secOutputs') + '</div><ol class="io-list">' + outs.map(ioItem).join('') + '</ol></div>';
 }
 
 function attHtml(node) {
   var atts = node.attachments || [];
   if (!atts.length) return '';
-  return '<div class="section-sm"><div class="label">attachments</div><ul class="att-list">' + atts.map(function (a) {
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secAttachments') + '</div><ul class="att-list">' + atts.map(function (a) {
     var href = a.url || ('/blobs/' + a.hash);
     var meta = [a.mime, a.hash ? shortHash(a.hash) : ''].filter(Boolean).join(' · ');
     return '<li><a href="' + escapeHtml(href) + '">' + escapeHtml(a.name) + '</a>' +
@@ -374,7 +374,7 @@ function childrenHtml(node) {
   // 小节头：seq=steps(N)、par=tasks(N)、loop=repeat 条件本身当头（旁注不再重复）
   var head = node.op === 'loop'
     ? '<div class="section-sm"><div class="label">' + escapeHtml(loopNote(node)) + '</div></div>'
-    : '<div class="section-sm"><div class="label">' + (node.op === 'seq' ? 'steps' : 'tasks') + ' (' + kids.length + ')</div></div>';
+    : '<div class="section-sm"><div class="label">' + POP_I18N.t(node.op === 'seq' ? 'secSteps' : 'secTasks', kids.length) + '</div></div>';
   var items = kids.map(function (k, i) {
     var body = (i + 1) + '. ' + escapeHtml(k.name) +
       (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
@@ -387,7 +387,7 @@ function childrenHtml(node) {
 function choiceHtml(node) {
   if (node.op !== 'choice') return '';
   var kids = node.children || [];
-  return '<div class="section-sm"><div class="label">options (' + kids.length + ')</div></div>' +
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secOptions', kids.length) + '</div></div>' +
     kids.map(function (k, i) {
       return '<button type="button" class="choice-card" data-idx="' + i + '">' +
         '<span class="choice-body">' + escapeHtml(k.name) +
@@ -398,7 +398,7 @@ function choiceHtml(node) {
 function setHtml(node) {
   if (node.op !== 'set') return '';
   var kids = node.children || [];
-  return '<div class="section-sm"><div class="label">items (' + kids.length + ')</div></div>' +
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secItems', kids.length) + '</div></div>' +
     kids.map(function (k, i) {
       var body = (i + 1) + '. ' + escapeHtml(k.name) +
         (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
@@ -414,13 +414,13 @@ function navHtml() {
   var next = nextOf(path);
   var choiceGate = node.type === 'practice' && node.op === 'choice';
   var html = '<div class="nav"><div class="nav-row">';
-  html += navStack.length ? '<button type="button" class="btn" data-act="prev">Prev</button>' : '<span></span>';
+  html += navStack.length ? '<button type="button" class="btn" data-act="prev">' + POP_I18N.t('wizardPrev') + '</button>' : '<span></span>';
   if (choiceGate) {
-    html += '<span class="nav-hint">choose a branch to continue</span>';
+    html += '<span class="nav-hint">' + POP_I18N.t('chooseBranch') + '</span>';
   } else if (next) {
-    html += '<button type="button" class="btn btn-primary" data-act="next">Next</button>';
+    html += '<button type="button" class="btn btn-primary" data-act="next">' + POP_I18N.t('next') + '</button>';
   } else {
-    html += '<span class="finish">end of practice</span>';
+    html += '<span class="finish">' + POP_I18N.t('endPractice') + '</span>';
   }
   html += '</div></div>';
   return html;
@@ -469,6 +469,12 @@ document.addEventListener('click', function (e) {
 
 // ── 启动 ──
 
+// 语言切换：侧栏大纲与内容区一并重绘
+POP_I18N.onChange(function () {
+  if (doc) document.getElementById('side').innerHTML = sideHtml();
+  render();
+});
+
 var HASH = decodeURIComponent((location.pathname.split('/pop/')[1] || '').replace(/\.json$/, ''));
 
 fetch('/doc/' + encodeURIComponent(HASH) + '.json')
@@ -486,6 +492,6 @@ fetch('/doc/' + encodeURIComponent(HASH) + '.json')
   })
   .catch(function (err) {
     document.getElementById('app').innerHTML =
-      '<div class="empty"><p class="lead">failed to load document (' + escapeHtml(String(err.message || err)) + ')</p>' +
-      '<p class="hint"><a href="/">← My practices</a></p></div>';
+      '<div class="empty"><p class="lead">' + POP_I18N.t('docFail', escapeHtml(String(err.message || err))) + '</p>' +
+      '<p class="hint"><a href="/">' + POP_I18N.t('backMine') + '</a></p></div>';
   });

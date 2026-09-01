@@ -43,12 +43,13 @@ function addedCell(d) {
 }
 
 function render() {
+  var t = POP_I18N.t;
   var app = document.getElementById('app');
   if (docs.length === 0) {
     app.innerHTML =
       '<div class="empty">' + BOOK_ICON +
-      '<p class="lead">Nothing recorded yet. Write first-hand experience as a POP document — verifiable by hash, forever.</p>' +
-      '<p class="hint">create one with <code>practi new</code></p></div>';
+      '<p class="lead">' + t('emptyLead') + '</p>' +
+      '<p class="hint">' + t('emptyHint') + '</p></div>';
     return;
   }
   var totalPages = Math.max(1, Math.ceil(docs.length / PAGE_SIZE));
@@ -67,16 +68,16 @@ function render() {
   var pager = '';
   if (page > 1 || page < totalPages) {
     pager = '<div class="pager">' +
-      (page > 1 ? '<button type="button" data-page="' + (page - 1) + '">Previous</button>' : '') +
-      (page < totalPages ? '<button type="button" data-page="' + (page + 1) + '">Next</button>' : '') +
+      (page > 1 ? '<button type="button" data-page="' + (page - 1) + '">' + t('pagerPrev') + '</button>' : '') +
+      (page < totalPages ? '<button type="button" data-page="' + (page + 1) + '">' + t('pagerNext') + '</button>' : '') +
       '</div>';
   }
   app.innerHTML =
-    '<h3 class="page-title">My practices</h3>' +
+    '<h3 class="page-title">' + t('pageTitle') + '</h3>' +
     '<table class="doc-table">' +
-    '<thead><tr><th>Document</th><th class="col-steps">Steps</th><th class="col-added">Added</th></tr></thead>' +
+    '<thead><tr><th>' + t('thDocument') + '</th><th class="col-steps">' + t('thSteps') + '</th><th class="col-added">' + t('thAdded') + '</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>' +
-    '<div class="count-row"><span>' + plural(docs.length, 'document') + ' · page ' + page + ' of ' + totalPages + '</span>' + pager + '</div>';
+    '<div class="count-row"><span>' + t('countDocs', docs.length) + ' · ' + t('pageOf', page, totalPages) + '</span>' + pager + '</div>';
 }
 
 // 翻页走事件委托：innerHTML 重渲染不需要重复绑监听
@@ -86,6 +87,9 @@ document.addEventListener('click', function (e) {
   page = Number(btn.getAttribute('data-page'));
   render();
 });
+
+// 语言切换：整页文案重渲染
+POP_I18N.onChange(render);
 
 fetch('/api/directs')
   .then(function (r) { return r.json(); })
@@ -98,5 +102,5 @@ fetch('/api/directs')
   })
   .catch(function () {
     document.getElementById('app').innerHTML =
-      '<div class="empty"><p class="lead">failed to load /api/directs</p></div>';
+      '<div class="empty"><p class="lead">' + POP_I18N.t('loadFail') + '</p></div>';
   });

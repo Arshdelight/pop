@@ -24,6 +24,21 @@ header { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom:
 header .logo { width: 28px; height: 28px; color: var(--primary); flex: none; }
 header .brand { font-weight: 700; letter-spacing: .2px; font-size: 16px; }
 header .sub { color: var(--brand-40); font-size: 13px; }
+/* 设置入口（lang.js 注入）：header 右上角齿轮 ghost 钮 */
+.settings-btn { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: none; border-radius: 8px; background: transparent; color: var(--brand-40); cursor: pointer; }
+.settings-btn:hover { background: var(--hover-bg); color: var(--brand); }
+/* 设置弹窗：固定大小（320×212），遮罩点击/Esc/完成均可关 */
+.settings-overlay { display: none; position: fixed; inset: 0; z-index: 50; background: rgba(17, 24, 39, .32); }
+.settings-overlay.open { display: block; }
+.settings-dialog { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 320px; height: 212px; background: #fff; border-radius: 14px; box-shadow: 0 20px 50px rgba(0, 25, 51, .18); padding: 18px 20px 16px; display: flex; flex-direction: column; }
+.settings-title { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: var(--brand); }
+.settings-body { flex: 1; }
+.settings-field { margin: 0 0 8px; font-size: 12px; color: var(--brand-50); }
+.settings-langs { display: flex; gap: 8px; }
+.settings-lang { flex: 1; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--brand-60); font: inherit; font-size: 14px; padding: 8px 0; cursor: pointer; }
+.settings-lang:hover { border-color: var(--brand-30); color: var(--brand); }
+.settings-lang.on { background: rgba(0, 51, 102, .08); border-color: rgba(0, 51, 102, .25); color: var(--brand); font-weight: 500; }
+.settings-foot { display: flex; justify-content: flex-end; }
 main { max-width: 72rem; margin: 0 auto; padding: 40px 24px 64px; }
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
