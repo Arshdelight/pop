@@ -206,8 +206,12 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 箭头语义=面板去向：收起态朝左（展开=面板从右缘向左滑出），展开态朝右（收起=向右滑走） */
 #note-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; transform: rotate(180deg); }
 #note-side.open + #note-toggle svg { transform: rotate(0deg); }
-.nside-head { margin-bottom: 10px; }
+.nside-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .nside-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--brand-50); }
+/* 新建按钮：面板头部的小胶囊 */
+.nside-new { flex: none; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 50%; background: #fff; color: var(--brand-60); cursor: pointer; }
+.nside-new svg { width: 12px; height: 12px; }
+.nside-new:hover { color: var(--brand); border-color: var(--brand-30); }
 .nside-empty { font-size: 12px; line-height: 1.6; color: var(--brand-40); margin: 0 0 10px; }
 .nside-err { font-size: 12px; line-height: 1.5; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 10px; margin: 0 0 10px; overflow-wrap: break-word; }
 .nside-item { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
@@ -217,14 +221,11 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .nside-act svg { width: 13px; height: 13px; }
 .nside-act:hover { background: var(--hover-bg); color: var(--brand); }
 .nside-item .note-time { font-size: 11px; }
-.nside-item .note-body { font-size: 13px; line-height: 1.6; }
+.nside-item .note-body { font-size: 13px; line-height: 1.6; cursor: text; }
+.nside-item .note-body:hover { background: var(--hover-bg); border-radius: 4px; }
 /* 行内编辑态与底部新增框共用输入框形态 */
 .nside-input { width: 100%; min-height: 72px; resize: vertical; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--brand); font: inherit; font-size: 13px; line-height: 1.6; padding: 8px 10px; }
 .nside-input:focus { outline: none; border-color: var(--brand-30); }
 .nside-item.editing { padding: 8px; }
-.nside-form-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
-/* 新增框钉在栏底（flex 末位），空文档时它就是入口 */
-.nside-add { margin-top: auto; padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
-.nside-save { padding: 6px 14px; font-size: 13px; }
 
 /* LR kick */

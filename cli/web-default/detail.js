@@ -14,7 +14,10 @@ var notesByHash = {}; // 本地学习笔记（/api/notes），按节点哈希分
 var hashByPath = {};  // nodeIndex 的逆映射（树内路径 → 哈希）；根（空路径）= HASH 本身
 var notesOpen = false;  // 右栏开合：默认折叠；首载若本文档有笔记则自动展开（不持久化，每页按规则重判）
 var notesTouched = false; // 用户本页手动开合过——之后自动规则不再介入
-var editingId = null;   // 右栏里正在行内编辑的 note id（null=无；底部新增框常驻）
+var editingId = null;   // 右栏里正在行内编辑的 note id（NOTE_NEW=新建草稿；null=无）
+var NOTE_NEW = '__new__';
+var savingNote = false;  // 一次写盘在途（防 focusout 重入重复 POST）
+var suppressBlur = false; // 程序化重建/Esc 引发的失焦不算用户失焦（挡一次）
 var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动作或重渲染即清）
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
@@ -308,11 +311,12 @@ function fmtNoteTime(iso) {
 }
 
 // ── 右侧笔记栏（#note-side）：当前节点的笔记工作台，常驻可增改删 ──
-// 空文档也有面板（底部常驻输入框），解决「有笔记才可见」的发现性问题。
-// note 的第二个写入门（其一=CLI practi note）：POST /api/notes，CSRF 闸与 /api/run 同规格
+// 交互：点文本进入行内编辑、失焦即存（Esc 取消、清空=还原原文）；新建=头部按钮弹出
+// 草稿（失焦有内容才落库，空=静默放弃——存储层不允许空笔记）。写入门之二
+// （其一=CLI practi note）：POST /api/notes，CSRF 闸与 /api/run 同规格
 
-var PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
 var TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+var PLUS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
 
 /** 开合同步：面板宽度与内容列让位由 CSS transition 承担，这里只切类
  *  （body.note-open 让底部操作区同步让位，与内容列一起平滑重排） */
@@ -343,42 +347,51 @@ function renderNoteSide() {
   applyNotesOpen();
   var list = document.getElementById('note-list');
   if (!list) return;
-  // 重渲染保打字稿：输入框里的草稿跨导航/刷新存活（保存成功后的清空在 afterNoteWrite 做）
-  var draft = '';
-  var prevInput = document.getElementById('note-add-input');
-  if (prevInput) draft = prevInput.value;
+  // 重渲染保打字稿：只保「同一条」的草稿——编辑 note1 时点 note2，绝不能把 1 的文本带进 2
+  var editDraft = null;
+  var prevTa = list.querySelector('[data-note-input]');
+  if (prevTa && editingId !== null) {
+    var prevId = prevTa.getAttribute('data-id') || NOTE_NEW;
+    if (prevId === editingId) editDraft = prevTa.value;
+  }
   var notes = notesFor(hashAt(path));
-  var html = '<div class="nside-head"><p class="nside-title">' + POP_I18N.t('secNotes', notes.length) + '</p></div>';
+  var count = notes.length + (editingId === NOTE_NEW ? 1 : 0);
+  var html = '<div class="nside-head"><p class="nside-title">' + POP_I18N.t('secNotes', count) + '</p>' +
+    '<button type="button" class="nside-new" data-act="note-new" aria-label="' + escapeHtml(POP_I18N.t('noteNew')) + '" title="' + escapeHtml(POP_I18N.t('noteNew')) + '">' + PLUS_ICON + '</button></div>';
   if (noteErrorMsg) html += '<p class="nside-err">' + escapeHtml(noteErrorMsg) + '</p>';
-  if (!notes.length) html += '<p class="nside-empty">' + escapeHtml(POP_I18N.t('noteEmpty')) + '</p>';
+  if (!notes.length && editingId !== NOTE_NEW) html += '<p class="nside-empty">' + escapeHtml(POP_I18N.t('noteEmpty')) + '</p>';
   html += notes.map(function (n) {
-    if (editingId === n.id) return noteFormHtml(n);
+    if (editingId === n.id) return noteEditHtml(n.id, n.content);
     return '<div class="nside-item">' +
       '<div class="nside-meta"><span class="note-time">' + escapeHtml(fmtNoteTime(n.createdAt)) + '</span>' +
       '<span class="nside-acts">' +
-      '<button type="button" class="nside-act" data-act="note-edit" data-id="' + n.id + '" data-tip="' + escapeHtml(POP_I18N.t('noteEdit')) + '" aria-label="' + escapeHtml(POP_I18N.t('noteEdit')) + '">' + PENCIL_ICON + '</button>' +
       '<button type="button" class="nside-act" data-act="note-del" data-id="' + n.id + '" data-tip="' + escapeHtml(POP_I18N.t('noteDelete')) + '" aria-label="' + escapeHtml(POP_I18N.t('noteDelete')) + '">' + TRASH_ICON + '</button>' +
       '</span></div>' +
-      '<div class="note-body">' + escapeHtml(n.content) + '</div></div>';
+      '<div class="note-body" data-act="note-edit" data-id="' + n.id + '" title="' + escapeHtml(POP_I18N.t('noteClickEdit')) + '">' + escapeHtml(n.content) + '</div></div>';
   }).join('');
-  html += '<div class="nside-add">' +
-    '<textarea id="note-add-input" class="nside-input" placeholder="' + escapeHtml(POP_I18N.t('notePlaceholder')) + '"></textarea>' +
-    '<button type="button" class="btn btn-primary nside-save" data-act="note-add">' + escapeHtml(POP_I18N.t('noteSave')) + '</button></div>';
+  // 重建会移走聚焦中的编辑框并触发 focusout——这是自己引起的，不算用户失焦，
+  // 否则刚打开的编辑框会被「未改动→退出」分支立刻关掉
+  var active = document.activeElement;
+  if (active && active.closest && active.closest('[data-note-input]')) suppressBlur = true;
+  // 新建草稿排在列表末尾：保存后按时间顺序正好落在这里
+  if (editingId === NOTE_NEW) html += noteEditHtml(null, '');
   list.innerHTML = html;
-  if (draft) {
-    var input = document.getElementById('note-add-input');
-    if (input) input.value = draft;
+  if (editingId !== null) {
+    var ta = list.querySelector('[data-note-input]');
+    if (ta) {
+      if (editDraft !== null) ta.value = editDraft;
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      ta.scrollIntoView({ block: 'nearest' });
+    }
   }
 }
 
-/** 行内编辑表单（替换被编辑的那条） */
-function noteFormHtml(n) {
+/** 行内编辑框（新建草稿与改写同一形态；id 空=新建）。失焦保存由 focusout 委托负责 */
+function noteEditHtml(id, content) {
   return '<div class="nside-item editing">' +
-    '<textarea class="nside-input" data-edit-input>' + escapeHtml(n.content) + '</textarea>' +
-    '<div class="nside-form-acts">' +
-    '<button type="button" class="btn btn-primary nside-save" data-act="note-save" data-id="' + n.id + '">' + escapeHtml(POP_I18N.t('noteSave')) + '</button>' +
-    '<button type="button" class="btn nside-save" data-act="note-cancel">' + escapeHtml(POP_I18N.t('noteCancel')) + '</button>' +
-    '</div></div>';
+    '<textarea class="nside-input" data-note-input' + (id ? ' data-id="' + id + '"' : '') +
+    ' placeholder="' + escapeHtml(POP_I18N.t('notePlaceholder')) + '">' + escapeHtml(content) + '</textarea></div>';
 }
 
 function postNote(body) {
@@ -401,36 +414,61 @@ function postNote(body) {
 }
 
 /** 写成功后的统一收口：服务端是唯一真相，重拉 → onNotesArrived 同步右栏。
- *  clearAdd=true（新增成功）先清空输入框——否则重渲染的草稿保活会把已保存内容填回去 */
-function afterNoteWrite(clearAdd) {
-  editingId = null;
+ *  重拉延后一个宏任务：失焦保存往往由「点击另一条」引发，必须让这次 click 先在
+ *  旧 DOM 上派发完（命中 note-edit/note-new），再重建列表——否则重建会吃掉点击，
+ *  表现为「点了第二条却没反应」。保存期间用户若已点了别的编辑，不动它的编辑态 */
+function afterNoteWrite(id) {
+  savingNote = false;
   noteErrorMsg = null;
-  if (clearAdd) {
-    var input = document.getElementById('note-add-input');
-    if (input) input.value = '';
-  }
-  loadNotesData();
+  if (editingId === id) editingId = null;
+  setTimeout(function () { loadNotesData(); }, 0);
 }
 
 function noteFail(e) {
+  savingNote = false;
   noteErrorMsg = String(e && e.message ? e.message : e);
   renderNoteSide();
 }
 
-function saveEditNote(id, content) {
-  if (!content.trim()) return;
-  postNote({ op: 'edit', id: id, content: content }).then(function () { afterNoteWrite(false); }).catch(noteFail);
+function noteById(id) {
+  var arr = notesFor(hashAt(path));
+  for (var i = 0; i < arr.length; i++) if (arr[i].id === id) return arr[i];
+  return null;
 }
 
-function saveAddNote() {
-  var input = document.getElementById('note-add-input');
-  if (!input || !input.value.trim()) return;
-  postNote({ op: 'add', hash: hashAt(path), content: input.value }).then(function () { afterNoteWrite(true); }).catch(noteFail);
+/** 失焦即存（focusout 委托与 Ctrl+Enter 都走这里）。口径：
+ *  未改动=退出编辑；清空=还原原文（存储不允许空笔记）；空草稿=静默放弃。
+ *  三个不落盘的分支同样延后一个宏任务再重绘——理由同 afterNoteWrite，别吃掉进行中的点击 */
+function saveFromInput(ta) {
+  if (savingNote) return;
+  var id = ta.getAttribute('data-id');
+  var content = ta.value;
+  var exitDeferred = function () {
+    editingId = null;
+    setTimeout(function () { renderNoteSide(); }, 0);
+  };
+  if (id) {
+    var n = noteById(id);
+    if (!n) return;
+    if (content === n.content) { exitDeferred(); return; }
+    if (!content.trim()) { exitDeferred(); return; }
+    savingNote = true;
+    postNote({ op: 'edit', id: id, content: content })
+      .then(function () { afterNoteWrite(id); })
+      .catch(function (e) { noteFail(e); });
+  } else {
+    if (!content.trim()) { exitDeferred(); return; }
+    savingNote = true;
+    postNote({ op: 'add', hash: hashAt(path), content: content })
+      .then(function () { afterNoteWrite(NOTE_NEW); })
+      .catch(function (e) { noteFail(e); });
+  }
 }
 
 function deleteNoteById(id) {
-  postNote({ op: 'delete', id: id }).then(function () { afterNoteWrite(false); }).catch(noteFail);
+  postNote({ op: 'delete', id: id }).then(function () { afterNoteWrite(id); }).catch(noteFail);
 }
+
 
 function loopNote(node) {
   if (node.loop && node.loop.mode === 'count') return POP_I18N.t('repeatX', node.loop.count);
@@ -658,21 +696,20 @@ document.addEventListener('click', function (e) {
   if (!act) return;
   var a = act.getAttribute('data-act');
   if (a === 'note-edit') {
+    // 点文本进入行内编辑；保存交给 focusout 委托（失焦即存）
     editingId = act.getAttribute('data-id') || null;
     noteErrorMsg = null;
     renderNoteSide();
-    var ta = document.querySelector('#note-side [data-edit-input]');
-    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
     return;
   }
-  if (a === 'note-cancel') { editingId = null; noteErrorMsg = null; renderNoteSide(); return; }
-  if (a === 'note-save') {
-    var et = document.querySelector('#note-side [data-edit-input]');
-    saveEditNote(act.getAttribute('data-id'), et ? et.value : '');
+  if (a === 'note-new') {
+    if (editingId === NOTE_NEW) return;
+    editingId = NOTE_NEW;
+    noteErrorMsg = null;
+    renderNoteSide();
     return;
   }
   if (a === 'note-del') { deleteNoteById(act.getAttribute('data-id')); return; }
-  if (a === 'note-add') { saveAddNote(); return; }
   if (a === 'next') {
     var n = nextOf(path);
     if (n) goTo(n);
@@ -686,16 +723,32 @@ document.addEventListener('click', function (e) {
 
 // ── 启动 ──
 
-// 右栏键盘：Ctrl/Cmd+Enter 保存（新增框或行内编辑），Esc 退出行内编辑
+// 右栏键盘：Ctrl/Cmd+Enter 立即保存（否则失焦也会存），Esc 取消编辑（还原原文/放弃草稿）
 document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape' && editingId) { editingId = null; renderNoteSide(); return; }
+  if (e.key === 'Escape' && editingId !== null) {
+    suppressBlur = true;
+    var ta = document.querySelector('#note-side [data-note-input]');
+    if (ta) ta.blur(); // 显式失焦，让 focusout 委托确定性地消费掉 suppressBlur 旗标
+    editingId = null;
+    renderNoteSide();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    if (editingId) {
-      var ta = document.querySelector('#note-side [data-edit-input]');
-      if (ta) saveEditNote(editingId, ta.value);
-    } else {
-      saveAddNote();
-    }
+    var ta2 = document.querySelector('#note-side [data-note-input]');
+    if (ta2) saveFromInput(ta2);
+  }
+});
+
+// 失焦即存：blur 不冒泡、focusout 冒泡，委托在面板上（innerHTML 重建不丢监听）
+document.addEventListener('DOMContentLoaded', function () {
+  var panel = document.getElementById('note-side');
+  if (panel) {
+    panel.addEventListener('focusout', function (e) {
+      var ta = e.target.closest ? e.target.closest('[data-note-input]') : null;
+      if (!ta || savingNote) return;
+      if (suppressBlur) { suppressBlur = false; return; }
+      saveFromInput(ta);
+    });
   }
 });
 
