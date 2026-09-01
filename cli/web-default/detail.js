@@ -84,13 +84,13 @@ function render() {
 
 function jsonSectionHtml() {
   if (view === 'doc') {
-    return '<div class="section-sm"><div class="label">Document JSON</div>' +
+    return '<div class="section-sm"><div class="label">' + POP_I18N.t('labelDocJson') + '</div>' +
       '<pre class="json-pre">' + jsonHtml(doc, markDoc) + '</pre></div>';
   }
   if (svJson === null) {
-    return '<div class="section-sm"><div class="label">StandardView JSON</div><p class="op-note">' + POP_I18N.t('loading') + '</p></div>';
+    return '<div class="section-sm"><div class="label">' + POP_I18N.t('labelSvJson') + '</div><p class="op-note">' + POP_I18N.t('loading') + '</p></div>';
   }
-  return '<div class="section-sm"><div class="label">StandardView JSON</div>' +
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('labelSvJson') + '</div>' +
     '<pre class="json-pre">' + jsonHtml(svJson, markSv) + '</pre></div>';
 }
 
@@ -181,9 +181,9 @@ function sideHtml() {
   var total = countActions(doc);
   // 视图三 tab 钉在侧栏最顶：向导正文 / StandardView JSON / document JSON（内容区随之换形态）
   var html = '<div class="side-tabs">' +
-    '<button type="button" class="side-tab" data-view="wizard">Wizard</button>' +
-    '<button type="button" class="side-tab" data-view="sv">StandardView</button>' +
-    '<button type="button" class="side-tab" data-view="doc">Document</button>' +
+    '<button type="button" class="side-tab" data-view="wizard">' + POP_I18N.t('tabWizard') + '</button>' +
+    '<button type="button" class="side-tab" data-view="sv">' + POP_I18N.t('tabSv') + '</button>' +
+    '<button type="button" class="side-tab" data-view="doc">' + POP_I18N.t('tabDoc') + '</button>' +
     '</div>' +
     '<p class="side-count">' + POP_I18N.t('stepCount', total) + '</p>' +
     '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + '</a>';

@@ -11,6 +11,8 @@ var POP_I18N = (function () {
   var M = {
     zh: {
       settings: '设置', language: '语言', done: '完成',
+      tabWizard: '向导', tabSv: 'StandardView', tabDoc: '文档',
+      labelDocJson: '文档 JSON', labelSvJson: 'StandardView JSON',
       // 目录页
       pageTitle: '我的实践',
       thDocument: '文档', thSteps: '步骤', thAdded: '添加时间',
@@ -44,6 +46,8 @@ var POP_I18N = (function () {
     },
     en: {
       settings: 'Settings', language: 'Language', done: 'Done',
+      tabWizard: 'Wizard', tabSv: 'StandardView', tabDoc: 'Document',
+      labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',
       thDocument: 'Document', thSteps: 'Steps', thAdded: 'Added',
       emptyLead: 'Nothing recorded yet. Write first-hand experience as a POP document — verifiable by hash, forever.',
