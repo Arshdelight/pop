@@ -148,7 +148,10 @@ practi migrate [path] [--keep] # cut: move the workspace (old dir removed after 
 
 ```bash
 practi push [hash]         # push new local claims (fetch /mine, diff, upload only new ones); stored PRIVATE — record first, publish later
-practi search [query...]   # --scope public|me|all, --limit N, --json; title hits rank first; empty = browse newest; --local searches the workspace instead
+practi search [query...]   # no flag = mixed: local workspace first, then the hub;
+                               # --local only the workspace; --remote only the hub;
+                               # --scope public|me|all applies to the hub half; --limit N; --json;
+                               # title hits rank first; empty = browse; hashes/prefixes match locally
 practi pull [hash]         # sync YOUR claims from the remote (default: all of mine)
 practi clone <hash>        # fetch a public POP and claim it (local direct + remote claim)
 practi submit [hash]       # PRIVATE → PENDING_REVIEW; auto review passes → public (already-approved skips re-review); default: all direct

@@ -43,8 +43,9 @@ practi logout                     clear stored credentials (revokes on the serve
 practi me                         show the authenticated remote user
 practi push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)
 practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
-practi search [query...]          search POPs on the remote (title-first; empty = browse)
-                               [--scope public|me|all] [--limit N] [--json]
+practi search [query...]          search POPs — no flag = mixed (local workspace first, then
+                               the hub); --local only the workspace; --remote only the hub
+                               [--scope public|me|all] applies to the hub half; --limit N; --json
 practi submit [hash]               submit POPs for public review (default: all direct)
 practi unpublish [hash]            withdraw a submission / take one back out of public
 practi remove <hash> [--keep]      take a direct pop out of the local directory (registry op;

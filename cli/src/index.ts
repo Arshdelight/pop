@@ -82,8 +82,9 @@ usage:
        | practi remove <hash> --remote   withdraw the claim on the remote instead (alias: delete)
   practi repair                     backfill missing claim timestamps from node file times
                                  (idempotent; stamped claims are never touched)
-  practi search [query...]          search pops (remote by default; --local the workspace)
-       [--local] [--scope public|me|all] [--limit N] [--json]
+  practi search [query...]          search pops — no flag = mixed (local workspace first, then
+       [--local | --remote]         the hub); --local only the workspace; --remote only the hub
+       [--scope public|me|all] [--limit N] [--json]   (scope applies to the hub half)
   practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK); local first, full-hash
                                  fallback to the hub — content is re-hashed before display, a
                                  found-but-mismatched hash is an error, never shown
@@ -353,13 +354,14 @@ async function main(argv: string[]): Promise<number> {
         options: {
           ...COMMON,
           local: { type: 'boolean' as const },
+          remote: { type: 'boolean' as const },
           scope: { type: 'string' as const, default: 'public' },
           limit: { type: 'string' as const },
           json: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi search [query...] [--local] [--scope public|me|all] [--limit N] [--json]'); return 0; }
+      if (values.help) { console.log('usage: practi search [query...] [--local | --remote] [--scope public|me|all] [--limit N] [--json]'); console.log('       (no flag = mixed: local workspace first, then the hub; --local/--remote are mutually exclusive)'); return 0; }
       const limit = values.limit ? Number(values.limit) : 20;
       return runSearch({
         dataDir: str(values['data-dir']),
@@ -368,6 +370,7 @@ async function main(argv: string[]): Promise<number> {
         limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
         json: values.json === true,
         local: values.local === true,
+        remote: values.remote === true,
       });
     }
     case 'submit': {
