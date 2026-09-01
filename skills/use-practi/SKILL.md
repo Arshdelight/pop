@@ -7,13 +7,14 @@ description: Record, search, read, publish, evaluate, and manage practice
   ("record this practice", "save this session", "turn this into steps"), search
   or read practices ("search practices", "has anyone done X", "find a how-to"),
   evaluate them ("what do people say about this practice", "comment on this
-  step", "is this practice any good"), or manage them ("publish", "submit for
-  review", "unpublish", "delete my practice") — even when practi is not
-  mentioned by name. Also for any explicit practi CLI usage (practi new, practi
-  show, practi ls, practi push, practi pull, practi clone, practi search,
-  practi comment, practi login, practi blob add, practi skill import, practi
-  skill export, …), and for converting between formats ("turn this skill into a
-  POP", "export this practice as a skill").
+  step", "is this practice any good"), annotate your own learning ("take a note
+  on this step", "note what I learned while reproducing"), or manage them
+  ("publish", "submit for review", "unpublish", "delete my practice") — even
+  when practi is not mentioned by name. Also for any explicit practi CLI usage
+  (practi new, practi show, practi ls, practi push, practi pull, practi clone,
+  practi search, practi comment, practi note, practi login, practi blob add,
+  practi skill import, practi skill export, …), and for converting between
+  formats ("turn this skill into a POP", "export this practice as a skill").
 ---
 
 One JSON document = one practice tree. Leaves are **actions** — atomic skills; interior nodes are **practices** — compositions. Everything except `name` is optional, and type is inferred: a node with `children` is a practice, one without is an action.
@@ -24,7 +25,7 @@ Three principles hold everywhere:
 - **A document format, not a workflow engine.** Nothing executes. Judgment — waiting times, acceptance prose, loop predicates — stays in human-readable text.
 - **Prose before fields.** What needs no machine semantics belongs in `content`; a field exists only when structure earns its place.
 
-The data directory (default `~/.practi`) is the workspace: nodes content-addressed under `nodes/*.md`; `practi.json` records the remote and the registered **direct** roots (indirect = every other node the direct POPs reference).
+The data directory (default `~/.practi`) is the workspace: nodes content-addressed under `nodes/*.md`; `practi.json` records the remote and the registered **direct** roots (indirect = every other node the direct POPs reference). Learning notes live beside it in a `notes.json` sidecar (local only).
 
 ## Setup
 
@@ -159,6 +160,19 @@ practi comment report <comment-id> --reason illegal|infringement|spam|other [--d
 - **Review** — comments are publish-then-review (automated content safety); a flagged comment is hidden and editing it resubmits it. Reported comments go through platform review with the source document as context; a confirmed report deletes the comment and notifies its author.
 - **Endorsement is reuse** — a "support" comment is just a note. The real endorsement is structural: publishing a document that references a node is what endorses it.
 
+## Local notes
+
+```bash
+practi note add <hash> -m "<text>"       # pin a learning note to any node (hash prefix OK)
+practi note list [hash]                  # all notes grouped by document; with a hash: that subtree only
+practi note edit <note-id> -m "<text>"   # 8-hex id, unique prefix works
+practi note delete <note-id>
+```
+
+- Notes are **local and private** — a `notes.json` sidecar, never uploaded. Division of labor with comments: a note is your learning/reproduction experience (what actually worked, where you deviated, dead ends); a comment is public judgment on content authenticity.
+- A note pins to **any** node hash, not just document roots — annotate the exact step that taught you something. Content addressing makes the pin exact: a note always refers to precisely this version of the content, and edits that replace a node leave the old note in place (kept, listed last as dangling).
+- `--json` prints a flat machine list (no grouping); human output groups by owning document, newest document first. `practi web` renders and edits the viewed document's notes in a right-hand panel — same file, same data as the CLI.
+
 ## Skill ⇄ POP conversion
 
 ```bash
@@ -185,5 +199,6 @@ practi skill import <dir>                # replay a `practi skill export` direct
 
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid` → `practi show <hash>` to review → optional `practi push`.
 - **Find prior art** — `practi search <query>` → `practi clone <hash>` → `practi show <hash>`.
+- **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"`. Notes stay local; public endorsement is a comment or a `refines`.
 - **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs are never GC'd). Local only: sync the hub afterwards with `practi push` then `practi delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `practi new`.
 - **Evaluate / see what people say** — `practi comment list <hash>` → `practi comment tally <hash>`; leave feedback with `practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "…"`.
