@@ -38,8 +38,8 @@ practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK); local f
                                hash missing locally falls back to the hub; content is re-hashed
                                before display (found-but-mismatched = error, never shown)
 practi web [--port 4317]          browse direct POPs in a local web UI
-practi login [--no-open]          OAuth login to the remote (browser authorize; --no-open prints the URL)
-practi relogin [--no-open]        logout + fresh login in one step
+practi login [--no-open] [--reauth]  OAuth login to the remote (browser authorize; --no-open prints the URL;
+                               --reauth = logout + fresh login in one step)
 practi logout                     clear stored credentials (revokes on the server)
 practi me                         show the authenticated remote user
 practi push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)

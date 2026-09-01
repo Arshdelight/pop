@@ -18,12 +18,15 @@ export interface LoginOpts {
   dataDir?: string;
   /** 不自动开浏览器，只打印授权 URL（适合无头环境/agent） */
   noOpen?: boolean;
+  /** 退出并重登一步到位：先 revoke + 清凭据再走完整登录；未登录时无痕退化为纯 login */
+  reauth?: boolean;
 }
 
 /**
  * practi login：OAuth 2.1 Authorization Code + PKCE（loopback 回调）登录 practihub。
  * 浏览器授权 → 换 access+refresh token → 凭证存 $dataDir/practi.auth.json（独立于 workspace 状态）。
  * 之后命令自动用 refresh token 续期（rotation），无需再次交互。
+ * --reauth：已登录时不必先 logout——一步重换凭据（revoke 是 best-effort，不阻塞）。
  */
 export async function runLogin(opts: LoginOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -35,24 +38,28 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
   const remote = state.remote.url;
   const resource = cliResource(remote);
   const existing = loadCredentials(dataDir);
-  if (existing) {
+  if (opts.reauth === true && existing) {
+    await revokeToken(remote, existing.client_id, existing.refresh_token, 'refresh_token');
+    deleteCredentials(dataDir);
+    console.log('logged out');
+  } else if (existing) {
     if (existing.resource && existing.resource !== resource) {
       // 凭据由另一个 hub 签发，对当前 remote 无用——清掉直接走新登录
       console.error(`note: stored credentials were issued for ${existing.resource}, not ${resource} — clearing them`);
       deleteCredentials(dataDir);
     } else if (isAccessTokenFresh(existing)) {
-      console.error('error: already logged in — run `practi logout` first to re-authenticate');
+      console.error('error: already logged in — use `practi login --reauth` (or logout first)');
       return 1;
     } else {
       // access 已过期：探一次 refresh。被拒=凭据已死，自动清除后继续；连不上=生死未知，保留并退出
       try {
         await validAccessToken(dataDir, remote);
-        console.error('error: already logged in — run `practi logout` first to re-authenticate');
+        console.error('error: already logged in — use `practi login --reauth` (or logout first)');
         return 1;
       } catch (e) {
         if (e instanceof HubUnreachableError) {
           console.error(`error: already logged in, but the session cannot be verified — ${e.message}`);
-          console.error('        run `practi logout` to force re-login');
+          console.error('        use `practi login --reauth` to force a fresh session');
           return 1;
         }
         console.error(`note: stored credentials are dead — clearing them (${(e as Error).message})`);
@@ -115,14 +122,6 @@ export async function runLogout(opts: { dataDir?: string }): Promise<number> {
   deleteCredentials(dataDir);
   console.log('logged out');
   return 0;
-}
-
-/** practi relogin：退出并重登——logout（revoke + 清凭据）紧接完整 login 流程，
- *  未登录时退化为纯 login。旗标与 login 同（--no-open 无头用）。 */
-export async function runRelogin(opts: LoginOpts): Promise<number> {
-  const code = await runLogout({ dataDir: opts.dataDir });
-  if (code !== 0) return code;
-  return runLogin(opts);
 }
 
 export interface MeOpts {

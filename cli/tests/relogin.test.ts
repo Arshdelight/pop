@@ -1,50 +1,60 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { init, pop, tempDataDir } from './helpers.js';
 
-// relogin = logout + login 一扇门；remote show 已砍（与 config 重复，看挂靠用 config）。
-// 离线钉：relogin 的 logout 半场完成、login 半场在死端口上失败（不碰真网）。
-describe('practi relogin: logout + fresh login in one step', () => {
-  it('logs out first, then attempts the fresh login (dead-port remote, offline)', async () => {
+// --reauth（原 relogin 命令改为 login 旗标，2026-09-01 词汇定案：relogin 非规范英语，
+// re-authenticate 是 OAuth 正规词）：logout + login 一步；未登录时无痕退化纯 login。
+// relogin 命令随之退役。
+describe('practi login --reauth', () => {
+  it('not logged in: degrades to a plain login (no "logged out" noise), dead-port offline', async () => {
     const dir = tempDataDir();
     await init(dir);
     await pop(dir, ['remote', 'set', 'http://127.0.0.1:9']);
 
-    const r = await pop(dir, ['relogin', '--no-open']);
-    expect(r.code).toBe(1); // login 半场失败
-    expect(r.stdout).toContain('logged out'); // logout 半场先完成
-    expect(r.stderr).toBeTruthy(); // login 的失败有话要说
+    const r = await pop(dir, ['login', '--no-open', '--reauth']);
+    expect(r.code).toBe(1); // login 半场在死端口上失败
+    expect(r.stdout).not.toContain('logged out'); // 未登录=无痕
+    expect(r.stdout).toContain('logging in to http://127.0.0.1:9');
   });
 
-  it('--help prints its usage without touching anything', async () => {
+  it('logged in (stale creds): logs out first, then the fresh login proceeds', async () => {
     const dir = tempDataDir();
     await init(dir);
-    const r = await pop(dir, ['relogin', '--help']);
-    expect(r.code).toBe(0);
-    expect(r.stdout).toContain('usage: practi relogin');
-  });
-});
+    await pop(dir, ['remote', 'set', 'http://127.0.0.1:9']);
+    // 造一份本地凭据（过期 access + 假 refresh）——revoke 走死端口是 best-effort 吞掉
+    fs.writeFileSync(path.join(dir, 'practi.auth.json'), JSON.stringify({
+      schema: 1, client_id: 'client-x', resource: 'http://127.0.0.1:9/cli',
+      scope: 'pop:read', client_name: 'practi cli',
+      access_token: 'at', refresh_token: 'rt', expires_at: 0,
+    }));
 
-describe('practi remote show is retired (config owns the display)', () => {
-  it('remote show → usage error pointing at config', async () => {
+    const r = await pop(dir, ['login', '--no-open', '--reauth']);
+    expect(r.code).toBe(1); // 后续 login 半场失败
+    expect(r.stdout).toContain('logged out'); // 先退出了
+    expect(fs.existsSync(path.join(dir, 'practi.auth.json'))).toBe(false); // 凭据已清
+  });
+
+  it('already logged in without --reauth still refuses and points at the flag', async () => {
     const dir = tempDataDir();
     await init(dir);
-    const r = await pop(dir, ['remote', 'show']);
+    await pop(dir, ['remote', 'set', 'http://127.0.0.1:9']);
+    fs.writeFileSync(path.join(dir, 'practi.auth.json'), JSON.stringify({
+      schema: 1, client_id: 'client-x', resource: 'http://127.0.0.1:9/cli',
+      scope: 'pop:read', client_name: 'practi cli',
+      access_token: 'at', refresh_token: 'rt', expires_at: 0,
+    }));
+
+    const r = await pop(dir, ['login', '--no-open']);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('practi remote set <url> | remove');
-    expect(r.stderr).toContain('practi config');
+    expect(r.stderr).toContain('login --reauth');
   });
 
-  it('bare remote → same usage error; set/remove keep working', async () => {
+  it('relogin command is retired (unknown command)', async () => {
     const dir = tempDataDir();
     await init(dir);
-    const bare = await pop(dir, ['remote']);
-    expect(bare.code).toBe(1);
-    expect(bare.stderr).toContain('usage: practi remote');
-
-    const set = await pop(dir, ['remote', 'set', 'http://127.0.0.1:9']);
-    expect(set.code).toBe(0);
-    const rm = await pop(dir, ['remote', 'remove']);
-    expect(rm.code).toBe(0);
-    expect(rm.stdout).toContain('falls back to the official hub');
+    const r = await pop(dir, ['relogin']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('unknown command: relogin');
   });
 });

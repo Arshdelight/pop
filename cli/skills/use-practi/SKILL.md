@@ -36,7 +36,7 @@ practi config        # data dir, remote, registry summary
 practi login         # OAuth in the browser; --no-open prints the URL for headless agents
 ```
 
-The remote defaults to https://practihub.com — `practi remote set <url>` only when pointing at another hub. Credentials live in `practi.auth.json` (kept out of `practi.json`, auto-refreshing): log in once, keep using `practi` without prompts. `practi me` verifies the session; `practi logout` revokes and clears it; `practi relogin` does both steps in one command.
+The remote defaults to https://practihub.com — `practi remote set <url>` only when pointing at another hub. Credentials live in `practi.auth.json` (kept out of `practi.json`, auto-refreshing): log in once, keep using `practi` without prompts. `practi me` verifies the session; `practi logout` revokes and clears it; `practi login --reauth` redoes both steps in one command.
 
 Local use needs no account; logging in only matters for publishing, commenting, and syncing. (Upgrades from the pre-rename `pop` CLI keep working: the old data directory and credentials are found automatically.)
 

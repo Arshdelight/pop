@@ -11,7 +11,7 @@ import { runNew } from './cmd/new.js';
 import { runEdit } from './cmd/edit.js';
 import { runGc } from './cmd/gc.js';
 import { runShow } from './cmd/show.js';
-import { runLogin, runLogout, runRelogin, runMe } from './cmd/login.js';
+import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 import { runPush } from './cmd/push.js';
@@ -53,9 +53,9 @@ usage:
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
-  practi login [--no-open]          OAuth login in the browser (--no-open prints the URL only)
+  practi login [--no-open] [--reauth]  OAuth login in the browser (--no-open prints the URL only;
   practi logout                     clear stored credentials (revokes on the server)
-  practi relogin [--no-open]        logout + fresh login in one step (same flags as login)
+                                 --reauth = logout + fresh login in one step, fine when not logged in)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
   practi ls --remote [--json]       list YOUR claims on the hub (direct only; -a is local-only)
   practi me                         show the authenticated practihub user
@@ -265,25 +265,16 @@ async function main(argv: string[]): Promise<number> {
     case 'login': {
       const { values } = parseArgs({
         args: rest,
-        options: { ...COMMON, 'no-open': { type: 'boolean' as const } },
+        options: { ...COMMON, 'no-open': { type: 'boolean' as const }, reauth: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi login [--no-open]'); return 0; }
-      return runLogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true });
+      if (values.help) { console.log('usage: practi login [--no-open] [--reauth]   (--reauth: logout + fresh login in one step; fine when not logged in)'); return 0; }
+      return runLogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true, reauth: values.reauth === true });
     }
     case 'logout': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi logout'); return 0; }
       return runLogout({ dataDir: str(values['data-dir']) });
-    }
-    case 'relogin': {
-      const { values } = parseArgs({
-        args: rest,
-        options: { ...COMMON, 'no-open': { type: 'boolean' as const } },
-        allowPositionals: true,
-      });
-      if (values.help) { console.log('usage: practi relogin [--no-open]   (logout + fresh login in one step)'); return 0; }
-      return runRelogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true });
     }
     case 'me': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
