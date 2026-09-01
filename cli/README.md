@@ -34,7 +34,9 @@ practi edit <hash> <file.json> --remote
                                to the new document (revision from = old root); nothing local
 practi gc [--apply]                free orphan blobs — bytes no stored node references
                                (dry-run by default; --apply removes)
-practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK); local first — a full
+                               hash missing locally falls back to the hub; content is re-hashed
+                               before display (found-but-mismatched = error, never shown)
 practi web [--port 4317]          browse direct POPs in a local web UI
 practi login [--no-open]          OAuth login to the remote (browser authorize; --no-open prints the URL)
 practi logout                     clear stored credentials (revokes on the server)

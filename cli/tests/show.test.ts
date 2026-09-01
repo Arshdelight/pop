@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createdRoot, init, pop, tempDataDir, writeDoc } from './helpers.js';
 
@@ -62,5 +64,52 @@ describe('pop show: hash addressing (full hash and unique prefix)', () => {
     const r = await pop(dir, ['show', `sha256:${'0'.repeat(64)}`]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/error \[E_NOT_FOUND\]/);
+  });
+});
+
+// 哈希纪律（第 4 点）：本地「没找到」先区分「找到但哈希不正确」（加载层 E_NODE_CORRUPT），
+// 完整哈希才回落 hub（前缀只对本地有意义）；远端内容重算后才展示。
+describe('show: found-but-hash-mismatch is an error, never silent', () => {
+  it('a hand-edited node file reports corruption, not plain not-found', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Victim', content: 'original' })])).stdout);
+    const file = path.join(dir, 'nodes', `${root.slice('sha256:'.length)}.md`);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('original', 'tampered'));
+
+    const r = await pop(dir, ['show', root]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('E_NODE_CORRUPT');
+    expect(r.stderr).toContain('the node file exists locally');
+    expect(r.stderr).toContain('hashes to sha256:'); // 名实不符的实算值
+  });
+
+  it('a prefix that matches nothing says the hub fallback needs the full hash (no network)', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const r = await pop(dir, ['show', 'abcdef12']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('E_NOT_FOUND');
+    expect(r.stderr).toContain('hub fallback needs the full hash');
+  });
+
+  it('a full hash missing locally fails fast against an unreachable hub (offline, no real network)', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    // loadState 永远回落默认 remote（开箱即连），真离线只能指向死端口
+    await pop(dir, ['remote', 'set', 'http://127.0.0.1:9']);
+    const ghost = `sha256:${'c'.repeat(64)}`;
+    const r = await pop(dir, ['show', ghost]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('hub unreachable');
+  });
+
+  it('local happy path unchanged: found node renders as before', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Plain', content: 'fine' })])).stdout);
+    const r = await pop(dir, ['show', root]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('Plain');
   });
 });

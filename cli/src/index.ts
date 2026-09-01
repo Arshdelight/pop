@@ -84,7 +84,9 @@ usage:
                                  (idempotent; stamped claims are never touched)
   practi search [query...]          search pops (remote by default; --local the workspace)
        [--local] [--scope public|me|all] [--limit N] [--json]
-  practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+  practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK); local first, full-hash
+                                 fallback to the hub — content is re-hashed before display, a
+                                 found-but-mismatched hash is an error, never shown
   practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
   practi skill update                refresh the installed use-practi skill (--dir to override)
   practi skill uninstall             remove the installed use-practi skill
@@ -239,7 +241,7 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, json: { type: 'boolean' as const }, doc: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help || positionals.length === 0) { console.log('usage: practi show <hash> [--json] [--doc]'); return 0; }
+      if (values.help || positionals.length === 0) { console.log('usage: practi show <hash> [--json] [--doc]   (local first; full hash falls back to the hub, hash verified)'); return 0; }
       return runShow({ dataDir: str(values['data-dir']), hash: positionals[0], json: values.json === true, doc: values.doc === true });
     }
     case 'web': {
