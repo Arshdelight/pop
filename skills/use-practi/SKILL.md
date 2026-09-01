@@ -128,6 +128,7 @@ practi remove <hash> [--keep] # take a direct pop out of the local directory (re
                                # unreachable nodes — shared indirect nodes survive; --keep keeps)
 practi show <hash>           # aggregate view; --json machine view; --doc full document form
 practi ls [-a]               # direct roots; -a adds indirect nodes
+practi ls --remote           # YOUR claims on the hub (direct only; -a is local-only)
 practi search --local <q>    # offline search over every stored node (name/description/content; hash prefixes too)
 practi web                   # browse direct POPs in a local web UI
 practi gc [--apply]          # free orphan blobs — bytes no stored node references

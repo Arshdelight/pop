@@ -21,6 +21,7 @@ practi remote show | remove       inspect / clear the remote
 practi repair                     backfill missing claim timestamps from node file times
                                (idempotent; stamped claims are never touched)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
+practi ls --remote [--json]       list YOUR claims on the hub (direct only; -a is local-only)
 practi new <file.json>            create a POP from a JSON document (or --json '<text>', or stdin)
 practi new <file.json> --remote [--publish]
                                create on the hub ONLY (the hub parses + hashes; nothing local;

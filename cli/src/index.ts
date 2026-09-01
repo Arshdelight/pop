@@ -56,6 +56,7 @@ usage:
   practi login [--no-open]          OAuth login in the browser (--no-open prints the URL only)
   practi logout                     clear stored credentials (revokes on the server)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
+  practi ls --remote [--json]       list YOUR claims on the hub (direct only; -a is local-only)
   practi me                         show the authenticated practihub user
   practi migrate [path] [--keep]      move the workspace to a new data directory
                                  (cut: the old directory is removed after per-file
@@ -162,13 +163,13 @@ async function main(argv: string[]): Promise<number> {
       return runMigrate({ dataDir: str(values['data-dir']), positional: positionals, keep: values.keep === true });
     }
     case 'ls': {
-      const { values } = parseArgs({
+      const { values, positionals } = parseArgs({
         args: rest,
-        options: { ...COMMON, all: { type: 'boolean' as const, short: 'a' }, json: { type: 'boolean' as const } },
+        options: { ...COMMON, all: { type: 'boolean' as const, short: 'a' }, json: { type: 'boolean' as const }, remote: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi ls [-a] [--json]'); return 0; }
-      return runLs({ dataDir: str(values['data-dir']), all: values.all === true, json: values.json === true });
+      if (values.help) { console.log('usage: practi ls [-a] [--json]   (local); practi ls --remote [--json]   (your claims on the hub)'); return 0; }
+      return runLs({ dataDir: str(values['data-dir']), all: values.all === true, json: values.json === true, remote: values.remote === true });
     }
     case 'note': {
       const { values, positionals } = parseArgs({
