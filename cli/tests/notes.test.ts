@@ -206,4 +206,40 @@ describe('GET /api/notes: notes data window', () => {
     expect((await fetch(`${base}/api/notes`)).status).toBe(400);
     expect((await fetch(`${base}/api/notes?ref=deadbeef`)).status).toBe(404);
   });
+
+  it('POST add/edit/delete roundtrip through the second write door', async () => {
+    const post = async (body: unknown, origin?: string, ctype = 'application/json') => {
+      const r = await fetch(`${base}/api/notes`, {
+        method: 'POST',
+        headers: { 'content-type': ctype, ...(origin === undefined ? {} : { origin }) },
+        body: JSON.stringify(body),
+      });
+      return { status: r.status, json: await r.json().catch(() => null) };
+    };
+
+    // 安全闸与 /api/run 同规格：无 Origin 403、跨源 403、错 content-type 415
+    expect((await fetch(`${base}/api/notes`, { method: 'POST', body: '{}' })).status).toBe(403);
+    expect((await post({ op: 'noop' }, 'http://evil.example')).status).toBe(403);
+    expect((await post({ op: 'noop' }, base, 'text/plain')).status).toBe(415);
+
+    // add：走完整 hash；GET 立即可见
+    const added = await post({ op: 'add', hash: pour, content: 'web-added' }, base);
+    expect(added.status).toBe(200);
+    expect(added.json.note.hash).toBe(pour);
+    expect(added.json.note.id).toMatch(/^[0-9a-f]{8}$/);
+    const id = added.json.note.id as string;
+    let view = await (await fetch(`${base}/api/notes?ref=${encodeURIComponent(pour)}`)).json();
+    expect(view.notes).toHaveLength(2);
+
+    // edit + delete；unknown id 404、坏 op/空 content 400
+    const edited = await post({ op: 'edit', id: id.slice(0, 4), content: 'web-edited' }, base);
+    expect(edited.status).toBe(200);
+    expect(edited.json.note.content).toBe('web-edited');
+    expect((await post({ op: 'delete', id }, base)).status).toBe(200);
+    view = await (await fetch(`${base}/api/notes?ref=${encodeURIComponent(pour)}`)).json();
+    expect(view.notes).toHaveLength(1);
+    expect((await post({ op: 'edit', id: 'ffffffff', content: 'x' }, base)).status).toBe(404);
+    expect((await post({ op: 'noop' }, base)).status).toBe(400);
+    expect((await post({ op: 'add', hash: pour, content: '   ' }, base)).status).toBe(400);
+  });
 });

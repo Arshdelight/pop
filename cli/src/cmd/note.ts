@@ -2,7 +2,7 @@ import { resolveNodeRef, type Workspace } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { shortHash } from '../render.js';
-import { loadNotes, saveNotes, newNoteId, subtreeHashes, type NoteEntry, type NotesFile } from '../notes.js';
+import { loadNotes, insertNote, updateNote, removeNote, subtreeHashes, type NoteEntry, type NoteMutation } from '../notes.js';
 
 /**
  * practi note — 本地学习笔记（sidecar notes.json，不进协议、不上 hub）。
@@ -52,11 +52,7 @@ function noteAdd(opts: NoteOpts, dataDir: string): number {
   // 存在性校验兼前缀解析：笔记必须钉在工作区已有的节点上（挡手滑哈希）
   const ws = openWorkspace(dataDir);
   const hash = resolveNodeRef(ws, target);
-  const file = loadNotes(dataDir);
-  const now = new Date().toISOString();
-  const note: NoteEntry = { id: newNoteId(), hash, content: opts.message, createdAt: now, updatedAt: now };
-  file.notes.push(note);
-  saveNotes(dataDir, file);
+  const note = insertNote(dataDir, hash, opts.message);
   if (opts.json) {
     console.log(JSON.stringify(note, null, 2));
     return 0;
@@ -141,16 +137,13 @@ function fmtLocal(iso: string): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function findNote(file: NotesFile, id: string): NoteEntry | null {
-  const key = id.toLowerCase();
-  const hits = file.notes.filter(n => n.id.startsWith(key));
-  if (hits.length === 1) return hits[0];
-  if (hits.length > 1) {
-    console.error(`error: note id prefix "${id}" matches ${hits.length} notes`);
-    return null;
+function reportMutation(id: string, m: NoteMutation): number {
+  if (!m.ok) {
+    if (m.reason === 'not_found') console.error(`error: note "${id}" not found`);
+    else console.error(`error: note id prefix "${id}" matches ${m.matches} notes`);
+    return 1;
   }
-  console.error(`error: note "${id}" not found`);
-  return null;
+  return 0;
 }
 
 function noteEdit(opts: NoteOpts, dataDir: string): number {
@@ -159,17 +152,13 @@ function noteEdit(opts: NoteOpts, dataDir: string): number {
     console.error('usage: practi note edit <note-id> -m "<新内容>"');
     return 1;
   }
-  const file = loadNotes(dataDir);
-  const note = findNote(file, id);
-  if (!note) return 1;
-  note.content = opts.message;
-  note.updatedAt = new Date().toISOString();
-  saveNotes(dataDir, file);
+  const m = updateNote(dataDir, id, opts.message);
+  if (!m.ok) return reportMutation(id, m);
   if (opts.json) {
-    console.log(JSON.stringify(note, null, 2));
+    console.log(JSON.stringify(m.note, null, 2));
     return 0;
   }
-  console.log(`note ${note.id} edited`);
+  console.log(`note ${m.note.id} edited`);
   return 0;
 }
 
@@ -179,11 +168,8 @@ function noteDelete(opts: NoteOpts, dataDir: string): number {
     console.error('usage: practi note delete <note-id>');
     return 1;
   }
-  const file = loadNotes(dataDir);
-  const note = findNote(file, id);
-  if (!note) return 1;
-  file.notes.splice(file.notes.indexOf(note), 1);
-  saveNotes(dataDir, file);
-  console.log(`note ${note.id} deleted`);
+  const m = removeNote(dataDir, id);
+  if (!m.ok) return reportMutation(id, m);
+  console.log(`note ${m.note.id} deleted`);
   return 0;
 }

@@ -86,6 +86,50 @@ export function saveNotes(dataDir: string, file: NotesFile): void {
   fs.writeFileSync(notesPath(dataDir), JSON.stringify(file, null, 2) + '\n', 'utf8');
 }
 
+/* ── CRUD 原语：CLI（practi note）与 web（POST /api/notes）共用的唯一写逻辑，
+ *  id 唯一前缀解析只活在这里。调用方负责校验 content 非空、解析节点哈希 ── */
+
+export type NoteMutation =
+  | { ok: true; note: NoteEntry }
+  | { ok: false; reason: 'not_found' | 'ambiguous'; matches: number };
+
+/** 新增：hash 必须是调用方解析过的全形 sha256:<64hex> */
+export function insertNote(dataDir: string, hash: string, content: string): NoteEntry {
+  const file = loadNotes(dataDir);
+  const now = new Date().toISOString();
+  const note: NoteEntry = { id: newNoteId(), hash, content, createdAt: now, updatedAt: now };
+  file.notes.push(note);
+  saveNotes(dataDir, file);
+  return note;
+}
+
+function matchNote(notes: NoteEntry[], id: string): NoteMutation {
+  const key = id.toLowerCase();
+  const hits = notes.filter(n => n.id.startsWith(key));
+  if (hits.length === 1) return { ok: true, note: hits[0] };
+  if (hits.length > 1) return { ok: false, reason: 'ambiguous', matches: hits.length };
+  return { ok: false, reason: 'not_found', matches: 0 };
+}
+
+export function updateNote(dataDir: string, id: string, content: string): NoteMutation {
+  const file = loadNotes(dataDir);
+  const m = matchNote(file.notes, id);
+  if (!m.ok) return m;
+  m.note.content = content;
+  m.note.updatedAt = new Date().toISOString();
+  saveNotes(dataDir, file);
+  return { ok: true, note: m.note };
+}
+
+export function removeNote(dataDir: string, id: string): NoteMutation {
+  const file = loadNotes(dataDir);
+  const m = matchNote(file.notes, id);
+  if (!m.ok) return m;
+  file.notes.splice(file.notes.indexOf(m.note), 1);
+  saveNotes(dataDir, file);
+  return { ok: true, note: m.note };
+}
+
 /** 子树哈希集（含根自身）：note list 按文档/子树过滤用。直接走 nodes 图的 children pin，
  *  不经 exportSubtree 的 JSON 化。防环靠集合本身（内容寻址树天然无环，守一下不亏） */
 export function subtreeHashes(ws: Workspace, root: string): Set<string> {

@@ -80,7 +80,8 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 `practi web` serves a local UI on `127.0.0.1` (default port 4317). Data and presentation are separated:
 
-- **Data window** — plain JSON endpoints backed by the workspace: `GET /api/directs` (directory list: hash, name, description, step/output counts), `GET /pop/<hash>.json` (§7 standard view), `GET /doc/<hash>.json` (document tree + `nodeIndex`, a hash→tree-path registry for resolving `inputs.from` references), `GET /blobs/<hash>` (attachment bytes).
+- **Data window** — plain JSON endpoints backed by the workspace: `GET /api/directs` (directory list: hash, name, description, step/output counts), `GET /pop/<hash>.json` (§7 standard view), `GET /doc/<hash>.json` (document tree + `nodeIndex`, a hash→tree-path registry for resolving `inputs.from` references), `GET /blobs/<hash>` (attachment bytes), `GET /api/notes?ref=<hash>` (learning notes within that node's subtree).
+- **Notes write endpoint** — `POST /api/notes` is how the built-in notes sidebar writes (also available to custom frontends): `{"op":"add","hash":"<node hash>","content":"…"}` / `{"op":"edit","id":"<note id>","content":"…"}` / `{"op":"delete","id":"<note id>"}` with `content-type: application/json` and a same-origin `Origin` header (the same CSRF gate as `/api/run`).
 - **Action endpoint** — `POST /api/run` lets a custom frontend trigger CLI commands directly. Request: `{ "cmd": "<name>", "args": { ... } }` with `content-type: application/json` and a same-origin `Origin` header (browser fetch from the page itself satisfies both). Response: `{ "code": <CLI exit code>, "out": "<stdout>", "err": "<stderr>" }`. Runnable commands (the whitelist mirrors the CLI, deliberately narrow):
 
   | cmd | args | effect |
@@ -100,7 +101,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 - `practi note` keeps **local learning notes** in `notes.json` next to `practi.json` — a sidecar, like `claims`. Each note is pinned to a node hash: content addressing gives the pin exact semantics (the note is about *that version* of the node, and can never drift with edits). Notes never enter the POP protocol body and are never uploaded.
 - The division of labor with the remote: **notes = your learning/reproduction experience (local, private)**; **`practi comment` = content authenticity (public, on the hub)**.
-- The write door is the CLI, so humans and agents go through the same gate: `practi note add <node-hash> -m "step 3 needs admin rights on Windows"` while reproducing a practice. `practi web` displays notes per node in the wizard view (amber dots in the outline mark nodes that carry notes).
+- Two write doors, one file: the CLI (`practi note add <node-hash> -m "step 3 needs admin rights on Windows"` — the gate agents go through) and `practi web`'s **notes sidebar** on the detail page (toggle in the header; lists the current node's notes with inline add/edit/delete; empty file just means an empty panel). The wizard view also renders a node's notes inline on its card, and amber dots in the outline mark nodes that carry notes.
 
 ### Lifecycle (submit / unpublish / delete)
 

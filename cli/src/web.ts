@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
-import { loadNotes, subtreeHashes } from './notes.js';
+import { loadNotes, subtreeHashes, insertNote, updateNote, removeNote } from './notes.js';
 import { runNew } from './cmd/new.js';
 import { runPull } from './cmd/pull.js';
 import { runPush } from './cmd/push.js';
@@ -105,7 +105,8 @@ function handle(
     return;
   }
   if (pathname === '/api/notes') {
-    notesRoute(req, res, dataDir, ws);
+    if (req.method === 'POST') void handleNoteWrite(req, res, dataDir, ws);
+    else notesRoute(req, res, dataDir, ws);
     return;
   }
   if (pathname === '/api/run') {
@@ -361,6 +362,67 @@ function directsPayload(dataDir: string, ws: ReturnType<typeof openWorkspace>, s
       };
     });
     return { dataDir, docs };
+}
+
+/** POST /api/notes：note 的第二个写入门（官方前端侧栏编辑用；CLI practi note 仍是第一门）。
+ *  本地个人数据，无审核诉求，但 CSRF 闸与 /api/run 同规格（sameOrigin + application/json）。
+ *  body={op:'add',hash,content} | {op:'edit',id,content} | {op:'delete',id}。 */
+
+async function handleNoteWrite(req: http.IncomingMessage, res: http.ServerResponse, dataDir: string, ws: ReturnType<typeof openWorkspace>): Promise<void> {
+  const fail = (status: number, message: string) => send(res, status, 'application/json; charset=utf-8', JSON.stringify({ error: message }));
+  try {
+    if (req.method !== 'POST') throw new ApiError(405, 'POST only');
+    if (!sameOrigin(req)) throw new ApiError(403, 'same-origin POST required (Origin header missing or foreign)');
+    const ctype = String(req.headers['content-type'] ?? '');
+    if (!ctype.startsWith('application/json')) throw new ApiError(415, 'content-type must be application/json');
+    const body = await readBody(req, 256 * 1024);
+    let parsed: { op?: unknown; hash?: unknown; id?: unknown; content?: unknown };
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      throw new ApiError(400, 'request body is not valid JSON');
+    }
+    const content = typeof parsed.content === 'string' ? parsed.content : '';
+    const okBody = (note: unknown) => send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ note }, null, 2));
+
+    switch (parsed.op) {
+      case 'add': {
+        if (!content.trim()) throw new ApiError(400, 'content required');
+        const ref = typeof parsed.hash === 'string' ? parsed.hash : '';
+        let hash: string;
+        try {
+          hash = resolveNodeRef(ws, ref);
+        } catch (e) {
+          throw new ApiError(404, e instanceof PracticeError ? `${e.code}: ${e.message}` : String(e));
+        }
+        return void okBody(insertNote(dataDir, hash, content));
+      }
+      case 'edit': {
+        if (!content.trim()) throw new ApiError(400, 'content required');
+        const id = typeof parsed.id === 'string' ? parsed.id : '';
+        const m = updateNote(dataDir, id, content);
+        if (!m.ok) throw mutationError(id, m);
+        return void okBody(m.note);
+      }
+      case 'delete': {
+        const id = typeof parsed.id === 'string' ? parsed.id : '';
+        const m = removeNote(dataDir, id);
+        if (!m.ok) throw mutationError(id, m);
+        return void send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ deleted: true, id: m.note.id }, null, 2));
+      }
+      default:
+        throw new ApiError(400, 'op must be add | edit | delete');
+    }
+  } catch (e) {
+    if (e instanceof ApiError) fail(e.status, e.message);
+    else fail(500, e instanceof Error ? e.message : String(e));
+  }
+}
+
+function mutationError(id: string, m: Exclude<ReturnType<typeof updateNote>, { ok: true }>): ApiError {
+  return m.reason === 'not_found'
+    ? new ApiError(404, `note "${id}" not found`)
+    : new ApiError(400, `note id prefix "${id}" matches ${m.matches} notes`);
 }
 
 /** 笔记数据窗：GET /api/notes?ref=<hash> → 该节点子树内的本地笔记（存入顺序=时间正序）。

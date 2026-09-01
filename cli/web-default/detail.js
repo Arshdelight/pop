@@ -10,8 +10,12 @@ var navStack = []; // 走过的路径栈，Prev 回退用（避开只读全局 w
 var nodeIndex = null; // 哈希→树内路径登记簿（数据窗 nodeIndex），inputs.from 反解用
 var view = 'wizard';  // 内容区视图：wizard | sv | doc（侧栏顶部三 tab）
 var svJson = null;    // StandardView JSON 缓存（首次切到该 tab 才拉取）
-var notesByHash = {}; // 本地学习笔记（/api/notes），按节点哈希分组；写入口在 CLI（practi note）
+var notesByHash = {}; // 本地学习笔记（/api/notes），按节点哈希分组；写入口=CLI（practi note）+ 右栏（POST /api/notes）
 var hashByPath = {};  // nodeIndex 的逆映射（树内路径 → 哈希）；根（空路径）= HASH 本身
+var notesOpen = true;   // 右侧笔记栏开合（localStorage practi.notesSide，默认开）
+var editingId = null;   // 右栏里正在行内编辑的 note id（null=无；底部新增框常驻）
+var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动作或重渲染即清）
+try { notesOpen = localStorage.getItem('practi.notesSide') !== '0'; } catch (e) { /* 隐私模式：默认开 */ }
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -76,6 +80,7 @@ function render() {
   app.innerHTML = (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
   updateTabs();
   markSide();
+  renderNoteSide(); // 右栏跟人走：每次导航换节点都重渲染（草稿保真在 renderNoteSide 内部处理）
   // 向导视图回顶（瞬移，既有行为）；JSON 视图平滑滚到当前高亮块首行。
   // 原生 smooth 滚动天然可中断：快速连点不同节点时，新目标的滚动指令
   // 会取消进行中的动画，从当前位置转向新目标（CSSOM View 语义）
@@ -310,6 +315,128 @@ function fmtNoteTime(iso) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
+// ── 右侧笔记栏（#note-side）：当前节点的笔记工作台，常驻可增改删 ──
+// 空文档也有面板（底部常驻输入框），解决「有笔记才可见」的发现性问题。
+// note 的第二个写入门（其一=CLI practi note）：POST /api/notes，CSRF 闸与 /api/run 同规格
+
+var NOTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.706 1.257l-.268 2.358a1 1 0 0 0 .69 1.089l2.358.268a2 2 0 0 0 1.257-.706z"/></svg>';
+var PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
+var TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+function applyNotesOpen() {
+  var panel = document.getElementById('note-side');
+  if (panel) panel.classList.toggle('off', !notesOpen);
+  document.body.classList.toggle('notes-open', notesOpen);
+  var btn = document.querySelector('.notes-btn');
+  if (btn) btn.classList.toggle('on', notesOpen);
+}
+
+/** header 开关钮（设置钮左边）：笔记本图标 + 琥珀点（当前节点有笔记才亮） */
+function mountNoteToggle() {
+  var header = document.querySelector('header');
+  if (!header) return;
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'notes-btn';
+  btn.setAttribute('aria-label', POP_I18N.t('notePanel'));
+  btn.setAttribute('data-tip', POP_I18N.t('notePanel'));
+  btn.innerHTML = NOTE_ICON + '<span class="side-dot"></span>';
+  btn.addEventListener('click', function () {
+    notesOpen = !notesOpen;
+    try { localStorage.setItem('practi.notesSide', notesOpen ? '1' : '0'); } catch (e) { /* 同 lang */ }
+    applyNotesOpen();
+    renderNoteSide();
+  });
+  var settings = header.querySelector('.settings-btn');
+  if (settings) header.insertBefore(btn, settings);
+  else header.appendChild(btn);
+}
+
+function renderNoteSide() {
+  var panel = document.getElementById('note-side');
+  if (!panel) return;
+  var btnDot = document.querySelector('.notes-btn .side-dot');
+  if (btnDot) btnDot.classList.toggle('has', notesFor(hashAt(path)).length > 0);
+  if (!notesOpen) { panel.innerHTML = ''; return; }
+  // 重渲染保打字稿：输入框里的草稿跨导航/刷新存活
+  var draft = '';
+  var prevInput = document.getElementById('note-add-input');
+  if (prevInput) draft = prevInput.value;
+  var list = notesFor(hashAt(path));
+  var html = '<div class="nside-head"><p class="nside-title">' + POP_I18N.t('secNotes', list.length) + '</p>' +
+    '<p class="nside-node">' + escapeHtml(walk(path).name) + '</p></div>';
+  if (noteErrorMsg) html += '<p class="nside-err">' + escapeHtml(noteErrorMsg) + '</p>';
+  if (!list.length) html += '<p class="nside-empty">' + escapeHtml(POP_I18N.t('noteEmpty')) + '</p>';
+  html += list.map(function (n) {
+    if (editingId === n.id) return noteFormHtml(n);
+    return '<div class="nside-item">' +
+      '<div class="nside-meta"><span class="note-time">' + escapeHtml(fmtNoteTime(n.createdAt)) + '</span>' +
+      '<span class="nside-acts">' +
+      '<button type="button" class="nside-act" data-act="note-edit" data-id="' + n.id + '" data-tip="' + escapeHtml(POP_I18N.t('noteEdit')) + '" aria-label="' + escapeHtml(POP_I18N.t('noteEdit')) + '">' + PENCIL_ICON + '</button>' +
+      '<button type="button" class="nside-act" data-act="note-del" data-id="' + n.id + '" data-tip="' + escapeHtml(POP_I18N.t('noteDelete')) + '" aria-label="' + escapeHtml(POP_I18N.t('noteDelete')) + '">' + TRASH_ICON + '</button>' +
+      '</span></div>' +
+      '<div class="note-body">' + escapeHtml(n.content) + '</div></div>';
+  }).join('');
+  html += '<div class="nside-add">' +
+    '<textarea id="note-add-input" class="nside-input" placeholder="' + escapeHtml(POP_I18N.t('notePlaceholder')) + '"></textarea>' +
+    '<button type="button" class="btn btn-primary nside-save" data-act="note-add">' + escapeHtml(POP_I18N.t('noteSave')) + '</button></div>';
+  panel.innerHTML = html;
+  if (draft) {
+    var input = document.getElementById('note-add-input');
+    if (input) input.value = draft;
+  }
+}
+
+/** 行内编辑表单（替换被编辑的那条） */
+function noteFormHtml(n) {
+  return '<div class="nside-item editing">' +
+    '<textarea class="nside-input" data-edit-input>' + escapeHtml(n.content) + '</textarea>' +
+    '<div class="nside-form-acts">' +
+    '<button type="button" class="btn btn-primary nside-save" data-act="note-save" data-id="' + n.id + '">' + escapeHtml(POP_I18N.t('noteSave')) + '</button>' +
+    '<button type="button" class="btn nside-save" data-act="note-cancel">' + escapeHtml(POP_I18N.t('noteCancel')) + '</button>' +
+    '</div></div>';
+}
+
+function postNote(body) {
+  return fetch('/api/notes', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) {
+      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      return j;
+    });
+  });
+}
+
+/** 写成功后的统一收口：服务端是唯一真相，重拉 → onNotesArrived 同步右栏与节点卡 */
+function afterNoteWrite() {
+  editingId = null;
+  noteErrorMsg = null;
+  loadNotesData();
+}
+
+function noteFail(e) {
+  noteErrorMsg = String(e && e.message ? e.message : e);
+  renderNoteSide();
+}
+
+function saveEditNote(id, content) {
+  if (!content.trim()) return;
+  postNote({ op: 'edit', id: id, content: content }).then(afterNoteWrite).catch(noteFail);
+}
+
+function saveAddNote() {
+  var input = document.getElementById('note-add-input');
+  if (!input || !input.value.trim()) return;
+  postNote({ op: 'add', hash: hashAt(path), content: input.value }).then(afterNoteWrite).catch(noteFail);
+}
+
+function deleteNoteById(id) {
+  postNote({ op: 'delete', id: id }).then(afterNoteWrite).catch(noteFail);
+}
+
 function loopNote(node) {
   if (node.loop && node.loop.mode === 'count') return POP_I18N.t('repeatX', node.loop.count);
   if (node.loop && node.loop.mode === 'until') return POP_I18N.t('repeatUntil', node.loop.until);
@@ -526,6 +653,22 @@ document.addEventListener('click', function (e) {
   var act = e.target.closest('[data-act]');
   if (!act) return;
   var a = act.getAttribute('data-act');
+  if (a === 'note-edit') {
+    editingId = act.getAttribute('data-id') || null;
+    noteErrorMsg = null;
+    renderNoteSide();
+    var ta = document.querySelector('#note-side [data-edit-input]');
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    return;
+  }
+  if (a === 'note-cancel') { editingId = null; noteErrorMsg = null; renderNoteSide(); return; }
+  if (a === 'note-save') {
+    var et = document.querySelector('#note-side [data-edit-input]');
+    saveEditNote(act.getAttribute('data-id'), et ? et.value : '');
+    return;
+  }
+  if (a === 'note-del') { deleteNoteById(act.getAttribute('data-id')); return; }
+  if (a === 'note-add') { saveAddNote(); return; }
   if (a === 'next') {
     var n = nextOf(path);
     if (n) goTo(n);
@@ -538,6 +681,26 @@ document.addEventListener('click', function (e) {
 });
 
 // ── 启动 ──
+
+// 右栏键盘：Ctrl/Cmd+Enter 保存（新增框或行内编辑），Esc 退出行内编辑
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && editingId) { editingId = null; renderNoteSide(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if (editingId) {
+      var ta = document.querySelector('#note-side [data-edit-input]');
+      if (ta) saveEditNote(editingId, ta.value);
+    } else {
+      saveAddNote();
+    }
+  }
+});
+
+// 开关钮插在设置齿轮左边——lang.js 的设置钮在 DOMContentLoaded 才注入（其监听先注册先
+// 执行，届时必已存在），所以这里也挂 DOMContentLoaded，同步执行会扑空掉到 header 尾部
+document.addEventListener('DOMContentLoaded', function () {
+  mountNoteToggle();
+  applyNotesOpen();
+});
 
 // 语言切换：侧栏大纲与内容区一并重绘
 POP_I18N.onChange(function () {
@@ -554,15 +717,18 @@ function buildHashByPath() {
   for (var h in nodeIndex) hashByPath[nodeIndex[h].join(',')] = h;
 }
 
-/** 笔记到货后的重绘：侧栏（琥珀点）必更；向导正文仅当前节点确实有笔记才重绘，
- *  并保住滚动位（render 自带的回顶是导航语义，这里不是导航） */
+/** 笔记到货后的重绘：侧栏（琥珀点）+右栏必更；向导正文整体重绘但保住滚动位
+ *  （render 自带的回顶是导航语义，这里不是导航——增删笔记后卡片区块要跟上） */
 function onNotesArrived() {
   if (!doc) return;
   document.getElementById('side').innerHTML = sideHtml();
-  if (view !== 'wizard' || !notesFor(hashAt(path)).length) return;
-  var y = window.scrollY;
-  render();
-  window.scrollTo(0, y);
+  if (view === 'wizard') {
+    var y = window.scrollY;
+    render();
+    window.scrollTo(0, y);
+  } else {
+    renderNoteSide();
+  }
 }
 
 function loadNotesData() {

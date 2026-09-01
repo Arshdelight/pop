@@ -43,6 +43,10 @@ var POP_I18N = (function () {
       refines: function (n) { return '改进 (' + n + ')'; },
       secNotes: function (n) { return '笔记 (' + n + ')'; },
       noteTip: '本地学习笔记——practi note 添加，不上传',
+      notePanel: '笔记',
+      notePlaceholder: '记点什么…（Ctrl+Enter 保存）',
+      noteSave: '保存', noteCancel: '取消', noteEdit: '编辑', noteDelete: '删除',
+      noteEmpty: '这条节点还没有笔记，在下方写一条。',
       docFail: function (s) { return '文档加载失败（' + s + '）'; },
       backMine: '← 我的实践'
     },
@@ -78,6 +82,10 @@ var POP_I18N = (function () {
       refines: function (n) { return 'refines (' + n + ')'; },
       secNotes: function (n) { return 'notes (' + n + ')'; },
       noteTip: 'local learning notes via practi note (never uploaded)',
+      notePanel: 'Notes',
+      notePlaceholder: 'write anything… (Ctrl+Enter to save)',
+      noteSave: 'Save', noteCancel: 'Cancel', noteEdit: 'Edit', noteDelete: 'Delete',
+      noteEmpty: 'No notes on this node yet — write one below.',
       docFail: function (s) { return 'failed to load document (' + s + ')'; },
       backMine: '← My practices'
     }
