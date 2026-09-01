@@ -77,8 +77,30 @@ a:hover { text-decoration: underline; }
 .section-sm .prose p:last-child { margin-bottom: 0; }
 .prose pre { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
 .prose figure { margin: 14px 0; }
-.prose img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; }
+.prose img { max-width: 100%; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 .prose figcaption { font-size: 12px; color: var(--brand-40); text-align: center; margin-top: 4px; }
+/* markdown 全语法排版（对齐 hub MarkdownView 的 prose 观感）：标题品牌色、链接 primary
+   无下划线 hover 下划线、行内 code 浅底胶囊、块内 code 交还 pre 默认、blockquote 弱化竖线、
+   列表 marker 淡品牌色、表格细线表头浅底、hr 淡线 */
+.prose h3, .prose h4, .prose h5, .prose h6 { color: var(--brand); font-weight: 600; line-height: 1.35; margin: 20px 0 8px; }
+.prose h3 { font-size: 17px; }
+.prose h4 { font-size: 16px; }
+.prose h5, .prose h6 { font-size: 15px; }
+.prose h3:first-child, .prose h4:first-child { margin-top: 0; }
+.prose ul, .prose ol { margin: 10px 0; padding-left: 22px; }
+.prose li { margin: 3px 0; }
+.prose li::marker { color: var(--brand-30); }
+.prose strong { color: var(--brand); }
+.prose a { color: var(--primary); text-decoration: none; }
+.prose a:hover { text-decoration: underline; }
+.prose code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .85em; background: #f8fafc; border: 1px solid rgba(226, 232, 240, .8); border-radius: 4px; padding: 1px 5px; }
+.prose pre code { background: transparent; border: none; padding: 0; font-size: inherit; }
+.prose blockquote { margin: 12px 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--brand-30); color: var(--brand-60); }
+.prose blockquote p { margin: 6px 0; }
+.prose table { border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+.prose th, .prose td { border: 1px solid var(--border); padding: 6px 12px; text-align: left; }
+.prose th { background: #f8fafc; font-weight: 600; }
+.prose hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 /* action 管道读序：inputs → 正文 → outputs，各占一块有序列表；io 条目与正文同字体同字号 */
 ol.io-list { margin: 0; padding-left: 24px; font-size: 16px; line-height: 1.75; color: var(--brand); }
 ol.io-list li { padding: 2px 0; }

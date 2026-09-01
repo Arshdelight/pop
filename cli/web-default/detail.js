@@ -285,6 +285,34 @@ function loopNote(node) {
 function proseHtml(node) {
   var content = node.content || '';
   if (!content.trim()) return '';
+  // marked 在位（detail.html 引入 /marked.min.js）走全语法渲染；DIY 覆盖前端缺库时回落 lite
+  if (typeof marked !== 'undefined' && marked.parse) {
+    return sectionWrap(renderMarkdown(content, node));
+  }
+  return sectionWrap(proseLite(content, node));
+}
+
+function sectionWrap(body) {
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secContent') + '</div><div class="prose">' + body + '</div></div>';
+}
+
+/** content → HTML：对齐 hub MarkdownView（CommonMark+GFM，marked v15 vendored）。
+ *  安全口径同 react-markdown 默认：内联 HTML 一律按文本显示——渲染前预转义 &<>，
+ *  marked 只做语法渲染；mailto 自动链接降级为文本（hub 同款规则） */
+function renderMarkdown(content, node) {
+  var src = content.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, function (whole, alt, target) {
+    var url = mediaUrl(target, node);
+    // 未命中的图片引用整段按文本保留（转义 markdown 控制符）
+    if (url === null) return whole.replace(/([!\[\]()\\])/g, '\\$1');
+    return '![' + alt + '](' + url + ')';
+  });
+  // 只转义 < 与 &（足以挡内联 HTML 注入）；> 保留——行首 "> " 是块引用语法
+  src = src.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  var html = marked.parse(src, { gfm: true, breaks: false, async: false });
+  return html.replace(/<a href="mailto:[^"]*">([^<]*)<\/a>/g, '$1');
+}
+
+function proseLite(content, node) {
   var blocks = [];
   var prose = content.replace(/```[\s\S]*?```/g, function (m) {
     blocks.push(m);
@@ -307,10 +335,9 @@ function proseHtml(node) {
   }
   parts.push(paraHtml(prose.slice(last)));
   var out = parts.join('');
-  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secContent') + '</div><div class="prose">' +
-    out.replace(/\u0000B(\d+)\u0000/g, function (_, i) {
-      return '<pre>' + escapeHtml(blocks[Number(i)]) + '</pre>';
-    }) + '</div></div>';
+  return out.replace(/\u0000B(\d+)\u0000/g, function (_, i) {
+    return '<pre>' + escapeHtml(blocks[Number(i)]) + '</pre>';
+  });
 }
 
 function paraHtml(text) {
