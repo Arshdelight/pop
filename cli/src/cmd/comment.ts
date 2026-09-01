@@ -1,5 +1,5 @@
 import { defaultDataDir, loadState } from '../state.js';
-import { authedFetch } from '../client.js';
+import { authedFetch, normalizeHashRef } from '../client.js';
 import { shortHash } from '../render.js';
 import {
   COMMENT_VALENCES,
@@ -51,6 +51,17 @@ function errDetail(body: { error?: string; message?: string }, status: number): 
       : `HTTP ${status}`;
 }
 
+/** 统一哈希口径：评论对象可以是任何文档/节点（含他人的），前缀无处可靠解析——
+ *  全哈希必收，带不带 sha256: 均可自动补。 */
+function fullHash(label: string, ref?: string): string | null {
+  if (!ref) return null;
+  const full = normalizeHashRef(ref);
+  if (!full) {
+    console.error(`error: ${label} "${ref}" is not a full hash (with or without the sha256: prefix)`);
+  }
+  return full;
+}
+
 export async function runComment(opts: CommentOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
@@ -85,16 +96,19 @@ async function listComments(
   remote: string,
   hash?: string
 ): Promise<number> {
-  if (!hash) {
+  const full = fullHash('hash', hash);
+  if (!full) {
     console.error('usage: practi comment list <hash> [--node <hash>] [--json]');
     return 1;
   }
+  const node = fullHash('--node', opts.node) ?? undefined;
+  if (opts.node && !node) return 1;
   const params = new URLSearchParams();
-  if (opts.node) params.set('node', opts.node);
+  if (node) params.set('node', node);
   if (opts.cursor) params.set('cursor', opts.cursor);
   if (opts.limit) params.set('limit', opts.limit);
 
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(hash)}/comments?${params}`);
+  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments?${params}`);
   const body = (await res.json().catch(() => ({}))) as CommentListResult & { error?: string; message?: string };
   if (!res.ok) {
     console.error(`comments failed: ${errDetail(body, res.status)}`);
@@ -104,7 +118,7 @@ async function listComments(
     console.log(JSON.stringify(body, null, 2));
     return 0;
   }
-  printTally(body.tally, hash);
+  printTally(body.tally, full);
   if (body.items.length === 0) {
     console.log('no comments');
     return 0;
@@ -122,13 +136,16 @@ async function tallyComments(
   remote: string,
   hash?: string
 ): Promise<number> {
-  if (!hash) {
+  const full = fullHash('hash', hash);
+  if (!full) {
     console.error('usage: practi comment tally <hash> [--node <hash>] [--json]');
     return 1;
   }
+  const node = fullHash('--node', opts.node) ?? undefined;
+  if (opts.node && !node) return 1;
   const params = new URLSearchParams({ limit: '1' });
-  if (opts.node) params.set('node', opts.node);
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(hash)}/comments?${params}`);
+  if (node) params.set('node', node);
+  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments?${params}`);
   const body = (await res.json().catch(() => ({}))) as CommentListResult & { error?: string; message?: string };
   if (!res.ok) {
     console.error(`tally failed: ${errDetail(body, res.status)}`);
@@ -138,7 +155,7 @@ async function tallyComments(
     console.log(JSON.stringify(body.tally, null, 2));
     return 0;
   }
-  printTally(body.tally, hash);
+  printTally(body.tally, full);
   return 0;
 }
 
@@ -160,7 +177,9 @@ async function addComment(
   remote: string,
   hash?: string
 ): Promise<number> {
-  if (!hash || !opts.node || !opts.message) {
+  const full = fullHash('hash', hash);
+  const node = fullHash('--node', opts.node);
+  if (!full || !node || !opts.message) {
     console.error('usage: practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "<评论内容>"');
     return 1;
   }
@@ -169,10 +188,10 @@ async function addComment(
     console.error('error: valence must be support | neutral | oppose');
     return 1;
   }
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(hash)}/comments`, {
+  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ targetHash: opts.node, valence, body: opts.message }),
+    body: JSON.stringify({ targetHash: node, valence, body: opts.message }),
   });
   const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string; message?: string };
   if (!res.ok) {
@@ -183,7 +202,7 @@ async function addComment(
     console.log(JSON.stringify(body, null, 2));
     return 0;
   }
-  console.log(`commented on ${shortHash(opts.node)} [${valence}] — id ${body.id}`);
+  console.log(`commented on ${shortHash(node)} [${valence}] — id ${body.id}`);
   return 0;
 }
 

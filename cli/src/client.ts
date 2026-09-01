@@ -102,8 +102,15 @@ export async function fetchMine(
   return out;
 }
 
-/** POST /api/v1/pop：把文档（创作 JSON 或展开树均可）交给 hub——服务端委托官方 SDK
- *  解析、规范化、算 root_hash 并认领（默认 PRIVATE）。new --remote / edit --remote 共用。 */
+/** hub 端点一律要 `sha256:` 全形 root_hash；CLI 面子统一接受裸 64-hex 自动补前缀。
+ *  前缀短哈希这里不猜——直传端点的命令（clone/comment）没法可靠解析任意公开文档的
+ *  前缀，宁要全哈希也不要猜错。返回 null = 不是全哈希。 */
+export function normalizeHashRef(ref: string): string | null {
+  const hex = ref.replace(/^sha256:/i, '').toLowerCase();
+  return /^[0-9a-f]{64}$/.test(hex) ? `sha256:${hex}` : null;
+}
+
+/** POST /api/v1/pop：把文档（创作 JSON 或展开树均可）交给 hub——服务端委托官方 SDK *  解析、规范化、算 root_hash 并认领（默认 PRIVATE）。new --remote / edit --remote 共用。 */
 export async function storeDocumentRemote(
   dataDir: string,
   remote: string,

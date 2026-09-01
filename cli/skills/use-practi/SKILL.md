@@ -157,7 +157,7 @@ practi clone <hash>        # fetch a public POP and claim it (local direct + rem
 practi publish [hash]      # try to publish: PRIVATE → PENDING_REVIEW; auto review passes → public
                                # (already-approved skips re-review); default: all direct; hash prefix OK
 practi unpublish [hash]    # withdraw a submission / take a published POP out of public
-practi remove <hash> --remote # withdraw your claim on the remote (hash required; local workspace
+practi remove <hash> --remote # withdraw your claim on the remote (hash prefix OK; local workspace
                                # untouched)
 ```
 

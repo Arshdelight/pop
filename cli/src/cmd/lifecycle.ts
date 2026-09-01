@@ -28,12 +28,13 @@ export async function runUnpublish(opts: LifecycleOpts): Promise<number> {
 
 /**
  * practi remove <hash> --remote：删除自己在 remote 上的 DIRECT 认领（无认领的文档被硬删除）。
- * DELETE /api/v1/pop/:ref。必须显式给 hash 且为全哈希（不做默认全删）；纯远端操作，本地工作区不动，
+ * DELETE /api/v1/pop/:ref。必须显式给 hash（不做默认全删）；短哈希与 publish 同规
+ * （本地工作区解析 → 我在 hub 的认领前缀兜底）。纯远端操作，本地工作区不动，
  * 再次 push 同内容会重建（新行，PRIVATE）。
  */
 export async function runDelete(opts: LifecycleOpts): Promise<number> {
   if (opts.positional.length === 0) {
-    console.error('usage: practi remove <hash> --remote   (explicit hash required — no default)');
+    console.error('usage: practi remove <hash> --remote   (explicit hash required — no default; hash prefix OK)');
     return 1;
   }
   return runLifecycle(opts, undefined, 'deleted');
@@ -77,15 +78,18 @@ async function runLifecycle(
   }
 
   let refs: string[];
-  if (action === undefined) {
-    refs = opts.positional; // DELETE：全哈希要求，不解析
-  } else if (opts.positional[0]) {
+  if (opts.positional[0]) {
+    // 三种动作（publish/unpublish/remove --remote）共用同一套 ref 解析：全哈希直过
+    // （带不带 sha256: 均可），≥4 位前缀先本地工作区、未命中回落我在 hub 的认领
     try {
       refs = [await resolveClaimRef(dataDir, state.remote.url, opts.positional[0])];
     } catch (e) {
       console.error(`error: ${(e as Error).message}`);
       return 1;
     }
+  } else if (action === undefined) {
+    console.error('usage: practi remove <hash> --remote   (explicit hash required — no default; hash prefix OK)');
+    return 1;
   } else {
     refs = state.direct; // 默认全部 direct（本来就是全哈希）
   }

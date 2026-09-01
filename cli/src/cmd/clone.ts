@@ -1,7 +1,7 @@
 import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { authedFetch } from '../client.js';
+import { authedFetch, normalizeHashRef } from '../client.js';
 
 export interface CloneOpts {
   dataDir?: string;
@@ -27,10 +27,16 @@ export async function runClone(opts: CloneOpts): Promise<number> {
     console.error('usage: practi clone <hash>');
     return 1;
   }
+  // 统一哈希口径：裸 64-hex 自动补 sha256:；前缀不猜（任意公开文档无处可靠解析）
+  const full = normalizeHashRef(ref);
+  if (!full) {
+    console.error(`error: "${ref}" is not a full hash — clone needs the full root hash (with or without the sha256: prefix); get it from \`practi search <q>\``);
+    return 1;
+  }
   const remote = state.remote.url;
 
   // 取文档体（公开可读；私有且非本人会被 hub 拒）
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(ref)}`);
+  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}`);
   const body = (await res.json().catch(() => ({}))) as {
     root_hash?: string;
     document?: unknown;
@@ -41,11 +47,11 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   };
   if (!res.ok) {
     const detail = typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : `HTTP ${res.status}`;
-    console.error(`clone failed: ${ref} — ${detail}`);
+    console.error(`clone failed: ${full} — ${detail}`);
     return 1;
   }
   if (body.document === undefined || body.document === null) {
-    console.error(`clone failed: ${ref} — response missing document`);
+    console.error(`clone failed: ${full} — response missing document`);
     return 1;
   }
 
@@ -55,11 +61,11 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   try {
     computedRoot = parseDocument(body.document).rootHash;
   } catch (e) {
-    console.error(`clone failed: ${ref} — invalid document: ${(e as Error).message}`);
+    console.error(`clone failed: ${full} — invalid document: ${(e as Error).message}`);
     return 1;
   }
-  if (computedRoot !== ref || (body.root_hash !== undefined && body.root_hash !== computedRoot)) {
-    console.error(`clone failed: ${ref} — hash mismatch: content hashes to ${computedRoot}`);
+  if (computedRoot !== full || (body.root_hash !== undefined && body.root_hash !== computedRoot)) {
+    console.error(`clone failed: ${full} — hash mismatch: content hashes to ${computedRoot}`);
     return 1;
   }
 
