@@ -28,6 +28,9 @@ practi new <file.json> --remote [--publish]
 practi clone <hash>               fetch a public POP and claim it (local direct + remote claim)
 practi edit <hash> <file.json>    replace a direct POP with new content (new hash; auto-revision
                                + GC of nodes unreachable from any direct root)
+practi edit <hash> <file.json> --remote
+                               replace on the hub ONLY — your claim on <hash> (prefix OK) swaps
+                               to the new document (revision from = old root); nothing local
 practi gc [--apply]                free orphan blobs — bytes no stored node references
                                (dry-run by default; --apply removes)
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)

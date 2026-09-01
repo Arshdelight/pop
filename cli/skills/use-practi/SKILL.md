@@ -121,6 +121,9 @@ practi new doc.json --remote [--publish]
                                # authoring JSON; nothing written locally — it returns on the next
                                # practi pull); --publish also submits it for review (requires --remote)
 practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi edit <hash> doc.json --remote
+                               # replace on the hub ONLY — your claim on <hash> (prefix OK, checked
+                               # against your remote claims) swaps to the new document; nothing local
 practi remove <hash> [--keep] # take a direct pop out of the local directory (registry op; GCs
                                # unreachable nodes — shared indirect nodes survive; --keep keeps)
 practi show <hash>           # aggregate view; --json machine view; --doc full document form

@@ -9,6 +9,8 @@ import {
 } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
+import { fetchMine, storeDocumentRemote } from '../client.js';
+import { runDelete } from './lifecycle.js';
 
 export interface EditOpts {
   dataDir?: string;
@@ -17,6 +19,7 @@ export interface EditOpts {
   message?: string;
   noRevision?: boolean;
   keep?: boolean;
+  remote?: boolean;
   positional: string[];
 }
 
@@ -59,7 +62,7 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
  * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
  * 纯本地操作：远端旧版仍在，结束时提示 push + delete 同步。
  */
-export function runEdit(opts: EditOpts): number {
+export async function runEdit(opts: EditOpts): Promise<number> {
   const ref = opts.positional[0];
   let text: string | undefined;
   if (opts.json !== undefined) text = opts.json;
@@ -69,11 +72,89 @@ export function runEdit(opts: EditOpts): number {
 
   if (!ref || text === undefined || text.trim() === '') {
     console.error("usage: practi edit <hash> <file.json> | practi edit <hash> --json '<text>' | practi edit <hash> < file.json");
-    console.error('       [--message <text>] [--no-revision] [--keep]');
+    console.error('       [--message <text>] [--no-revision] [--keep] [--remote (replace the claim on the hub only)]');
     return 1;
   }
 
   const dataDir = opts.dataDir ?? defaultDataDir();
+  if (opts.remote === true) return remoteEdit(opts, dataDir, ref, text);
+  return localEdit(opts, dataDir, ref, text);
+}
+
+/** --remote：只有远端——把我对 hash A 的认领换成新文档（hash B）：A 经 /mine 解析
+ *  （前缀 OK，兼当「是我的认领」预检）→ 新文档带 revision{from:A} POST 上去（hub 解析
+ *  算哈希并认领）→ runDelete 撤掉 A（无人再认领时 hub 硬删旧内容）。本地零写入；
+ *  撤 A 失败时 B 已在（两认领并存），明说 practi remove <A> --remote 自愈。 */
+async function remoteEdit(opts: EditOpts, dataDir: string, ref: string, text: string): Promise<number> {
+  const state = loadState(dataDir);
+  if (!state.remote) {
+    console.error('error: no remote configured — run `practi remote set <url>` first');
+    return 1;
+  }
+
+  let oldRoot: string;
+  try {
+    const mine = await fetchMine(dataDir, state.remote.url);
+    const hits = mine.filter((r) => r.root_hash === ref || r.root_hash.startsWith(`sha256:${ref.replace(/^sha256:/, '')}`));
+    if (hits.length === 0) {
+      console.error(`error: ${ref} is not one of your remote claims — remote edit replaces YOUR claim;`);
+      console.error('       list them with `practi pull`-visible roots or check the hub (search --scope me)');
+      return 1;
+    }
+    if (hits.length > 1) {
+      console.error(`error: hash prefix "${ref}" matches ${hits.length} of your remote claims — give more hex`);
+      return 1;
+    }
+    oldRoot = hits[0].root_hash;
+  } catch (e) {
+    console.error(`error: ${(e as Error).message}`);
+    return 1;
+  }
+
+  let doc: unknown;
+  try {
+    doc = JSON.parse(text);
+  } catch (e) {
+    console.error(`error [E_JSON]: not valid JSON — ${(e as Error).message}`);
+    return 1;
+  }
+  if (!isRecord(doc)) {
+    console.error('error [E_SCHEMA]: the document must be a JSON object (one tree, root included)');
+    return 1;
+  }
+
+  if (opts.noRevision !== true) {
+    const revisions = Array.isArray(doc.revisions) ? (doc.revisions as unknown[]) : [];
+    const already = revisions.some((r) => isRecord(r) && r.from === oldRoot);
+    if (!already) {
+      revisions.push({
+        when: new Date().toISOString().slice(0, 10),
+        what: opts.message ?? 'edited via practi edit --remote',
+        from: oldRoot,
+      });
+      doc.revisions = revisions;
+    }
+  }
+
+  let newRoot: string;
+  try {
+    const stored = await storeDocumentRemote(dataDir, state.remote.url, doc);
+    newRoot = stored.rootHash;
+    console.log(`edited:   ${oldRoot} -> ${newRoot}  (on the hub — it parsed and hashed the tree)`);
+  } catch (e) {
+    console.error(`error: remote edit failed — ${(e as Error).message} (the old claim is untouched)`);
+    return 1;
+  }
+
+  const code = await runDelete({ dataDir, positional: [oldRoot] });
+  if (code !== 0) {
+    console.error(`remote:   withdrawing the old claim failed — both versions are claimed on the hub now; run \`practi remove ${oldRoot} --remote\` to finish`);
+    return 1;
+  }
+  return 0;
+}
+
+function localEdit(opts: EditOpts, dataDir: string, ref: string, text: string): number {
   const state = loadState(dataDir);
   const ws = openWorkspace(dataDir);
   const oldRoot = resolveNodeRef(ws, ref);

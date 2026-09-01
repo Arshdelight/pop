@@ -97,3 +97,34 @@ describe('pop ls -a: indirect visibility (nodes kept alive by direct roots)', ()
     expect(text.stdout).toContain('referenced by: Compound');
   });
 });
+
+// edit --remote：只有远端——我对 hash A 的认领换成新文档 B（/mine 解析兼预检 → POST 新文档
+// 带 revision{from:A} → 撤 A）。离线钉凭据闸：任何写入发生之前先挡，本地零变化。
+describe('edit --remote: hub-only claim replacement', () => {
+  it('offline: fails at the credentials gate before touching anything', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const created = await pop(dir, ['new', writeDoc(dir, { name: 'Local base', content: 'v1' })]);
+    const root = createdRoot(created.stdout);
+
+    const r = await pop(dir, ['edit', root, writeDoc(dir, { name: 'Local base', content: 'v2' }), '--remote']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('not logged in'); // fetchMine 的凭据闸先于一切写入
+    expect(r.stdout).not.toContain('edited:');
+
+    // 本地原样：direct 未变、旧内容未被替换
+    const show = await pop(dir, ['show', root]);
+    expect(show.code).toBe(0);
+    expect(show.stdout).toContain('Local base');
+    expect(readState(dir).direct).toContain(root);
+  });
+
+  it('full-hash and prefix refs hit the same pre-flight gate', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const ghost = `sha256:${'b'.repeat(64)}`;
+    const r = await pop(dir, ['edit', ghost, writeDoc(dir, { name: 'X', content: 'y' }), '--remote']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('not logged in'); // 全哈希也走 /mine 预检（认领归属是第一道语义门）
+  });
+});

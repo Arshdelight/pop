@@ -46,6 +46,10 @@ usage:
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
        [--message <text>] [--no-revision] [--keep]
+  practi edit <hash> <file.json> --remote
+                                 replace on the hub ONLY — your claim on <hash> (prefix OK, checked
+                                 against your remote claims) swaps to the new document; revision
+                                 from = old root; nothing written locally
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
@@ -212,10 +216,11 @@ async function main(argv: string[]): Promise<number> {
           message: { type: 'string' as const },
           'no-revision': { type: 'boolean' as const },
           keep: { type: 'boolean' as const },
+          remote: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi edit <hash> <file.json> [--message <text>] [--no-revision] [--keep]'); return 0; }
+      if (values.help) { console.log('usage: practi edit <hash> <file.json> [--message <text>] [--no-revision] [--keep]'); console.log('       practi edit <hash> <file.json> --remote   (replace YOUR claim on the hub only — new doc POSTed, old claim withdrawn)'); return 0; }
       return runEdit({
         dataDir: str(values['data-dir']),
         json: values.json,
@@ -223,6 +228,7 @@ async function main(argv: string[]): Promise<number> {
         message: values.message,
         noRevision: values['no-revision'] === true,
         keep: values.keep === true,
+        remote: values.remote === true,
         positional: positionals,
       });
     }

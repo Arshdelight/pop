@@ -101,3 +101,26 @@ export async function fetchMine(
   }
   return out;
 }
+
+/** POST /api/v1/pop：把文档（创作 JSON 或展开树均可）交给 hub——服务端委托官方 SDK
+ *  解析、规范化、算 root_hash 并认领（默认 PRIVATE）。new --remote / edit --remote 共用。 */
+export async function storeDocumentRemote(
+  dataDir: string,
+  remote: string,
+  doc: unknown
+): Promise<{ rootHash: string; status: string; idempotent: boolean }> {
+  const res = await authedFetch(dataDir, remote, '/api/v1/pop', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(doc),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    root_hash?: string; status?: string; idempotent?: boolean; code?: string; message?: string;
+  };
+  if (!res.ok) {
+    const code = body.code ? `[${body.code}] ` : '';
+    throw new Error(`${code}${body.message ?? `HTTP ${res.status}`}`);
+  }
+  if (!body.root_hash) throw new Error('hub stored the document but the response carries no root_hash');
+  return { rootHash: body.root_hash, status: body.status ?? 'PRIVATE', idempotent: body.idempotent === true };
+}

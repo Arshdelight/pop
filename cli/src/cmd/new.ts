@@ -3,7 +3,7 @@ import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/po
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { runSubmit } from './lifecycle.js';
-import { authedFetch } from '../client.js';
+import { storeDocumentRemote } from '../client.js';
 
 export interface NewOpts {
   dataDir?: string;
@@ -93,29 +93,18 @@ async function remoteNew(opts: NewOpts, dataDir: string, doc: unknown): Promise<
     console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
-  const res = await authedFetch(dataDir, state.remote.url, '/api/v1/pop', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(doc),
-  });
-  const body = (await res.json().catch(() => ({}))) as {
-    root_hash?: string; status?: string; idempotent?: boolean; code?: string; message?: string;
-  };
-  if (!res.ok) {
-    const code = body.code ? ` [${body.code}]` : '';
-    console.error(`error: remote create failed${code} — ${body.message ?? `HTTP ${res.status}`}`);
+  let stored: Awaited<ReturnType<typeof storeDocumentRemote>>;
+  try {
+    stored = await storeDocumentRemote(dataDir, state.remote.url, doc);
+  } catch (e) {
+    console.error(`error: remote create failed — ${(e as Error).message}`);
     return 1;
   }
-  const root = body.root_hash;
-  if (!root) {
-    console.error('error: remote create succeeded but the response carries no root_hash');
-    return 1;
-  }
-  console.log(`created:  ${root}  (on the hub — it parsed and hashed the tree; nothing written locally)`);
-  console.log(`status:   ${body.status ?? 'PRIVATE'}, claimed${body.idempotent ? ' (already existed)' : ''}`);
+  console.log(`created:  ${stored.rootHash}  (on the hub — it parsed and hashed the tree; nothing written locally)`);
+  console.log(`status:   ${stored.status}, claimed${stored.idempotent ? ' (already existed)' : ''}`);
 
   if (opts.publish === true) {
-    const code = await runSubmit({ dataDir, positional: [root] });
+    const code = await runSubmit({ dataDir, positional: [stored.rootHash] });
     if (code !== 0) {
       console.error('publish:  submit failed — the document is created on the hub (PRIVATE); run `practi submit <hash>` after fixing');
       return 1;
