@@ -357,6 +357,8 @@ function directsPayload(dataDir: string, ws: ReturnType<typeof openWorkspace>, s
         type: v.type,
         op: v.type === 'practice' ? v.op : null,
         steps: v.steps.length,
+        // 全树节点数（含根，=详情页侧栏 countNodes 口径）；steps 保留给既有消费者（加法演进）
+        nodes: subtreeHashes(ws, h).size,
         outputs: v.outputs.length,
         claimedAt,
         addedAt: claimedAt ?? nodeFileTime(dataDir, h),

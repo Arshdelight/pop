@@ -60,7 +60,7 @@ function render() {
       return '<tr>' +
         '<td><a class="doc-name" href="/pop/' + encodeURIComponent(d.hash) + '">' + escapeHtml(d.name) + '</a>' +
         (d.description ? '<p class="doc-desc">' + escapeHtml(d.description) + '</p>' : '') + '</td>' +
-        '<td class="doc-steps">' + d.steps + '</td>' +
+        '<td class="doc-nodes">' + d.nodes + '</td>' +
         addedCell(d) +
         '</tr>';
     })
@@ -75,7 +75,7 @@ function render() {
   app.innerHTML =
     '<h3 class="page-title">' + t('pageTitle') + '</h3>' +
     '<table class="doc-table">' +
-    '<thead><tr><th>' + t('thDocument') + '</th><th class="col-steps">' + t('thSteps') + '</th><th class="col-added">' + t('thAdded') + '</th></tr></thead>' +
+    '<thead><tr><th>' + t('thDocument') + '</th><th class="col-nodes">' + t('thNodes') + '</th><th class="col-added">' + t('thAdded') + '</th></tr></thead>' +
     '<tbody>' + rows + '</tbody></table>' +
     '<div class="count-row"><span>' + t('countDocs', docs.length) + ' · ' + t('pageOf', page, totalPages) + '</span>' + pager + '</div>';
 }

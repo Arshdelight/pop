@@ -15,7 +15,7 @@ var POP_I18N = (function () {
       labelDocJson: '文档 JSON', labelSvJson: 'StandardView JSON',
       // 目录页
       pageTitle: '我的实践',
-      thDocument: '文档', thSteps: '步骤', thAdded: '添加时间',
+      thDocument: '文档', thNodes: '节点', thAdded: '添加时间',
       emptyLead: '还没有记录。写下第一手实践经验，成为一份 POP 文档——哈希可验证，永久保存。',
       emptyHint: '用 <code>practi new</code> 创建',
       countDocs: function (n) { return n + ' 篇文档'; },
@@ -55,7 +55,7 @@ var POP_I18N = (function () {
       tabWizard: 'Todo', tabSv: 'StandardView', tabDoc: 'Document',
       labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',
-      thDocument: 'Document', thSteps: 'Steps', thAdded: 'Added',
+      thDocument: 'Document', thNodes: 'Nodes', thAdded: 'Added',
       emptyLead: 'Nothing recorded yet. Write first-hand experience as a POP document — verifiable by hash, forever.',
       emptyHint: 'create one with <code>practi new</code>',
       countDocs: function (n) { return n + (n === 1 ? ' document' : ' documents'); },
