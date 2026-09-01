@@ -116,6 +116,7 @@ The command prints a ready-to-paste object. Put it on the **action's** `attachme
 
 ```bash
 practi new doc.json          # or: practi new --json '<text>'  /  practi new < doc.json (stdin)
+                               # --remote also pushes the claim to the hub (stored PRIVATE)
 practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
 practi remove <hash> [--keep] # take a direct pop out of the local directory (registry op; GCs
                                # unreachable nodes — shared indirect nodes survive; --keep keeps)

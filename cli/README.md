@@ -21,7 +21,8 @@ practi remote show | remove       inspect / clear the remote
 practi repair                     backfill missing claim timestamps from node file times
                                (idempotent; stamped claims are never touched)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
-practi new <file.json>            create a POP from a JSON document (or --json '<text>', or stdin)
+practi new <file.json>            create a POP from a JSON document (or --json '<text>', or stdin);
+                               --remote also pushes the claim to the hub (stored PRIVATE)
 practi clone <hash>               fetch a public POP and claim it (local direct + remote claim)
 practi edit <hash> <file.json>    replace a direct POP with new content (new hash; auto-revision
                                + GC of nodes unreachable from any direct root)

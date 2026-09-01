@@ -144,3 +144,29 @@ describe('pop new: typed error surface', () => {
     expect(r.stderr).toContain('usage: practi new');
   });
 });
+
+// --remote：创建后顺手把认领推上 hub（PRIVATE）。离线只钉得住失败分支：
+// 凭据检查先于网络——push 失败时本地已是有效产物（不回滚），exit 1 留自愈口。
+describe('pop new --remote: create + push chained', () => {
+  it('offline: doc is created and registered locally, push fails loudly, exit 1', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Chained push', content: 'x' }), '--remote']);
+    expect(r.code).toBe(1);
+    expect(r.stdout).toContain('created:');
+    expect(r.stdout).toContain('status:   valid, registered as direct'); // 本地半场完成
+    expect(r.stderr).toContain('not logged in'); // push 的凭据闸
+    expect(r.stderr).toContain('the doc is created and registered locally'); // 不回滚的明说
+    const root = createdRoot(r.stdout);
+    expect(readState(dir).direct).toContain(root);
+  });
+
+  it('without the flag the behavior is untouched (no push attempt)', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Plain new', content: 'x' })]);
+    expect(r.code).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(r.stdout).toContain('status:   valid, registered as direct');
+  });
+});
