@@ -187,9 +187,9 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time/note-body 由右栏条目复用 */
 .note-time { display: block; font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
 .note-body { font-size: 14px; line-height: 1.6; color: var(--brand-60); white-space: pre-wrap; overflow-wrap: break-word; }
-/* 侧栏大纲的笔记数徽标：可点（跳到该节点并展开笔记栏），琥珀实底与纯导航的蓝系拉开一档 */
-.note-badge { display: inline-block; min-width: 15px; height: 15px; line-height: 15px; padding: 0 4px; border-radius: 8px; background: #d97706; color: #fff; font-size: 10px; font-weight: 600; text-align: center; margin-left: 6px; cursor: pointer; }
-.note-badge:hover { background: #b45309; }
+/* 侧栏大纲的笔记数徽标：可点（跳到该节点并展开笔记栏）；横向胶囊、无填充、边框同文字色 */
+.note-badge { display: inline-block; min-width: 18px; height: 16px; line-height: 14px; padding: 0 6px; border-radius: 999px; border: 1px solid #d97706; color: #d97706; font-size: 10px; font-weight: 600; text-align: center; margin-left: 6px; cursor: pointer; }
+.note-badge:hover { background: rgba(217, 119, 6, .12); }
 
 /* ── 右侧笔记栏：布局列（非悬浮）——宽度 0↔18rem 平滑过渡，内容列随之在两栏之间保持居中 ── */
 #note-side { flex: none; width: 0; overflow: hidden; align-self: stretch; transition: width .25s ease; }
