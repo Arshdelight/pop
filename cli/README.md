@@ -38,7 +38,10 @@ practi search [query...]          search POPs on the remote (title-first; empty 
                                [--scope public|me|all] [--limit N] [--json]
 practi submit [hash]               submit POPs for public review (default: all direct)
 practi unpublish [hash]            withdraw a submission / take one back out of public
-practi delete <hash>               remove your direct claim on the remote (hash required)
+practi remove <hash> [--keep]      take a direct pop out of the local directory (registry op;
+                               GCs nodes unreachable from the rest — shared indirect nodes survive)
+practi remove <hash> --remote      withdraw your claim on the remote (hash required; local
+                               untouched; `practi delete <hash>` remains an alias)
 practi blob add <file-or-url>     stage an attachment; emits the attachment entry
                                (hashes the bytes, stores local blobs in the workspace)
 practi note add <node> -m "<text>"  pin a local learning note to any node hash (sidecar

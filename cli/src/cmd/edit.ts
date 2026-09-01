@@ -137,6 +137,6 @@ export function runEdit(opts: EditOpts): number {
       `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(short).join(', ')}` : ''}`
     );
   }
-  console.log(`remote:   the hub still holds the old version — sync with \`practi push\` then \`practi delete ${oldRoot}\``);
+  console.log(`remote:   the hub still holds the old version — sync with \`practi push\` then \`practi remove ${oldRoot} --remote\``);
   return 0;
 }

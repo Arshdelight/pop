@@ -20,6 +20,7 @@ import { runClone } from './cmd/clone.js';
 import { runSearch } from './cmd/search.js';
 import { runComment } from './cmd/comment.js';
 import { runNote } from './cmd/note.js';
+import { runRemove } from './cmd/remove.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
@@ -42,7 +43,6 @@ usage:
                                  node comments on the remote (hub extension; source-scoped list,
                                  --node for a shared node's full view; --json for agents)
   practi config                     show data dir, remote, registry summary
-  practi delete <hash>              remove your direct claim on the remote (hash required)
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
        [--message <text>] [--no-revision] [--keep]
@@ -68,6 +68,9 @@ usage:
   practi push [hash]                push new local claims to the remote (git-style: only new ones)
   practi remote set <url>           set the remote provider (e.g. https://practihub.com)
   practi remote show | remove       inspect / clear the remote
+  practi remove <hash> [--keep]     take a direct pop out of the local directory (registry op;
+                                 GCs nodes unreachable from the rest — shared indirect nodes survive)
+       | practi remove <hash> --remote   withdraw the claim on the remote instead (alias: delete)
   practi repair                     backfill missing claim timestamps from node file times
                                  (idempotent; stamped claims are never touched)
   practi search [query...]          search pops (remote by default; --local the workspace)
@@ -302,6 +305,27 @@ async function main(argv: string[]): Promise<number> {
         reason: values.reason,
         detail: values.detail,
         json: values.json === true,
+      });
+    }
+    case 'remove': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          keep: { type: 'boolean' as const },
+          remote: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help || positionals.length === 0) {
+        console.log('usage: practi remove <hash> [--keep]   (local directory; --remote withdraws the hub claim instead)');
+        return 0;
+      }
+      return runRemove({
+        dataDir: str(values['data-dir']),
+        keep: values.keep === true,
+        remote: values.remote === true,
+        positional: positionals,
       });
     }
     case 'search': {

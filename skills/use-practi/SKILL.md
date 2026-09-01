@@ -117,6 +117,8 @@ The command prints a ready-to-paste object. Put it on the **action's** `attachme
 ```bash
 practi new doc.json          # or: practi new --json '<text>'  /  practi new < doc.json (stdin)
 practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi remove <hash> [--keep] # take a direct pop out of the local directory (registry op; GCs
+                               # unreachable nodes — shared indirect nodes survive; --keep keeps)
 practi show <hash>           # aggregate view; --json machine view; --doc full document form
 practi ls [-a]               # direct roots; -a adds indirect nodes
 practi search --local <q>    # offline search over every stored node (name/description/content; hash prefixes too)
@@ -140,11 +142,12 @@ practi pull [hash]         # sync YOUR claims from the remote (default: all of m
 practi clone <hash>        # fetch a public POP and claim it (local direct + remote claim)
 practi submit [hash]       # PRIVATE → PENDING_REVIEW; auto review passes → public (already-approved skips re-review); default: all direct
 practi unpublish [hash]    # withdraw a submission / take a published POP out of public
-practi delete <hash]       # remove your direct claim on the remote (hash required; local workspace untouched)
+practi remove <hash> --remote # withdraw your claim on the remote (hash required; local workspace
+                               # untouched; `practi delete <hash>` remains an alias)
 ```
 
 - Reads of published docs are anonymous; writes and private reads need `practi login`.
-- Re-pushing the same content is idempotent (content-addressed); pushing again after `practi delete` recreates it — fresh record, PRIVATE.
+- Re-pushing the same content is idempotent (content-addressed); pushing again after withdrawing the remote claim recreates it — fresh record, PRIVATE.
 
 ## Evaluating practices
 
@@ -202,5 +205,5 @@ practi skill import <dir>                # replay a `practi skill export` direct
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid` → `practi show <hash>` to review → optional `practi push`.
 - **Find prior art** — `practi search <query>` → `practi clone <hash>` → `practi show <hash>`.
 - **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"`. Notes stay local; public endorsement is a comment or a `refines`.
-- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Local only: sync the hub afterwards with `practi push` then `practi delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `practi new`.
+- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Local only: sync the hub afterwards with `practi push` then `practi remove <old-root> --remote`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `practi new`.
 - **Evaluate / see what people say** — `practi comment list <hash>` → `practi comment tally <hash>`; leave feedback with `practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "…"`.
