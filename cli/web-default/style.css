@@ -186,10 +186,10 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 
 /* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time 由右栏条目复用 */
 .note-time { display: block; font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
-/* 侧栏大纲的笔记数徽标：可点（跳到该节点并展开笔记栏）；横向胶囊、无填充，
+/* 侧栏大纲的笔记数徽标：实心、可点（跳到该节点并展开笔记栏），
    边框/文字继承所在条目的颜色（currentColor）——普通态/选中态/根标题自动同色 */
-.note-badge { display: inline-block; min-width: 14px; height: 13px; line-height: 13px; padding: 0 4px; border-radius: 999px; background: #d97706; color: #f8fafc; font-size: 9px; font-weight: 600; text-align: center; margin-left: 5px; vertical-align: middle; cursor: pointer; }
-.note-badge:hover { background: #b45309; }
+.note-badge { display: inline-block; min-width: 14px; height: 13px; line-height: 13px; padding: 0 4px; border-radius: 999px; background: var(--primary); color: #f8fafc; font-size: 9px; font-weight: 600; text-align: center; margin-left: 5px; vertical-align: middle; cursor: pointer; }
+.note-badge:hover { background: #374151; }
 
 /* ── 右侧笔记栏：布局列（非悬浮）——宽度 0↔18rem 平滑过渡，内容列随之在两栏之间保持居中 ── */
 #note-side { flex: none; width: 0; overflow: hidden; align-self: stretch; transition: width .25s ease; }
