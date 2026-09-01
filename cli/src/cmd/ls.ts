@@ -22,6 +22,8 @@ export async function runLs(opts: LsOpts): Promise<number> {
   const direct = state.direct.filter(h => ws.nodes.has(h));
   const directSet = new Set(state.direct);
   const indirect = [...ws.nodes.keys()].filter(h => !directSet.has(h));
+  // 注册在列但节点文件缺失/损坏的根：不无痕消失，进 JSON 的 unresolved（加法键，仅非空时出现）
+  const unresolved = state.direct.filter(h => !ws.nodes.has(h));
 
   if (opts.json) {
     const views: StandardView[] = direct.map(h => aggregateView(h, ws.nodes));
@@ -29,7 +31,7 @@ export async function runLs(opts: LsOpts): Promise<number> {
       const n = ws.nodes.get(h)!;
       return { hash: h, name: n.name, type: n.type, ...(n.type === 'practice' ? { op: n.op } : {}) };
     });
-    console.log(JSON.stringify({ direct: views, indirect: indirectNodes }, null, 2));
+    console.log(JSON.stringify({ direct: views, indirect: indirectNodes, ...(unresolved.length > 0 ? { unresolved } : {}) }, null, 2));
     return 0;
   }
 

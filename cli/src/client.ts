@@ -72,8 +72,24 @@ export async function authedFetch(
 
   let res = await call(creds.access_token as string);
   if (res.status === 401) {
-    const refreshed = await refreshAndSave(dataDir, remote, creds);
-    res = await call(refreshed.access_token as string);
+    try {
+      const refreshed = await refreshAndSave(dataDir, remote, creds);
+      res = await call(refreshed.access_token as string);
+    } catch (e) {
+      // 轮换竞态的优雅收口（无锁）：两个并发进程同时 401 时，输家拿旧 refresh_token 去换会被拒。
+      // 被拒 ≠ 凭据死了——重读一次盘，refresh_token 变了说明赢家刚轮换成功，改用新凭据重试。
+      if (e instanceof RefreshRejectedError) {
+        const reloaded = loadCredentials(dataDir);
+        if (reloaded && reloaded.refresh_token !== creds.refresh_token) {
+          const again = await validAccessToken(dataDir, remote);
+          res = await call(again.access_token as string);
+        } else {
+          throw e;
+        }
+      } else {
+        throw e;
+      }
+    }
   }
   return res;
 }

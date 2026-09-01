@@ -83,13 +83,16 @@ describe('practi remove: local directory removal', () => {
     expect(r.stderr).toContain('not one of your direct pops');
   });
 
-  it('argless remove prints usage on stdout with exit 0 (help, not error)', async () => {
+  it('argless remove is a usage error (stderr + exit 1); --remote flavors the hint', async () => {
     const dir = tempDataDir();
     await init(dir);
     const r = await pop(dir, ['remove']);
-    expect(r.code).toBe(0);
-    expect(r.stdout).toContain('usage: practi remove');
-    expect(r.stderr).toBe('');
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('usage: practi remove');
+
+    const rr = await pop(dir, ['remove', '--remote']);
+    expect(rr.code).toBe(1);
+    expect(rr.stderr).toContain('explicit hash required');
   });
 });
 

@@ -244,7 +244,8 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, json: { type: 'boolean' as const }, doc: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help || positionals.length === 0) { console.log('usage: practi show <hash> [--json] [--doc]   (local first; full hash falls back to the hub, hash verified)'); return 0; }
+      if (values.help) { console.log('usage: practi show <hash> [--json] [--doc]   (local first; full hash falls back to the hub, hash verified)'); return 0; }
+      if (positionals.length === 0) { console.error('usage: practi show <hash> [--json] [--doc]'); return 1; }
       return runShow({ dataDir: str(values['data-dir']), hash: positionals[0], json: values.json === true, doc: values.doc === true });
     }
     case 'web': {
@@ -293,7 +294,8 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'clone': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help || positionals.length === 0) { console.log('usage: practi clone <hash>'); return 0; }
+      if (values.help) { console.log('usage: practi clone <hash>'); return 0; }
+      if (positionals.length === 0) { console.error('usage: practi clone <hash>'); return 1; }
       return runClone({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'comment': {
@@ -338,9 +340,17 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help || positionals.length === 0) {
+      if (values.help) {
         console.log('usage: practi remove <hash>   (local directory; --remote withdraws the hub claim instead)');
         return 0;
+      }
+      if (positionals.length === 0) {
+        if (values.remote === true) {
+          console.error('usage: practi remove <hash> --remote   (explicit hash required — no default)');
+        } else {
+          console.error('usage: practi remove <hash>   (local directory; --remote withdraws the hub claim instead)');
+        }
+        return 1;
       }
       return runRemove({
         dataDir: str(values['data-dir']),
