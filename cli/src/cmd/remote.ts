@@ -1,4 +1,4 @@
-import { defaultDataDir, loadState, saveState } from '../state.js';
+import { defaultDataDir, DEFAULT_REMOTE_URL, loadState, saveState } from '../state.js';
 import { loadCredentials, deleteCredentials } from '../credentials.js';
 import { cliResource, revokeToken } from '../oauth.js';
 
@@ -7,10 +7,11 @@ export interface RemoteOpts {
   positional: string[];
 }
 
+/** practi remote set / remove。看当前挂靠用 `practi config`（remote show 已砍——与 config 重复）。 */
 export async function runRemote(opts: RemoteOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
-  const action = opts.positional[0] ?? 'show';
+  const action = opts.positional[0];
 
   switch (action) {
     case 'set': {
@@ -39,15 +40,11 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
     case 'remove': {
       delete state.remote;
       saveState(dataDir, state);
-      console.log('remote removed');
-      return 0;
-    }
-    case 'show': {
-      console.log(state.remote ? state.remote.url : '(not set)');
+      console.log(`remote removed — falls back to the official hub (${DEFAULT_REMOTE_URL})`);
       return 0;
     }
     default:
-      console.error(`usage: practi remote set <url> | show | remove`);
+      console.error('usage: practi remote set <url> | remove   (see the current remote with `practi config`)');
       return 1;
   }
 }

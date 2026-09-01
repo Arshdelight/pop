@@ -117,6 +117,14 @@ export async function runLogout(opts: { dataDir?: string }): Promise<number> {
   return 0;
 }
 
+/** practi relogin：退出并重登——logout（revoke + 清凭据）紧接完整 login 流程，
+ *  未登录时退化为纯 login。旗标与 login 同（--no-open 无头用）。 */
+export async function runRelogin(opts: LoginOpts): Promise<number> {
+  const code = await runLogout({ dataDir: opts.dataDir });
+  if (code !== 0) return code;
+  return runLogin(opts);
+}
+
 export interface MeOpts {
   dataDir?: string;
 }

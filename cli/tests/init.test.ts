@@ -69,9 +69,9 @@ describe('pop remote: the remote override stored in practi.json', () => {
     expect(set.code).toBe(0);
     expect(set.stdout).toContain('remote set: https://hub.example.com');
 
-    const show = await pop(dir, ['remote', 'show']);
-    expect(show.code).toBe(0);
-    expect(show.stdout.trim()).toBe('https://hub.example.com');
+    // remote show 已砍：config 承接展示（remote: 行）
+    const config1 = await pop(dir, ['config']);
+    expect(config1.stdout).toMatch(/^remote:\s+https:\/\/hub\.example\.com$/m);
 
     // persisted in practi.json, and config reflects it
     const state = JSON.parse(fs.readFileSync(path.join(dir, 'practi.json'), 'utf8'));
@@ -103,7 +103,7 @@ describe('pop remote: the remote override stored in practi.json', () => {
 
     // loadState re-applies the built-in default when the key is absent:
     // removal clears the override, it does not blank the effective remote
-    const show = await pop(dir, ['remote', 'show']);
-    expect(show.stdout.trim()).toBe('https://practihub.com');
+    const config2 = await pop(dir, ['config']);
+    expect(config2.stdout).toMatch(/^remote:\s+https:\/\/practihub\.com$/m);
   });
 });
