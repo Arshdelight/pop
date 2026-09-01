@@ -403,8 +403,14 @@ function postNote(body) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   }).then(function (r) {
-    return r.json().catch(function () { return {}; }).then(function (j) {
-      if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return r.json().catch(function () { return null; }).then(function (j) {
+      if (!r.ok) {
+        var msg = j && j.error ? j.error : 'HTTP ' + r.status;
+        // 裸 404（非 JSON 响应体）= 服务器没有这条路由：进程还在跑旧构建
+        // （前端静态文件即时读盘是新的，web.ts 服务器代码是冷的——重启 practi web 即愈）
+        if (!j && r.status === 404) msg += ' — ' + POP_I18N.t('noteServerStale');
+        throw new Error(msg);
+      }
       return j;
     });
   });
