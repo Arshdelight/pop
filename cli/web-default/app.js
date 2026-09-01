@@ -90,8 +90,10 @@ document.addEventListener('click', function (e) {
 fetch('/api/directs')
   .then(function (r) { return r.json(); })
   .then(function (data) {
-    document.getElementById('dir').textContent = data.dataDir || '';
-    docs = data.docs || [];
+    // 按 added 倒序：后发的在前；无 addedAt（时间未知）垫底
+    docs = (data.docs || []).slice().sort(function (a, b) {
+      return new Date(b.addedAt || 0) - new Date(a.addedAt || 0);
+    });
     render();
   })
   .catch(function () {

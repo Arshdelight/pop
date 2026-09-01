@@ -24,7 +24,6 @@ header { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom:
 header .logo { width: 28px; height: 28px; color: var(--primary); flex: none; }
 header .brand { font-weight: 700; letter-spacing: .2px; font-size: 16px; }
 header .sub { color: var(--brand-40); font-size: 13px; }
-header .dir { margin-left: auto; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; color: var(--brand-40); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 main { max-width: 72rem; margin: 0 auto; padding: 40px 24px 64px; }
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -124,15 +123,18 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
   /* 操作区只覆盖内容列：left 让出侧栏，侧栏档案区完整可见 */
   .nav { left: 16rem; }
 }
-/* 视图三 tab（侧栏最顶）：向导正文 / StandardView / document，切换内容区形态 */
-.side-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
-.side-tab { flex: 1; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--brand-40); font: inherit; font-size: 12px; padding: 5px 0; cursor: pointer; }
+/* 视图三 tab（侧栏最顶）：向导正文 / StandardView / document，切换内容区形态。
+   共用一枚胶囊：容器持边框与圆角，tab 自身无边框，选中以胶囊内填充块呈现 */
+.side-tabs { display: flex; gap: 2px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: #fff; }
+.side-tab { flex: 1; border: none; border-radius: 999px; background: transparent; color: var(--brand-40); font: inherit; font-size: 12px; padding: 4px 0; cursor: pointer; }
 .side-tab:hover { color: var(--brand); }
-.side-tab.on { background: rgba(0, 51, 102, .08); color: var(--brand); font-weight: 500; border-color: rgba(0, 51, 102, .2); }
-/* JSON 视图：pretty 渲染，当前节点/其子树 steps 高亮浅蓝底 */
+.side-tab.on { background: rgba(0, 51, 102, .1); color: var(--brand); font-weight: 500; }
+/* JSON 视图：pretty 渲染，当前节点/其子树 steps 命中行整行铺浅蓝底（编辑器选中行形态） */
 .json-pre { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.6; color: var(--brand); overflow-x: auto; white-space: pre; }
 .json-pre .jk { color: var(--brand-60); }
-.json-pre .hl { background: rgba(0, 51, 102, .08); border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+/* 行级块：短行铺满可视宽、长行铺到内容末尾，高亮行首尾与缩进、逗号全部入色带 */
+.json-pre .ln { display: block; width: max-content; min-width: 100%; }
+.json-pre .ln.hl { background: rgba(0, 51, 102, .08); scroll-margin-top: 64px; }
 /* revisions 折叠：节点自己的变更史，默认收起，好奇点开 */
 /* revisions 折叠已删：revisions/refines 汇总挪到左侧大纲底部（.side-sec） */
 

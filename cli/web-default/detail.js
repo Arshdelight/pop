@@ -65,7 +65,16 @@ function render() {
   app.innerHTML = (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
   updateTabs();
   markSide();
-  window.scrollTo(0, 0);
+  // 向导视图回顶（瞬移，既有行为）；JSON 视图平滑滚到当前高亮块首行。
+  // 原生 smooth 滚动天然可中断：快速连点不同节点时，新目标的滚动指令
+  // 会取消进行中的动画，从当前位置转向新目标（CSSOM View 语义）
+  if (view === 'wizard') {
+    window.scrollTo(0, 0);
+  } else {
+    var hl = document.querySelector('.json-pre .ln.hl');
+    if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 // ── JSON 视图：pretty 渲染 + 当前节点高亮 ──
@@ -75,7 +84,7 @@ function render() {
 
 function jsonSectionHtml() {
   if (view === 'doc') {
-    return '<div class="section-sm"><div class="label">document JSON</div>' +
+    return '<div class="section-sm"><div class="label">Document JSON</div>' +
       '<pre class="json-pre">' + jsonHtml(doc, markDoc) + '</pre></div>';
   }
   if (svJson === null) {
@@ -100,6 +109,8 @@ function markSv(container, key, index, child) {
 }
 
 function svMarkedSteps() {
+  // 根节点不高亮（与 document 视图对齐）：全树都亮等于没有定位
+  if (!path.length) return [];
   var marks = [];
   var idx = 0;
   (function w(n, p, parentIsSet) {
@@ -119,32 +130,43 @@ function svMarkedSteps() {
   return marks;
 }
 
-/** JSON → HTML：标准 pretty（2 空格缩进），markChild(container,key,index,child) 决定该孩子是否高亮 */
+/** JSON → HTML：标准 pretty（2 空格缩进），markChild(container,key,index,child) 决定该孩子起是否高亮。
+ *  行级输出：每行一个 span.ln（display:block），命中子树（hl 继承给后代）的开行、内部行、
+ *  闭括号行各自整行铺底——编辑器选中行形态，不再按文本片段断续着色 */
 function jsonHtml(value, markChild) {
   function esc(s) { return escapeHtml(s); }
-  function w(v, depth, hl, container, key, index) {
+  function w(v, depth, hl, key) {
     var pad = new Array(depth + 1).join('  ');
-    var padIn = new Array(depth + 2).join('  ');
-    var open = hl ? '<span class="hl">' : '';
-    var close = hl ? '</span>' : '';
-    if (v === null) return open + 'null' + close;
+    var k = key === null ? '' : '<span class="jk">' + esc(JSON.stringify(key)) + '</span>: ';
+    if (v === null) return [{ t: pad + k + 'null', h: hl }];
     if (Array.isArray(v)) {
-      if (v.length === 0) return open + '[]' + close;
-      var items = v.map(function (x, i) { return padIn + w(x, depth + 1, markChild(v, null, i, x), v, null, i); });
-      return open + '[\n' + items.join(',\n') + '\n' + pad + ']' + close;
+      if (!v.length) return [{ t: pad + k + '[]', h: hl }];
+      var lines = [{ t: pad + k + '[', h: hl }];
+      v.forEach(function (x, i) {
+        var block = w(x, depth + 1, hl || markChild(v, null, i, x), null);
+        if (i < v.length - 1) block[block.length - 1].t += ',';
+        lines = lines.concat(block);
+      });
+      lines.push({ t: pad + ']', h: hl });
+      return lines;
     }
     if (typeof v === 'object') {
       var keys = Object.keys(v);
-      if (!keys.length) return open + '{}' + close;
-      var lines = keys.map(function (k) {
-        return padIn + '<span class="jk">' + esc(JSON.stringify(k)) + '</span>: ' +
-          w(v[k], depth + 1, markChild(v, k, null, v[k]), v, k, null);
+      if (!keys.length) return [{ t: pad + k + '{}', h: hl }];
+      var lines2 = [{ t: pad + k + '{', h: hl }];
+      keys.forEach(function (kk, i) {
+        var block2 = w(v[kk], depth + 1, hl || markChild(v, kk, null, v[kk]), kk);
+        if (i < keys.length - 1) block2[block2.length - 1].t += ',';
+        lines2 = lines2.concat(block2);
       });
-      return open + '{\n' + lines.join(',\n') + '\n' + pad + '}' + close;
+      lines2.push({ t: pad + '}', h: hl });
+      return lines2;
     }
-    return open + (typeof v === 'string' ? esc(JSON.stringify(v)) : String(v)) + close;
+    return [{ t: pad + k + (typeof v === 'string' ? esc(JSON.stringify(v)) : String(v)), h: hl }];
   }
-  return w(value, 0, false, null, null, null);
+  return w(value, 0, false, null).map(function (l) {
+    return '<span class="ln' + (l.h ? ' hl' : '') + '">' + l.t + '</span>';
+  }).join('');
 }
 
 // ── 左侧大纲（学 hub /pop 详情侧栏）：根的直接孩子成节（1、2…）递归（1.1），
@@ -159,9 +181,9 @@ function sideHtml() {
   var total = countActions(doc);
   // 视图三 tab 钉在侧栏最顶：向导正文 / StandardView JSON / document JSON（内容区随之换形态）
   var html = '<div class="side-tabs">' +
-    '<button type="button" class="side-tab" data-view="wizard">wizard</button>' +
+    '<button type="button" class="side-tab" data-view="wizard">Wizard</button>' +
     '<button type="button" class="side-tab" data-view="sv">StandardView</button>' +
-    '<button type="button" class="side-tab" data-view="doc">document</button>' +
+    '<button type="button" class="side-tab" data-view="doc">Document</button>' +
     '</div>' +
     '<p class="side-count">' + total + (total === 1 ? ' step' : ' steps') + '</p>' +
     '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + '</a>';
@@ -458,6 +480,7 @@ fetch('/doc/' + encodeURIComponent(HASH) + '.json')
     // 数据窗=加法演进：树字段在顶层，nodeIndex 是后加的兄弟键（老响应没有它 → 哈希兜底）
     doc = d;
     nodeIndex = d.nodeIndex || null;
+    document.title = doc.name + ' — practi';
     document.getElementById('side').innerHTML = sideHtml();
     render();
   })
