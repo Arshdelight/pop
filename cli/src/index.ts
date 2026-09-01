@@ -9,6 +9,7 @@ import { runMigrate } from './cmd/migrate.js';
 import { runLs } from './cmd/ls.js';
 import { runNew } from './cmd/new.js';
 import { runEdit } from './cmd/edit.js';
+import { runGc } from './cmd/gc.js';
 import { runShow } from './cmd/show.js';
 import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runWeb } from './web.js';
@@ -45,6 +46,8 @@ usage:
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
        [--message <text>] [--no-revision] [--keep]
+  practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
+                                 stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
   practi login [--no-open]          OAuth login in the browser (--no-open prints the URL only)
   practi logout                     clear stored credentials (revokes on the server)
@@ -109,6 +112,15 @@ async function main(argv: string[]): Promise<number> {
   }
 
   switch (cmd) {
+    case 'gc': {
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, apply: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi gc [--apply]   (free orphan blobs; dry-run by default)'); return 0; }
+      return runGc({ dataDir: str(values['data-dir']), apply: values.apply === true });
+    }
     case 'init': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi init [path]'); return 0; }

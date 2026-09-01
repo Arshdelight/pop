@@ -25,6 +25,8 @@ practi new <file.json>            create a POP from a JSON document (or --json '
 practi clone <hash>               fetch a public POP and claim it (local direct + remote claim)
 practi edit <hash> <file.json>    replace a direct POP with new content (new hash; auto-revision
                                + GC of nodes unreachable from any direct root)
+practi gc [--apply]                free orphan blobs — bytes no stored node references
+                               (dry-run by default; --apply removes)
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
 practi web [--port 4317]          browse direct POPs in a local web UI
 practi login [--no-open]          OAuth login to the remote (browser authorize; --no-open prints the URL)

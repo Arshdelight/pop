@@ -121,6 +121,8 @@ practi show <hash>           # aggregate view; --json machine view; --doc full d
 practi ls [-a]               # direct roots; -a adds indirect nodes
 practi search --local <q>    # offline search over every stored node (name/description/content; hash prefixes too)
 practi web                   # browse direct POPs in a local web UI
+practi gc [--apply]          # free orphan blobs — bytes no stored node references
+                               # (dry-run by default; --apply removes)
 practi migrate [path] [--keep] # cut: move the workspace (old dir removed after per-file
                                #  verification; --keep retains a .bak; a path becomes the
                                #  default via ~/.practi-home)
@@ -200,5 +202,5 @@ practi skill import <dir>                # replay a `practi skill export` direct
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid` → `practi show <hash>` to review → optional `practi push`.
 - **Find prior art** — `practi search <query>` → `practi clone <hash>` → `practi show <hash>`.
 - **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"`. Notes stay local; public endorsement is a comment or a `refines`.
-- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs are never GC'd). Local only: sync the hub afterwards with `practi push` then `practi delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `practi new`.
+- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Local only: sync the hub afterwards with `practi push` then `practi delete <old-root>`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `practi new`.
 - **Evaluate / see what people say** — `practi comment list <hash>` → `practi comment tally <hash>`; leave feedback with `practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "…"`.
