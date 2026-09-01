@@ -286,26 +286,12 @@ function nodeHtml(node) {
   html += proseHtml(node);
   if (node.type === 'action') html += outputsHtml(node) + attHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
-  // 本地学习笔记钉在节点卡末尾（sidecar，不属文档本体，JSON 两视图不出现）
-  html += notesHtml(hashAt(path));
-  // revisions 已挪到左侧大纲底部（全文档汇总）；refines 同处
+  // 笔记只住右侧栏（不进内容区）：revisions 已挪到左侧大纲底部（全文档汇总）；refines 同处
   return html;
 }
 
-// ── 学习笔记（/api/notes，本地 sidecar notes.json → practi note 命令写入门）──
-// 空节点整块不出现；label 带气泡说明来源（本地、不上传），正文纯文本 pre-wrap
-
-function notesHtml(hash) {
-  var list = notesFor(hash);
-  if (!list.length) return '';
-  return '<div class="section-sm"><div class="label" data-tip="' + escapeHtml(POP_I18N.t('noteTip')) + '">' +
-    POP_I18N.t('secNotes', list.length) + '</div>' +
-    list.map(function (n) {
-      return '<div class="note-item"><span class="note-time">' +
-        escapeHtml(fmtNoteTime(n.createdAt)) + '</span>' +
-        '<div class="note-body">' + escapeHtml(n.content || '') + '</div></div>';
-    }).join('') + '</div>';
-}
+// ── 学习笔记（/api/notes，本地 sidecar notes.json）──
+// 呈现只住右侧笔记栏；内容区与 JSON 两视图不出现
 
 /** ISO → 浏览器本地时区的 YYYY-MM-DD HH:mm（个人日记口径：时间属于看的人，不属于服务器） */
 function fmtNoteTime(iso) {
@@ -723,18 +709,12 @@ function buildHashByPath() {
   for (var h in nodeIndex) hashByPath[nodeIndex[h].join(',')] = h;
 }
 
-/** 笔记到货后的重绘：侧栏（琥珀点）+右栏必更；向导正文整体重绘但保住滚动位
- *  （render 自带的回顶是导航语义，这里不是导航——增删笔记后卡片区块要跟上） */
+/** 笔记到货后的重绘：只动左右两栏（侧栏琥珀点 + 右栏），内容区不碰——
+ *  笔记不进内容区，动它只会带来无谓的重绘与闪烁 */
 function onNotesArrived() {
   if (!doc) return;
   document.getElementById('side').innerHTML = sideHtml();
-  if (view === 'wizard') {
-    var y = window.scrollY;
-    render();
-    window.scrollTo(0, y);
-  } else {
-    renderNoteSide();
-  }
+  renderNoteSide();
 }
 
 function loadNotesData() {

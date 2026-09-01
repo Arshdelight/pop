@@ -179,9 +179,7 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* revisions 折叠：节点自己的变更史，默认收起，好奇点开 */
 /* revisions 折叠已删：revisions/refines 汇总挪到左侧大纲底部（.side-sec） */
 
-/* 学习笔记（/api/notes → practi note 写入门）：节点卡末尾的个人批注区。
-   左侧细竖线=批注语态（区别于正文的分节），正文纯文本 pre-wrap 保换行 */
-.note-item { border-left: 3px solid var(--brand-15); padding: 2px 0 2px 12px; margin-bottom: 10px; }
+/* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time/note-body 由右栏条目复用 */
 .note-time { display: block; font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
 .note-body { font-size: 14px; line-height: 1.6; color: var(--brand-60); white-space: pre-wrap; overflow-wrap: break-word; }
 /* 侧栏大纲的笔记标记：琥珀点=这个节点有我的笔记（与纯导航的蓝系拉开一档） */
