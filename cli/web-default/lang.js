@@ -23,7 +23,7 @@ var POP_I18N = (function () {
       pagerPrev: '上一页', pagerNext: '下一页',
       loadFail: '加载失败（/api/directs）',
       // 详情页
-      stepCount: function (n) { return n + ' 个步骤'; },
+      nodeCount: function (n) { return n + ' 个节点'; },
       loading: '加载中…',
       opPar: '以下任务并行执行——顺序无关',
       opChoice: '选择一个分支继续',
@@ -62,7 +62,7 @@ var POP_I18N = (function () {
       pageOf: function (a, b) { return 'page ' + a + ' of ' + b; },
       pagerPrev: 'Previous', pagerNext: 'Next',
       loadFail: 'failed to load /api/directs',
-      stepCount: function (n) { return n + (n === 1 ? ' step' : ' steps'); },
+      nodeCount: function (n) { return n + (n === 1 ? ' node' : ' nodes'); },
       loading: 'loading…',
       opPar: 'the tasks below run in parallel — order does not matter',
       opChoice: 'pick one branch to continue',

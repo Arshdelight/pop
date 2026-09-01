@@ -194,9 +194,10 @@ function jsonHtml(value, markChild) {
 // ── 左侧大纲（学 hub /pop 详情侧栏）：根的直接孩子成节（1、2…）递归（1.1），
 // 与 fromRef 的 #编号同一坐标系；点击 goTo 跳转，当前节点高亮 ──
 
-function countActions(n) {
-  if (n.type === 'action') return 1;
-  return (n.children || []).reduce(function (s, c) { return s + countActions(c); }, 0);
+/** 全树节点数（含根本身）——侧栏大纲列的就是节点（1、1.1…），统计行与之同口径；
+ *  不叫 steps：steps 只对 op:seq 成立 */
+function countNodes(n) {
+  return 1 + (n.children || []).reduce(function (s, c) { return s + countNodes(c); }, 0);
 }
 
 /** 图标 tab（lucide list-todo/list-ordered/list-tree）：图标即按钮，名字进 tooltip 与 aria-label */
@@ -207,14 +208,14 @@ function tabIconBtn(view, tipKey, inner) {
 }
 
 function sideHtml() {
-  var total = countActions(doc);
+  var total = countNodes(doc);
   // 视图三 tab 钉在侧栏最顶：向导正文 / StandardView JSON / document JSON（内容区随之换形态）
   var html = '<div class="side-tabs">' +
     tabIconBtn('wizard', 'tabWizard', '<path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><rect x="3" y="4" width="6" height="6" rx="1"/>') +
     tabIconBtn('sv', 'tabSv', '<path d="M11 5h10"/><path d="M11 12h10"/><path d="M11 19h10"/><path d="M4 4h1v5"/><path d="M4 9h2"/><path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"/>') +
     tabIconBtn('doc', 'tabDoc', '<path d="M8 5h13"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="M3 10a2 2 0 0 0 2 2h3"/><path d="M3 5v12a2 2 0 0 0 2 2h3"/>') +
     '</div>' +
-    '<p class="side-count">' + POP_I18N.t('stepCount', total) + '</p>' +
+    '<p class="side-count">' + POP_I18N.t('nodeCount', total) + '</p>' +
     '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + noteBadge('', notesFor(HASH).length) + '</a>';
   (function walkSide(n, prefix, depth, p) {
     (n.children || []).forEach(function (c, i) {
