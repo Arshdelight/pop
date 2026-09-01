@@ -112,6 +112,9 @@ ol.io-list li { padding: 2px 0; }
 [data-tip] { position: relative; }
 [data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); background: #fff; color: var(--brand); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; line-height: 1.4; padding: 2px 8px; border: 1px solid rgba(226, 232, 240, .9); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -2px rgba(0, 0, 0, .1); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease .5s; z-index: 20; }
 [data-tip]:hover::after { opacity: 1; }
+/* 侧栏 tab 的气泡朝下翻：tab 贴侧栏顶，朝上会被 .side 的 overflow-y:auto 裁剪
+   （absolute 元素出不了滚动容器，非 z-index 问题），朝下空间无限不受裁 */
+.side-tab[data-tip]::after { bottom: auto; top: calc(100% + 6px); }
 /* from 反解命中的 #编号引用：可点跳转（data-path 委托） */
 .io-ref { color: var(--brand-50); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; cursor: pointer; border-bottom: 1px dotted var(--brand-30); text-decoration: none; }
 .io-ref:hover { color: var(--brand); text-decoration: none; }
