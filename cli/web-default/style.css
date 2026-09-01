@@ -187,8 +187,9 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time/note-body 由右栏条目复用 */
 .note-time { display: block; font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
 .note-body { font-size: 14px; line-height: 1.6; color: var(--brand-60); white-space: pre-wrap; overflow-wrap: break-word; }
-/* 侧栏大纲的笔记标记：琥珀点=这个节点有我的笔记（与纯导航的蓝系拉开一档） */
-.side-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #d97706; margin-right: 6px; vertical-align: 1px; }
+/* 侧栏大纲的笔记数徽标：可点（跳到该节点并展开笔记栏），琥珀实底与纯导航的蓝系拉开一档 */
+.note-badge { display: inline-block; min-width: 15px; height: 15px; line-height: 15px; padding: 0 4px; border-radius: 8px; background: #d97706; color: #fff; font-size: 10px; font-weight: 600; text-align: center; margin-left: 6px; cursor: pointer; }
+.note-badge:hover { background: #b45309; }
 
 /* ── 右侧笔记栏：布局列（非悬浮）——宽度 0↔18rem 平滑过渡，内容列随之在两栏之间保持居中 ── */
 #note-side { flex: none; width: 0; overflow: hidden; align-self: stretch; transition: width .25s ease; }
@@ -201,8 +202,9 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 #note-toggle { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 26px; height: 56px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-right: none; border-radius: 8px 0 0 8px; background: #f8fafc; color: var(--brand-40); cursor: pointer; z-index: 5; transition: right .25s ease; }
 #note-side.open + #note-toggle { right: 18rem; }
 #note-toggle:hover { color: var(--brand); }
-#note-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; }
-#note-side.open + #note-toggle svg { transform: rotate(180deg); }
+/* 箭头语义=面板去向：收起态朝左（展开=面板从右缘向左滑出），展开态朝右（收起=向右滑走） */
+#note-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; transform: rotate(180deg); }
+#note-side.open + #note-toggle svg { transform: rotate(0deg); }
 .nside-head { margin-bottom: 10px; }
 .nside-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--brand-50); }
 .nside-empty { font-size: 12px; line-height: 1.6; color: var(--brand-40); margin: 0 0 10px; }

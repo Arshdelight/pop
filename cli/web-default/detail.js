@@ -70,6 +70,12 @@ function hashAt(p) {
   return p.length ? hashByPath[p.join(',')] : HASH;
 }
 
+/** 大纲里的笔记数徽标：0 条不出现；点击=跳到该节点并展开笔记栏（点击委托 data-note-badge） */
+function noteBadge(pathKey, count) {
+  if (!count) return '';
+  return '<span class="note-badge" data-note-badge data-path="' + pathKey + '">' + count + '</span>';
+}
+
 // ── 渲染 ──────────────────────────────────────────────
 
 function render() {
@@ -209,13 +215,13 @@ function sideHtml() {
     tabIconBtn('doc', 'tabDoc', '<path d="M8 5h13"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="M3 10a2 2 0 0 0 2 2h3"/><path d="M3 5v12a2 2 0 0 0 2 2h3"/>') +
     '</div>' +
     '<p class="side-count">' + POP_I18N.t('stepCount', total) + '</p>' +
-    '<a href="#" class="side-item side-root" data-path="">' + (notesFor(HASH).length ? '<span class="side-dot" data-tip="' + escapeHtml(POP_I18N.t('noteTip')) + '"></span>' : '') + escapeHtml(doc.name) + '</a>';
+    '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + noteBadge('', notesFor(HASH).length) + '</a>';
   (function walkSide(n, prefix, depth, p) {
     (n.children || []).forEach(function (c, i) {
       var num = prefix + (i + 1);
       var cp = p.concat([i]);
       html += '<a href="#" class="side-item" data-path="' + cp.join(',') + '" style="padding-left:' + (14 + depth * 14) + 'px">' +
-        '<span class="side-num">' + num + '</span>' + (notesFor(hashAt(cp)).length ? '<span class="side-dot" data-tip="' + escapeHtml(POP_I18N.t('noteTip')) + '"></span>' : '') + escapeHtml(c.name) + '</a>';
+        '<span class="side-num">' + num + '</span>' + escapeHtml(c.name) + noteBadge(cp.join(','), notesFor(hashAt(cp)).length) + '</a>';
       if (c.children && c.children.length) walkSide(c, num + '.', depth + 1, cp);
     });
   })(doc, '', 0, []);
@@ -631,6 +637,15 @@ document.addEventListener('click', function (e) {
   if (jump) {
     goTo(path.concat([Number(jump.getAttribute('data-idx'))]));
     return;
+  }
+  var nbadge = e.target.closest('[data-note-badge]');
+  if (nbadge) {
+    // 徽标语义=看这条节点的笔记：跳转交给下面的 data-path，这里负责展开右栏
+    if (!notesOpen) {
+      notesOpen = true;
+      notesTouched = true;
+      renderNoteSide();
+    }
   }
   var jump = e.target.closest('[data-path]');
   if (jump) {
