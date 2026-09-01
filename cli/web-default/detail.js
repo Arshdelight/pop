@@ -394,6 +394,7 @@ function reconcileNoteSide() {
 
 /** textarea 高度自适应内容（无边框伪装成正文的代价：得自己长个） */
 function autoGrow(ta) {
+  if (window.CSS && CSS.supports && CSS.supports('field-sizing', 'content')) return; // 原生自适应，JS 别插手
   ta.style.height = 'auto';
   ta.style.height = ta.scrollHeight + 'px';
 }
