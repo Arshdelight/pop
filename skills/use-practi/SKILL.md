@@ -124,8 +124,8 @@ practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + G
 practi edit <hash> doc.json --remote
                                # replace on the hub ONLY — your claim on <hash> (prefix OK, checked
                                # against your remote claims) swaps to the new document; nothing local
-practi remove <hash> [--keep] # take a direct pop out of the local directory (registry op; GCs
-                               # unreachable nodes — shared indirect nodes survive; --keep keeps)
+practi remove <hash>         # take a direct pop out of the local directory (registry op; GCs
+                               # unreachable nodes — shared indirect nodes survive)
 practi show <hash>           # aggregate view; --json machine view; --doc full document form
                                # local first (hash prefix OK); a full hash missing locally falls
                                # back to the hub — content is re-hashed before display, a

@@ -38,16 +38,15 @@ describe('practi remove: local directory removal', () => {
     expect(readState(dir).claims?.[root]).toBeUndefined(); // 认领时刻随 direct 退出被修剪
   });
 
-  it('--keep leaves the nodes on disk (only the registration goes)', async () => {
+  it('--keep is gone (remove removes — unknown option is rejected)', async () => {
     const dir = tempDataDir();
     await init(dir);
     const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Keep me' })])).stdout);
 
     const r = await pop(dir, ['remove', root, '--keep']);
-    expect(r.code).toBe(0);
-    expect(r.stdout).toContain('gc:       skipped (--keep)');
-    expect(directOf((await pop(dir, ['ls', '--json'])).stdout)).toEqual([]);
-    expect(fs.existsSync(nodeFile(dir, root))).toBe(true);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('keep'); // parseArgs 的 unknown option 报错
+    expect(directOf((await pop(dir, ['ls', '--json'])).stdout)).toEqual([root]); // 什么都没动
   });
 
   it('a shared indirect node survives removing one of its referencing roots', async () => {

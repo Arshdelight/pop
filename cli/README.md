@@ -48,7 +48,7 @@ practi search [query...]          search POPs — no flag = mixed (local workspa
                                [--scope public|me|all] applies to the hub half; --limit N; --json
 practi submit [hash]               submit POPs for public review (default: all direct)
 practi unpublish [hash]            withdraw a submission / take one back out of public
-practi remove <hash> [--keep]      take a direct pop out of the local directory (registry op;
+practi remove <hash>               take a direct pop out of the local directory (registry op;
                                GCs nodes unreachable from the rest — shared indirect nodes survive)
 practi remove <hash> --remote      withdraw your claim on the remote (hash required; local
                                workspace untouched)

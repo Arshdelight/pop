@@ -77,7 +77,7 @@ usage:
   practi push [hash]                push new local claims to the remote (git-style: only new ones)
   practi remote set <url>           set the remote provider (e.g. https://practihub.com)
   practi remote show | remove       inspect / clear the remote
-  practi remove <hash> [--keep]     take a direct pop out of the local directory (registry op;
+  practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
        | practi remove <hash> --remote   withdraw the claim on the remote instead
   practi repair                     backfill missing claim timestamps from node file times
@@ -332,18 +332,16 @@ async function main(argv: string[]): Promise<number> {
         args: rest,
         options: {
           ...COMMON,
-          keep: { type: 'boolean' as const },
           remote: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
       if (values.help || positionals.length === 0) {
-        console.log('usage: practi remove <hash> [--keep]   (local directory; --remote withdraws the hub claim instead)');
+        console.log('usage: practi remove <hash>   (local directory; --remote withdraws the hub claim instead)');
         return 0;
       }
       return runRemove({
         dataDir: str(values['data-dir']),
-        keep: values.keep === true,
         remote: values.remote === true,
         positional: positionals,
       });
