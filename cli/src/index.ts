@@ -61,10 +61,13 @@ usage:
   practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar
                                  notes.json, never uploaded — learning/reproduction
                                  focus; remote authenticity lives in practi comment)
-  practi new <file.json> [--remote]  create a POP from a JSON document
+  practi new <file.json>            create a POP from a JSON document (local)
        | practi new --json '<text>'
        | practi new < file.json
-                                 (--remote also pushes the claim to the hub — stored PRIVATE)
+  practi new <file.json> --remote [--publish]
+                                 create on the hub ONLY — the authoring JSON goes to POST /api/v1/pop
+                                 (the hub parses + hashes; nothing written locally; it comes back on
+                                 the next practi pull). --publish also submits it for review
   practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
   practi push [hash]                push new local claims to the remote (git-style: only new ones)
   practi remote set <url>           set the remote provider (e.g. https://practihub.com)
@@ -187,11 +190,17 @@ async function main(argv: string[]): Promise<number> {
     case 'new': {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { ...COMMON, json: { type: 'string' as const }, file: { type: 'string' as const }, remote: { type: 'boolean' as const } },
+        options: {
+          ...COMMON,
+          json: { type: 'string' as const },
+          file: { type: 'string' as const },
+          remote: { type: 'boolean' as const },
+          publish: { type: 'boolean' as const },
+        },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi new <file.json> | practi new --json \'<text>\' | practi new < file.json  [--remote]'); return 0; }
-      return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, remote: values.remote === true, positional: positionals });
+      if (values.help) { console.log('usage: practi new <file.json> | practi new --json \'<text>\' | practi new < file.json'); console.log('       [--remote (create on the hub only; nothing local)] [--publish (submit for review; requires --remote)]'); return 0; }
+      return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, remote: values.remote === true, publish: values.publish === true, positional: positionals });
     }
     case 'edit': {
       const { values, positionals } = parseArgs({

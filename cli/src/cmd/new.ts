@@ -2,13 +2,15 @@ import fs from 'node:fs';
 import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { runPush } from './push.js';
+import { runSubmit } from './lifecycle.js';
+import { authedFetch } from '../client.js';
 
 export interface NewOpts {
   dataDir?: string;
   json?: string;
   file?: string;
   remote?: boolean;
+  publish?: boolean;
   positional: string[];
 }
 
@@ -20,6 +22,11 @@ function readStdin(): string {
  * Create a POP from a JSON document: --json '<text>', <file.json>, or stdin
  * (all machine/AI friendly — no editor loop). Validates through the SDK,
  * persists the content-addressed tree, and registers the root as direct.
+ *
+ * --remote switches the whole creation to the hub: the authoring JSON goes to
+ * the existing POST /api/v1/pop (the hub runs the same SDK parse + hashing),
+ * nothing is written locally. --publish additionally submits for review and
+ * requires --remote (publishing needs the document on the hub first).
  */
 export async function runNew(opts: NewOpts): Promise<number> {
   let text: string | undefined;
@@ -30,6 +37,12 @@ export async function runNew(opts: NewOpts): Promise<number> {
 
   if (text === undefined || text.trim() === '') {
     console.error('usage: practi new <file.json> | practi new --json \'<json text>\' | practi new < file.json');
+    console.error('       [--remote (create on the hub only)] [--publish (submit for review; requires --remote)]');
+    return 1;
+  }
+
+  if (opts.publish === true && opts.remote !== true) {
+    console.error('error: --publish requires --remote — publishing needs the document on the hub first');
     return 1;
   }
 
@@ -42,6 +55,12 @@ export async function runNew(opts: NewOpts): Promise<number> {
   }
 
   const dataDir = opts.dataDir ?? defaultDataDir();
+  if (opts.remote === true) return remoteNew(opts, dataDir, doc);
+  return localNew(dataDir, doc);
+}
+
+/** 本地默认路：SDK 校验 → 内容寻址落盘 → 注册 direct。 */
+function localNew(dataDir: string, doc: unknown): number {
   const ws = openWorkspace(dataDir);
   const { root, count } = createFromDoc(ws, doc);
   const issues = validateWorkspace(loadWorkspace(dataDir));
@@ -60,14 +79,46 @@ export async function runNew(opts: NewOpts): Promise<number> {
     console.error(`warning:  stored but NOT registered as direct — ${issues.length} validation issue(s)`);
   } else {
     console.log('status:   valid, registered as direct');
-    // --remote：创建后顺手把这条认领推上 hub（ PRIVATE，不是公开——先记录后发布的边界不动）。
-    // 推送失败不回滚（内容寻址，本地已是有效产物）：明说现状并留 push 自愈口。
-    if (opts.remote === true) {
-      const code = await runPush({ dataDir, positional: [root] });
-      if (code !== 0) {
-        console.error('remote:   push failed — the doc is created and registered locally; fix the above and run `practi push`');
-        return 1;
-      }
+  }
+  return 0;
+}
+
+/** --remote：只有远端——创作 JSON 直送现有 POST /api/v1/pop（hub 委托官方 SDK 解析、
+ *  规范化、算 root_hash 并认领，默认 PRIVATE），本地零写入，root 由服务端告知。
+ *  注意：远端独占的文档下一次 practi pull 会拉回本地（它就是 hub 上你的认领），
+ *  本地 ls/show/web/note 也看不见它。--publish 再链 submit 送审。 */
+async function remoteNew(opts: NewOpts, dataDir: string, doc: unknown): Promise<number> {
+  const state = loadState(dataDir);
+  if (!state.remote) {
+    console.error('error: no remote configured — run `practi remote set <url>` first');
+    return 1;
+  }
+  const res = await authedFetch(dataDir, state.remote.url, '/api/v1/pop', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(doc),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    root_hash?: string; status?: string; idempotent?: boolean; code?: string; message?: string;
+  };
+  if (!res.ok) {
+    const code = body.code ? ` [${body.code}]` : '';
+    console.error(`error: remote create failed${code} — ${body.message ?? `HTTP ${res.status}`}`);
+    return 1;
+  }
+  const root = body.root_hash;
+  if (!root) {
+    console.error('error: remote create succeeded but the response carries no root_hash');
+    return 1;
+  }
+  console.log(`created:  ${root}  (on the hub — it parsed and hashed the tree; nothing written locally)`);
+  console.log(`status:   ${body.status ?? 'PRIVATE'}, claimed${body.idempotent ? ' (already existed)' : ''}`);
+
+  if (opts.publish === true) {
+    const code = await runSubmit({ dataDir, positional: [root] });
+    if (code !== 0) {
+      console.error('publish:  submit failed — the document is created on the hub (PRIVATE); run `practi submit <hash>` after fixing');
+      return 1;
     }
   }
   return 0;

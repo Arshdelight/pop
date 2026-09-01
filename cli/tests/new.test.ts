@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createdRoot, init, nodeFile, nodeFiles, pop, readState, tempDataDir, writeDoc } from './helpers.js';
 
@@ -145,23 +146,40 @@ describe('pop new: typed error surface', () => {
   });
 });
 
-// --remote：创建后顺手把认领推上 hub（PRIVATE）。离线只钉得住失败分支：
-// 凭据检查先于网络——push 失败时本地已是有效产物（不回滚），exit 1 留自愈口。
-describe('pop new --remote: create + push chained', () => {
-  it('offline: doc is created and registered locally, push fails loudly, exit 1', async () => {
+// --remote：只有远端——创作 JSON 直送 POST /api/v1/pop（hub 解析+算哈希+认领），本地零写入。
+// 离线只钉得住失败分支：凭据检查先于网络。--publish 必须伴随 --remote，单独出现报错。
+describe('pop new --remote: hub-only creation', () => {
+  it('offline: fails at the credentials gate, nothing written locally', async () => {
     const dir = tempDataDir();
     await init(dir);
-    const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Chained push', content: 'x' }), '--remote']);
+    const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Hub only', content: 'x' }), '--remote']);
     expect(r.code).toBe(1);
-    expect(r.stdout).toContain('created:');
-    expect(r.stdout).toContain('status:   valid, registered as direct'); // 本地半场完成
-    expect(r.stderr).toContain('not logged in'); // push 的凭据闸
-    expect(r.stderr).toContain('the doc is created and registered locally'); // 不回滚的明说
-    const root = createdRoot(r.stdout);
-    expect(readState(dir).direct).toContain(root);
+    expect(r.stdout).not.toContain('created:'); // 没到创建那一步
+    expect(r.stderr).toContain('not logged in');
+    // 本地零写入：无注册、无节点文件
+    expect(readState(dir).direct).toEqual([]);
+    expect(fs.readdirSync(path.join(dir, 'nodes')).length).toBe(0);
   });
 
-  it('without the flag the behavior is untouched (no push attempt)', async () => {
+  it('--publish without --remote is refused', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Bare publish', content: 'x' }), '--publish']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('--publish requires --remote');
+    expect(readState(dir).direct).toEqual([]); // 被拒于动手之前
+  });
+
+  it('--remote --publish offline: same credentials gate (POST precedes submit)', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Chain', content: 'x' }), '--remote', '--publish']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('not logged in');
+    expect(readState(dir).direct).toEqual([]);
+  });
+
+  it('without the flag the behavior is untouched (pure local create)', async () => {
     const dir = tempDataDir();
     await init(dir);
     const r = await pop(dir, ['new', '--json', JSON.stringify({ name: 'Plain new', content: 'x' })]);
