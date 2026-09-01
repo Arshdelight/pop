@@ -209,7 +209,7 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .nside-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .nside-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--brand-50); }
 /* 新建按钮：面板头部的小胶囊 */
-.nside-new { flex: none; width: 20px; height: 20px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 50%; background: #fff; color: var(--brand-60); cursor: pointer; }
+.nside-new { flex: none; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--brand-40); cursor: pointer; padding: 2px; }
 .nside-new svg { width: 12px; height: 12px; }
 .nside-new:hover { color: var(--brand); border-color: var(--brand-30); }
 .nside-empty { font-size: 12px; line-height: 1.6; color: var(--brand-40); margin: 0 0 10px; }

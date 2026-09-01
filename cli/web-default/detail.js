@@ -357,7 +357,7 @@ function renderNoteSide() {
   var notes = notesFor(hashAt(path));
   var count = notes.length + (editingId === NOTE_NEW ? 1 : 0);
   var html = '<div class="nside-head"><p class="nside-title">' + POP_I18N.t('secNotes', count) + '</p>' +
-    '<button type="button" class="nside-new" data-act="note-new" aria-label="' + escapeHtml(POP_I18N.t('noteNew')) + '" title="' + escapeHtml(POP_I18N.t('noteNew')) + '">' + PLUS_ICON + '</button></div>';
+    '<button type="button" class="nside-new" data-act="note-new" data-tip="' + escapeHtml(POP_I18N.t('noteNew')) + '" aria-label="' + escapeHtml(POP_I18N.t('noteNew')) + '">' + PLUS_ICON + '</button></div>';
   if (noteErrorMsg) html += '<p class="nside-err">' + escapeHtml(noteErrorMsg) + '</p>';
   if (!notes.length && editingId !== NOTE_NEW) html += '<p class="nside-empty">' + escapeHtml(POP_I18N.t('noteEmpty')) + '</p>';
   html += notes.map(function (n) {
@@ -391,7 +391,7 @@ function renderNoteSide() {
 function noteEditHtml(id, content) {
   return '<div class="nside-item editing">' +
     '<textarea class="nside-input" data-note-input' + (id ? ' data-id="' + id + '"' : '') +
-    ' placeholder="' + escapeHtml(POP_I18N.t('notePlaceholder')) + '">' + escapeHtml(content) + '</textarea></div>';
+    '>' + escapeHtml(content) + '</textarea></div>';
 }
 
 function postNote(body) {
@@ -453,16 +453,24 @@ function saveFromInput(ta) {
     if (content === n.content) { exitDeferred(); return; }
     if (!content.trim()) { exitDeferred(); return; }
     savingNote = true;
-    postNote({ op: 'edit', id: id, content: content })
+    return postNote({ op: 'edit', id: id, content: content })
       .then(function () { afterNoteWrite(id); })
       .catch(function (e) { noteFail(e); });
   } else {
     if (!content.trim()) { exitDeferred(); return; }
     savingNote = true;
-    postNote({ op: 'add', hash: hashAt(path), content: content })
+    return postNote({ op: 'add', hash: hashAt(path), content: content })
       .then(function () { afterNoteWrite(NOTE_NEW); })
       .catch(function (e) { noteFail(e); });
   }
+}
+
+/** 显式提交当前打开的编辑（编辑态下面板内 mousedown 被 preventDefault，不会先失焦）。
+ *  返回在途 POST（可能为 null），写写相碰的调用方（删除）须链式等待防丢更新 */
+function commitOpenEditor() {
+  var ta = document.querySelector('#note-list [data-note-input]');
+  if (!ta) return null;
+  return saveFromInput(ta);
 }
 
 function deleteNoteById(id) {
@@ -696,7 +704,8 @@ document.addEventListener('click', function (e) {
   if (!act) return;
   var a = act.getAttribute('data-act');
   if (a === 'note-edit') {
-    // 点文本进入行内编辑；保存交给 focusout 委托（失焦即存）
+    // 点文本进入行内编辑；先显式提交上一条（面板内 mousedown 已 preventDefault，不会先失焦）
+    commitOpenEditor();
     editingId = act.getAttribute('data-id') || null;
     noteErrorMsg = null;
     renderNoteSide();
@@ -704,12 +713,19 @@ document.addEventListener('click', function (e) {
   }
   if (a === 'note-new') {
     if (editingId === NOTE_NEW) return;
+    commitOpenEditor();
     editingId = NOTE_NEW;
     noteErrorMsg = null;
     renderNoteSide();
     return;
   }
-  if (a === 'note-del') { deleteNoteById(act.getAttribute('data-id')); return; }
+  if (a === 'note-del') {
+    // 写写相碰：等当前编辑落库后再删，防并发读改写互相覆盖
+    var pendingSave = commitOpenEditor();
+    if (pendingSave && pendingSave.then) pendingSave.then(function () { deleteNoteById(act.getAttribute('data-id')); });
+    else deleteNoteById(act.getAttribute('data-id'));
+    return;
+  }
   if (a === 'next') {
     var n = nextOf(path);
     if (n) goTo(n);
@@ -743,6 +759,15 @@ document.addEventListener('keydown', function (e) {
 document.addEventListener('DOMContentLoaded', function () {
   var panel = document.getElementById('note-side');
   if (panel) {
+    // 编辑态下面板内的按下不让编辑框失焦（preventDefault 保住焦点）：DOM 稳定，
+    // 点另一条一步到位；保存由点击委托显式提交。面板外的失焦照常走 focusout 即存
+    panel.addEventListener('mousedown', function (e) {
+      var active = document.activeElement;
+      if (!active || !active.closest || !active.closest('[data-note-input]')) return;
+      if (active === e.target || (active.contains && active.contains(e.target))) return;
+      if (!e.target.closest || !e.target.closest('#note-list')) return;
+      e.preventDefault();
+    });
     panel.addEventListener('focusout', function (e) {
       var ta = e.target.closest ? e.target.closest('[data-note-input]') : null;
       if (!ta || savingNote) return;
