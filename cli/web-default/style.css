@@ -223,7 +223,7 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .nside-act:hover { background: var(--hover-bg); color: var(--brand); }
 .nside-item .note-time { font-size: 11px; }
 /* 行内编辑态与底部新增框共用输入框形态 */
-.nside-input { display: block; width: 100%; border: none; background: transparent; resize: none; overflow: hidden; padding: 0; margin: 0; color: var(--brand-60); font-family: inherit; font-size: 13px; line-height: 1.6; user-select: none; -webkit-user-select: none; }
-.nside-input:focus { outline: none; user-select: text; -webkit-user-select: text; }
+.nside-input { display: block; width: 100%; border: none; background: transparent; resize: none; overflow: hidden; padding: 0; margin: 0; color: var(--brand-60); font-family: inherit; font-size: 13px; line-height: 1.6; user-select: none; -webkit-user-select: none; cursor: default; }
+.nside-input:focus { outline: none; cursor: text; user-select: text; -webkit-user-select: text; }
 
 /* LR kick */
