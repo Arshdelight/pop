@@ -67,7 +67,8 @@ a:hover { text-decoration: underline; }
 .empty code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
 
 /* ── 详情页（向导模式）：一次一节点，op 决定呈现 ── */
-.detail { max-width: 48rem; padding-bottom: 110px; }
+/* 内容列=详情页唯一的滚动容器（应用壳布局）；gutter 常驻防长文档切换时内容左右微移 */
+.detail { max-width: 48rem; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 110px; }
 .node-title { font-size: 22px; font-weight: 700; color: var(--brand); margin: 8px 0 4px; }
 .node-desc { color: var(--brand-60); margin: 0 0 12px; }
 .op-note { font-size: 13px; color: var(--brand-40); font-style: italic; margin: 0 0 8px; }
@@ -130,7 +131,9 @@ button.child-card:hover { border-color: var(--brand); color: var(--brand); }
 .choice-card:hover { border-color: var(--brand); background: rgba(0, 51, 102, .04); }
 /* 底部导航固定在视口底部：位置恒定，不随内容高度漂移；内行与正文列同宽对齐 */
 /* 底部操作区：固定视口底悬浮于内容列上方，无分界线（仅极轻投影托起），行与正文列同宽 */
-.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #fff; padding: 10px 24px; box-shadow: 0 -1px 8px rgba(0, 51, 102, .03); }
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: #fff; padding: 10px 24px; box-shadow: 0 -1px 8px rgba(0, 51, 102, .03); transition: right .25s ease; }
+/* 笔记栏展开时操作区同步让位（与内容列居中一起平滑重排） */
+body.note-open .nav { right: 18rem; }
 .nav-row { max-width: 48rem; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .btn { padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: var(--brand-60); font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; }
 .btn:hover { background: var(--hover-bg); text-decoration: none; }
@@ -138,8 +141,10 @@ button.child-card:hover { border-color: var(--brand); color: var(--brand); }
 .btn-primary:hover { background: #1f2937; }
 .nav-hint { font-size: 13px; color: var(--brand-40); }
 .finish { font-size: 13px; color: var(--brand-40); }
-/* ── 详情页外壳：左侧大纲栏（sticky 侧栏）+ 内容列；窄屏侧栏隐藏回单列 ── */
-.shell { display: flex; align-items: flex-start; }
+/* ── 详情页外壳：应用壳布局——整页不滚（滚动只属于中间内容列），header 常驻、左右栏满高 ── */
+body.detail-page { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+body.detail-page > header { flex: none; }
+.shell { display: flex; align-items: stretch; flex: 1; min-height: 0; position: relative; }
 .shell main { flex: 1; min-width: 0; }
 .side { display: none; }
 .side-count { font-size: 12px; font-weight: 500; color: var(--brand-40); margin: 0 0 8px; }
@@ -159,7 +164,7 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 档案底仓：钉在侧栏最底（flex 末位），大纲长过侧栏时随滚动自然跟在内容后 */
 .side-foot { margin-top: auto; padding-top: 4px; }
 @media (min-width: 1024px) {
-  .side { display: flex; flex-direction: column; position: sticky; top: 49px; height: calc(100dvh - 49px); overflow-y: auto; width: 16rem; flex: none; border-right: 1px solid var(--border); background: #f8fafc; padding: 12px 14px 24px; }
+  .side { display: flex; flex-direction: column; overflow-y: auto; width: 16rem; flex: none; border-right: 1px solid var(--border); background: #f8fafc; padding: 12px 14px 24px; }
   /* 操作区只覆盖内容列：left 让出侧栏，侧栏档案区完整可见 */
   .nav { left: 16rem; }
 }
@@ -185,20 +190,19 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 侧栏大纲的笔记标记：琥珀点=这个节点有我的笔记（与纯导航的蓝系拉开一档） */
 .side-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #d97706; margin-right: 6px; vertical-align: 1px; }
 
-/* ── 右侧笔记栏：悬浮抽屉，盖在内容区右缘之上——展开收起只平移自身，内容区零位移 ── */
-#note-side { position: fixed; top: 49px; bottom: 0; right: 0; z-index: 30; width: 18rem; display: flex; flex-direction: column; background: #f8fafc; border-left: 1px solid var(--border); box-shadow: 0 0 24px rgba(0, 51, 102, .08); padding: 14px 14px 16px; transform: translateX(100%); transition: transform .25s ease; }
-#note-side.open { transform: translateX(0); }
-/* 展开收起舌片：钉在面板左缘、垂直居中、凸出面板外——收起后停在屏幕右缘仍可点。
-   溢出裁剪放内层列表，面板自身保持 visible，否则 absolute 的舌片会被裁掉 */
-#note-toggle { position: absolute; left: -26px; top: 50%; transform: translateY(-50%); width: 26px; height: 56px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-right: none; border-radius: 8px 0 0 8px; background: #f8fafc; color: var(--brand-40); cursor: pointer; }
+/* ── 右侧笔记栏：布局列（非悬浮）——宽度 0↔18rem 平滑过渡，内容列随之在两栏之间保持居中 ── */
+#note-side { flex: none; width: 0; overflow: hidden; align-self: stretch; transition: width .25s ease; }
+#note-side.open { width: 18rem; }
+/* 内层定宽：动画期间内容不被挤压，从右缘逐步露出（抽屉观感）；边框/投影挂内层，
+   收起宽度 0 时被 overflow 裁掉，不留残线 */
+#note-list { width: 18rem; height: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; background: #f8fafc; border-left: 1px solid var(--border); box-shadow: 0 0 24px rgba(0, 51, 102, .08); padding: 14px 14px 16px; }
+/* 展开收起舌片：钉在面板左缘垂直居中（面板的相邻兄弟，right 与面板宽度同参数过渡即贴合）；
+   收起后停在屏幕右缘仍可点 */
+#note-toggle { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 26px; height: 56px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-right: none; border-radius: 8px 0 0 8px; background: #f8fafc; color: var(--brand-40); cursor: pointer; z-index: 5; transition: right .25s ease; }
+#note-side.open + #note-toggle { right: 18rem; }
 #note-toggle:hover { color: var(--brand); }
 #note-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; }
-#note-side.open #note-toggle svg { transform: rotate(180deg); }
-#note-toggle .side-dot { display: none; position: absolute; top: 7px; left: 50%; margin: 0 0 0 -3px; }
-#note-toggle .side-dot.has { display: inline-block; }
-/* 舌片气泡朝左开（默认朝上会被屏幕右缘截断） */
-#note-toggle[data-tip]::after { left: auto; right: calc(100% + 8px); top: 50%; bottom: auto; transform: translateY(-50%); }
-#note-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+#note-side.open + #note-toggle svg { transform: rotate(180deg); }
 .nside-head { margin-bottom: 10px; }
 .nside-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--brand-50); }
 .nside-empty { font-size: 12px; line-height: 1.6; color: var(--brand-40); margin: 0 0 10px; }

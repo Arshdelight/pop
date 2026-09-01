@@ -82,14 +82,14 @@ function render() {
   markSide();
   renderNoteSide(); // 右栏跟人走：每次导航换节点都重渲染（草稿保真在 renderNoteSide 内部处理）
   // 向导视图回顶（瞬移，既有行为）；JSON 视图平滑滚到当前高亮块首行。
-  // 原生 smooth 滚动天然可中断：快速连点不同节点时，新目标的滚动指令
-  // 会取消进行中的动画，从当前位置转向新目标（CSSOM View 语义）
+  // 滚动容器是中间内容列自身（应用壳布局：整页不滚），原生 smooth 滚动天然可中断：
+  // 快速连点不同节点时，新目标的滚动指令会取消进行中的动画，从当前位置转向新目标
   if (view === 'wizard') {
-    window.scrollTo(0, 0);
+    app.scrollTop = 0;
   } else {
     var hl = document.querySelector('.json-pre .ln.hl');
     if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    else window.scrollTo({ top: 0, behavior: 'smooth' });
+    else app.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
@@ -308,21 +308,21 @@ function fmtNoteTime(iso) {
 var PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
 var TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
-/** 开合同步：抽屉动画由 CSS transition 承担，这里只切类 */
+/** 开合同步：面板宽度与内容列让位由 CSS transition 承担，这里只切类
+ *  （body.note-open 让底部操作区同步让位，与内容列一起平滑重排） */
 function applyNotesOpen() {
   var panel = document.getElementById('note-side');
   if (panel) panel.classList.toggle('open', notesOpen);
+  document.body.classList.toggle('note-open', notesOpen);
 }
 
-/** 展开收起舌片：钉在面板左缘垂直居中（静态 HTML），收起后留在屏幕右缘仍可点。
- *  琥珀点 = 当前节点有笔记 */
+/** 展开收起舌片：钉在面板左缘垂直居中（shell 内面板的相邻兄弟，right 与面板宽度
+ *  同步过渡即贴合面板边）；收起后停在屏幕右缘仍可点 */
 function wireNoteToggle() {
   var btn = document.getElementById('note-toggle');
   if (!btn) return;
-  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>' +
-    '<span class="side-dot"></span>';
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
   btn.setAttribute('aria-label', POP_I18N.t('notePanel'));
-  btn.setAttribute('data-tip', POP_I18N.t('notePanel'));
   btn.addEventListener('click', function () {
     notesOpen = !notesOpen;
     notesTouched = true;
@@ -335,8 +335,6 @@ function renderNoteSide() {
   var panel = document.getElementById('note-side');
   if (!panel) return;
   applyNotesOpen();
-  var btnDot = document.querySelector('#note-toggle .side-dot');
-  if (btnDot) btnDot.classList.toggle('has', notesFor(hashAt(path)).length > 0);
   var list = document.getElementById('note-list');
   if (!list) return;
   // 重渲染保打字稿：输入框里的草稿跨导航/刷新存活（保存成功后的清空在 afterNoteWrite 做）
