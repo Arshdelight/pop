@@ -184,13 +184,12 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* revisions 折叠：节点自己的变更史，默认收起，好奇点开 */
 /* revisions 折叠已删：revisions/refines 汇总挪到左侧大纲底部（.side-sec） */
 
-/* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time/note-body 由右栏条目复用 */
+/* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time 由右栏条目复用 */
 .note-time { display: block; font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
-.note-body { font-size: 14px; line-height: 1.6; color: var(--brand-60); white-space: pre-wrap; overflow-wrap: break-word; }
 /* 侧栏大纲的笔记数徽标：可点（跳到该节点并展开笔记栏）；横向胶囊、无填充，
    边框/文字继承所在条目的颜色（currentColor）——普通态/选中态/根标题自动同色 */
-.note-badge { display: inline-block; min-width: 14px; height: 13px; line-height: 11px; padding: 0 4px; border-radius: 999px; border: 1px solid currentColor; color: inherit; font-size: 9px; font-weight: 600; text-align: center; margin-left: 5px; cursor: pointer; }
-.note-badge:hover { background: rgba(0, 51, 102, .07); }
+.note-badge { display: inline-block; min-width: 14px; height: 13px; line-height: 13px; padding: 0 4px; border-radius: 999px; background: #d97706; color: #f8fafc; font-size: 9px; font-weight: 600; text-align: center; margin-left: 5px; vertical-align: middle; cursor: pointer; }
+.note-badge:hover { background: #b45309; }
 
 /* ── 右侧笔记栏：布局列（非悬浮）——宽度 0↔18rem 平滑过渡，内容列随之在两栏之间保持居中 ── */
 #note-side { flex: none; width: 0; overflow: hidden; align-self: stretch; transition: width .25s ease; }
@@ -211,7 +210,9 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 新建按钮：面板头部的小胶囊 */
 .nside-new { flex: none; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--brand-40); cursor: pointer; padding: 2px; }
 .nside-new svg { width: 12px; height: 12px; }
-.nside-new:hover { color: var(--brand); border-color: var(--brand-30); }
+.nside-new:hover { color: var(--brand); }
+/* 头部贴面板顶+右缘：气泡朝下开、右缘对齐，避免被 #note-list 的 overflow 裁掉 */
+.nside-new[data-tip]::after { left: auto; right: 0; bottom: auto; top: calc(100% + 6px); transform: none; }
 .nside-empty { font-size: 12px; line-height: 1.6; color: var(--brand-40); margin: 0 0 10px; }
 .nside-err { font-size: 12px; line-height: 1.5; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 10px; margin: 0 0 10px; overflow-wrap: break-word; }
 .nside-item { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
@@ -221,11 +222,8 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .nside-act svg { width: 13px; height: 13px; }
 .nside-act:hover { background: var(--hover-bg); color: var(--brand); }
 .nside-item .note-time { font-size: 11px; }
-.nside-item .note-body { font-size: 13px; line-height: 1.6; cursor: text; }
-.nside-item .note-body:hover { background: var(--hover-bg); border-radius: 4px; }
 /* 行内编辑态与底部新增框共用输入框形态 */
-.nside-input { width: 100%; min-height: 72px; resize: vertical; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--brand); font: inherit; font-size: 13px; line-height: 1.6; padding: 8px 10px; }
-.nside-input:focus { outline: none; border-color: var(--brand-30); }
-.nside-item.editing { padding: 8px; }
+.nside-input { display: block; width: 100%; border: none; background: transparent; resize: none; overflow: hidden; padding: 0; margin: 0; color: var(--brand-60); font-family: inherit; font-size: 13px; line-height: 1.6; user-select: none; -webkit-user-select: none; }
+.nside-input:focus { outline: none; user-select: text; -webkit-user-select: text; }
 
 /* LR kick */
