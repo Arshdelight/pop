@@ -143,7 +143,8 @@ export function loadState(dataDir: string): State {
       state.claims = valid;
     }
     return state;
-  } catch {
+  } catch (e) {
+    console.error(`warning: ${file} is corrupt (${(e as Error).message}) — reading defaults; the next state write will OVERWRITE it, back it up now if it matters`);
     return base;
   }
 }

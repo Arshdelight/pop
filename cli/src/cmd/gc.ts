@@ -45,6 +45,7 @@ export function runGc(opts: GcOpts): number {
         continue; // 非目录条目（人手放的杂物）：不删不报，只跳过
       }
       for (const name of names) {
+        if (!/^[0-9a-f]{64}$/.test(name)) continue; // 抽屉里的杂物（.DS_Store 等）：不删不报
         const hash = `sha256:${name}`;
         if (referenced.has(hash)) continue;
         const file = path.join(shardDir, name);

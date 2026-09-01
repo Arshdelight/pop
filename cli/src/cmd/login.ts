@@ -39,7 +39,10 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
   const resource = cliResource(remote);
   const existing = loadCredentials(dataDir);
   if (opts.reauth === true && existing) {
-    await revokeToken(remote, existing.client_id, existing.refresh_token, 'refresh_token');
+    const revokeTarget = existing.resource && existing.resource !== resource
+      ? existing.resource.replace(/\/cli$/, '')
+      : remote;
+    await revokeToken(revokeTarget, existing.client_id, existing.refresh_token, 'refresh_token');
     deleteCredentials(dataDir);
     console.log('logged out');
   } else if (existing) {

@@ -1,5 +1,5 @@
 import { defaultDataDir, loadState } from '../state.js';
-import { authedFetch, normalizeHashRef } from '../client.js';
+import { authedFetch, normalizeHashRef, requireCredentials } from '../client.js';
 import { shortHash } from '../render.js';
 import {
   COMMENT_VALENCES,
@@ -53,6 +53,15 @@ function errDetail(body: { error?: string; message?: string }, status: number): 
 
 /** 统一哈希口径：评论对象可以是任何文档/节点（含他人的），前缀无处可靠解析——
  *  全哈希必收，带不带 sha256: 均可自动补。 */
+
+/** 读公开评论匿名即可（与 show 的 hub 回落、search 远端半场同口径）；
+ *  有凭据走 authed（未来 scope=me 之类有身份的读取不受影响）。 */
+async function hubGet(dataDir: string, remote: string, path: string): Promise<Response> {
+  const authed = (() => {
+    try { requireCredentials(dataDir); return true; } catch { return false; }
+  })();
+  return authed ? authedFetch(dataDir, remote, path) : fetch(`${remote}${path}`);
+}
 function fullHash(label: string, ref?: string): string | null {
   if (!ref) return null;
   const full = normalizeHashRef(ref);
@@ -108,7 +117,7 @@ async function listComments(
   if (opts.cursor) params.set('cursor', opts.cursor);
   if (opts.limit) params.set('limit', opts.limit);
 
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments?${params}`);
+  const res = await hubGet(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments?${params}`);
   const body = (await res.json().catch(() => ({}))) as CommentListResult & { error?: string; message?: string };
   if (!res.ok) {
     console.error(`comments failed: ${errDetail(body, res.status)}`);
@@ -145,7 +154,7 @@ async function tallyComments(
   if (opts.node && !node) return 1;
   const params = new URLSearchParams({ limit: '1' });
   if (node) params.set('node', node);
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments?${params}`);
+  const res = await hubGet(dataDir, remote, `/api/v1/pop/${encodeURIComponent(full)}/comments?${params}`);
   const body = (await res.json().catch(() => ({}))) as CommentListResult & { error?: string; message?: string };
   if (!res.ok) {
     console.error(`tally failed: ${errDetail(body, res.status)}`);

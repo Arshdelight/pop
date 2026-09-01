@@ -15,13 +15,13 @@ export class HubUnreachableError extends Error {}
  * 登录态之上的远程请求层：保证请求带有效 Bearer access token。
  * - access token 已过期 → 用 refresh token 换新对（rotation，回写 practi.auth.json）
  * - 401（token 被服务端撤销/aud 不符）→ 刷新一次并重试
- * 刷新失败（refresh 也被撤销/过期）→ 抛错提示重新 `pop login`。
+ * 刷新失败（refresh 也被撤销/过期）→ 抛错提示 `practi login --reauth`。
  */
 
 export function requireCredentials(dataDir: string): Credentials {
   const creds = loadCredentials(dataDir);
   if (!creds) {
-    throw new Error('not logged in — run `pop login` first');
+    throw new Error('not logged in — run `practi login` first');
   }
   return creds;
 }
@@ -33,7 +33,7 @@ async function refreshAndSave(dataDir: string, remote: string, creds: Credential
   } catch (e) {
     const msg = (e as Error).message;
     if (/^token endpoint failed \(HTTP/.test(msg)) {
-      throw new RefreshRejectedError(`session expired or revoked — run \`pop login\` again (${msg})`);
+      throw new RefreshRejectedError(`session expired or revoked — run \`practi login --reauth\` again (${msg})`);
     }
     throw new HubUnreachableError(`cannot reach ${remote} — is the hub running? (${msg})`);
   }
@@ -97,7 +97,8 @@ export async function fetchMine(
     };
     const results = body.results ?? [];
     out.push(...results);
-    if (results.length === 0 || out.length >= (body.total ?? out.length)) break;
+    // total 缺省时旧写法恒真=永远只取第一页；按页满即续页收口
+    if (results.length === 0 || (body.total !== undefined && out.length >= body.total)) break;
   }
   return out;
 }

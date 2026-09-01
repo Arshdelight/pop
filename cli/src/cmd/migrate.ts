@@ -139,6 +139,9 @@ export function runMigrate(opts: MigrateOpts): number {
   }
   if (toIsConvention) {
     console.log(`next run:  the default data dir resolves to ${to} (convention location)`);
+  if (process.env.PRACTI_HOME || process.env.POP_HOME) {
+    console.error(`warning:  $${process.env.PRACTI_HOME ? 'PRACTI_HOME' : 'POP_HOME'} is set and OUTRANKS the convention — unset it or repoint it at ${to}, or every bare command keeps resolving to the deleted directory`);
+  }
   } else {
     try {
       const previous = readPointer();

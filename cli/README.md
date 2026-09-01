@@ -34,10 +34,19 @@ practi edit <hash> <file.json> --remote
                                to the new document (revision from = old root); nothing local
 practi gc [--apply]                free orphan blobs — bytes no stored node references
                                (dry-run by default; --apply removes)
+practi migrate [path] [--keep]     move the workspace to a new data directory (cut: old dir removed
+                               after per-file verification; --keep retains a .bak; a path becomes
+                               the default via ~/.practi-home)
+practi skill install|update|uninstall [--dir <skills-dir>]
+                               manage the bundled use-practi skill (default: ~/.agents/skills)
+practi skill import <dir> | export <ref> [--dir]
+                               replay a skill-export directory back into a POP / project one out
+practi comment list|tally|add|edit|delete|report
+                               node comments on the hub (--node for a shared node's full view)
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK); local first — a full
                                hash missing locally falls back to the hub; content is re-hashed
                                before display (found-but-mismatched = error, never shown)
-practi web [--port 4317]          browse direct POPs in a local web UI
+practi web [--port 4317] [--no-open]  browse direct POPs in a local web UI
 practi login [--no-open] [--reauth]  OAuth login to the remote (browser authorize; --no-open prints the URL;
                                --reauth = logout + fresh login in one step)
 practi logout                     clear stored credentials (revokes on the server)
@@ -89,7 +98,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 ### Search
 
-- `practi search <query...>` searches the remote via `GET /api/v1/pop/search` — both title and content match, **title hits rank first**; an empty query browses the newest documents.
+- `practi search` is three-mode: no flag = mixed (local workspace first, then the hub); `--local` only the workspace (name/description/content substring + hash prefixes; empty = browse directs); `--remote` only the hub via `GET /api/v1/pop/search` (title and content match, **title hits rank first**; empty = browse newest; `--scope` applies to this half). `--json` differs per mode: local `{query, local: true, results, total}`, remote `{query, results, total}`, mixed `{query, local: {...}, remote: {...}}`.
 - `--scope public` (default) searches the published library; `--scope me` searches your own documents in **any status** (including PRIVATE); `--scope all` is the union — your visible universe.
 - `--json` dumps the raw API response. Fetch any result with `practi clone <hash>`.
 
@@ -120,7 +129,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 - The division of labor with the remote: **notes = your learning/reproduction experience (local, private)**; **`practi comment` = content authenticity (public, on the hub)**.
 - Two write doors, one file: the CLI (`practi note add <node-hash> -m "step 3 needs admin rights on Windows"` — the gate agents go through) and `practi web`'s **notes sidebar** on the detail page (toggle in the header; lists the current node's notes with inline add/edit/delete; empty file just means an empty panel). The wizard view also renders a node's notes inline on its card, and amber dots in the outline mark nodes that carry notes.
 
-### Lifecycle (submit / unpublish / delete)
+### Lifecycle (publish / unpublish / remove)
 
 - `practi publish [hash]` tries to publish your direct pops (hash prefix OK) (`PRIVATE → PENDING_REVIEW`; an auto review passes before they go public — already-approved content skips re-review). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
 - `practi unpublish [hash]` withdraws a pending submission or takes a published POP back out of public distribution (`→ PRIVATE`).

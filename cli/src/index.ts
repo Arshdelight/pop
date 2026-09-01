@@ -36,7 +36,7 @@ function printVersion(): number {
 const USAGE = `practi — local registry for POP (Protocol of Practice), syncing to PractiHub
 
 usage:
-  practi blob add <file-or-url>     stage an attachment; emits the attachment entry
+  practi blob add <file-or-url> [--name <name>]
                                  (hashes the bytes, stores local blobs in the workspace)
   practi clone <hash>               fetch a public POP and claim it (fork: local direct + remote claim)
   practi comment list|tally|add|edit|delete|report
@@ -53,9 +53,9 @@ usage:
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
-  practi login [--no-open] [--reauth]  OAuth login in the browser (--no-open prints the URL only;
+  practi login [--no-open] [--reauth]  OAuth login in the browser; --no-open prints the URL only;
+                                 --reauth = logout + fresh login in one step (fine when not logged in)
   practi logout                     clear stored credentials (revokes on the server)
-                                 --reauth = logout + fresh login in one step, fine when not logged in)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
   practi ls --remote [--json]       list YOUR claims on the hub (direct only; -a is local-only)
   practi me                         show the authenticated practihub user
@@ -150,7 +150,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'remote': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi remote set <url> | show | remove'); return 0; }
+      if (values.help) { console.log('usage: practi remote set <url> | remove   (see the current remote with `practi config`)'); return 0; }
       return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'repair': {
@@ -226,7 +226,7 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi edit <hash> <file.json> [--message <text>] [--no-revision] [--keep]'); console.log('       practi edit <hash> <file.json> --remote   (replace YOUR claim on the hub only — new doc POSTed, old claim withdrawn)'); return 0; }
+      if (values.help) { console.log('usage: practi edit <hash> <file.json> | --json \'<text>\' | < file.json [--message] [--no-revision] [--keep]'); console.log('       practi edit <hash> <file.json> --remote   (replace YOUR claim on the hub only — new doc POSTed, old claim withdrawn)'); return 0; }
       return runEdit({
         dataDir: str(values['data-dir']),
         json: values.json,

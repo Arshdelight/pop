@@ -10,9 +10,9 @@ export interface LifecycleOpts {
 
 /**
  * practi publish [hash]：尝试发布（PRIVATE → PENDING_REVIEW，自动机审通过后 PUBLISHED；此前已过审免二审）。
- * POST /api/v1/pop/:ref/submit（hub 端点名不变，这是 CLI 面孔）。不带 hash 默认发布全部 direct roots
- * （逐个尝试，非 PRIVATE 的跳过并计失败）。ref 支持短哈希：本地工作区解析，未命中回落我在
- * hub 上的认领前缀（唯一匹配才收）。
+ * POST /api/v1/pop/:ref/submit（hub 端点名不变，这是 CLI 面孔）。不带 hash 默认发布全部 direct roots；
+ * hub 现行为：PENDING/APPROVED 的重复 submit 幂等（免二审），仅 REJECTED 名单 409。ref 支持短哈希：
+ * 本地工作区解析，未命中回落我在 hub 上的认领前缀（唯一匹配才收）。
  */
 export async function runPublish(opts: LifecycleOpts): Promise<number> {
   return runLifecycle(opts, 'submit', 'published');
@@ -42,7 +42,7 @@ export async function runDelete(opts: LifecycleOpts): Promise<number> {
 
 /** 短哈希解析：全哈希直过；否则先本地工作区（resolveNodeRef，本地歧义即报），
  *  未命中再回落我在 hub 上的认领做前缀唯一匹配——两条登记簿都可能藏着这篇文档。 */
-async function resolveClaimRef(dataDir: string, remoteUrl: string, ref: string): Promise<string> {
+export async function resolveClaimRef(dataDir: string, remoteUrl: string, ref: string): Promise<string> {
   const hex = ref.replace(/^sha256:/i, '').toLowerCase();
   if (/^[0-9a-f]{64}$/.test(hex)) return `sha256:${hex}`;
   if (!/^[0-9a-f]{4,63}$/.test(hex)) {
@@ -118,7 +118,7 @@ async function runLifecycle(
         failed++;
         continue;
       }
-      console.log(`${verb}: ${body.root_hash ?? ref}  (${body.status ?? ''})`);
+      console.log(body.status ? `${verb}: ${body.root_hash ?? ref}  (${body.status})` : `${verb}: ${body.root_hash ?? ref}`);
     } catch (e) {
       console.error(`${verb} failed: ${ref} — ${(e as Error).message}`);
       failed++;

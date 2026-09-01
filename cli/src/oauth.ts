@@ -128,6 +128,9 @@ export function createLoopbackSession(): LoopbackSession {
     resolveCode = res;
     rejectCode = rej;
   });
+  // noop handler 在创建时挂上：waitForCode 之前流程失败（registerClient 抛错/port 绑定失败）时
+  // close() 会 reject 本 promise——零消费者的拒绝会以未处理拒绝炸出第二份堆栈
+  codePromise.catch(() => {});
 
   let port = 0;
   const server = http.createServer((req, res) => {

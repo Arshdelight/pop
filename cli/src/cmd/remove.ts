@@ -4,6 +4,7 @@ import { defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { collectUnreachable } from './edit.js';
 import { runDelete } from './lifecycle.js';
+import { shortHash } from '../render.js';
 
 /**
  * practi remove <hash>：把一个 direct 根从本地目录拿掉——注册层操作（direct≈git refs，
@@ -20,13 +21,9 @@ export interface RemoveOpts {
   positional: string[];
 }
 
-function short(hash: string): string {
-  return hash.slice('sha256:'.length, 'sha256:'.length + 10);
-}
-
 export async function runRemove(opts: RemoveOpts): Promise<number> {
   if (opts.remote === true) {
-    return runDelete({ dataDir: opts.dataDir, positional: opts.positional });
+    return runDelete({ dataDir: opts.dataDir, positional: opts.positional.slice(0, 1) }); // 一命令一认领，多给的不静默连删
   }
 
   const ref = opts.positional[0];
@@ -53,13 +50,13 @@ export async function runRemove(opts: RemoveOpts): Promise<number> {
   const dead = collectUnreachable(loadWorkspace(dataDir), state.direct);
   for (const h of dead) fs.unlinkSync(nodeFilePath(dataDir, h));
   console.log(
-    `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(short).join(', ')}` : ''}`
+    `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(shortHash).join(', ')}` : ''}`
   );
   if (dead.length > 0) {
     console.log('hint:     blobs stay with their bytes — `practi gc` sweeps orphans when you want');
   }
   if (state.remote) {
-    console.log(`remote:   the hub copy (if pushed) stays — withdraw with \`practi remove ${short(root)} --remote\``);
+    console.log(`remote:   the hub copy (if pushed) stays — withdraw with \`practi remove ${shortHash(root)} --remote\``);
   }
   return 0;
 }

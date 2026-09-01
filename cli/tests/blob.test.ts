@@ -86,7 +86,7 @@ describe('attachment pointers validate against the stored blob', () => {
       attachments: [{ name: 'ghost.png', hash: ghost, size: 5 }],
     };
     const r = await pop(dir, ['new', writeDoc(dir, doc)]);
-    expect(r.code).toBe(0); // stored, but not silently treated as valid
+    expect(r.code).toBe(1); // stored, but NOT registered — exit 1 对齐 edit 与 --remote 的 422（2026-09-01 审查轮定）
     expect(r.stderr).toMatch(/E_BLOB_MISSING/);
     expect(r.stderr).toContain('stored but NOT registered as direct');
 

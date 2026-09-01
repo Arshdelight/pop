@@ -41,9 +41,18 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
       delete state.remote;
       saveState(dataDir, state);
       console.log(`remote removed — falls back to the official hub (${DEFAULT_REMOTE_URL})`);
+      // 与 set 同规：换回官方 hub 时，自建 hub 签发的凭据已无用——revoke（best-effort）并清除
+      const creds = loadCredentials(dataDir);
+      if (creds && creds.resource && creds.resource !== cliResource(DEFAULT_REMOTE_URL)) {
+        const oldOrigin = creds.resource.replace(/\/cli$/, '');
+        if (oldOrigin) await revokeToken(oldOrigin, creds.client_id, creds.refresh_token, 'refresh_token');
+        deleteCredentials(dataDir);
+        console.log(`note: cleared credentials issued by ${oldOrigin} — run \`practi login\` against ${DEFAULT_REMOTE_URL}`);
+      }
       return 0;
     }
     default:
+      console.error('error: missing action — set or remove');
       console.error('usage: practi remote set <url> | remove   (see the current remote with `practi config`)');
       return 1;
   }

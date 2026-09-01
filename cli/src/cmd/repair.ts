@@ -33,6 +33,6 @@ export function runRepair(opts: RepairOpts): number {
   if (backfilled > 0) saveState(dataDir, state);
 
   console.log(`claims:   ${already} already stamped, ${backfilled} backfilled from file time, ${unrepairable.length} unrepairable`);
-  for (const h of unrepairable) console.log(`  no local node file: ${h}`);
+  for (const h of unrepairable) console.error(`  no local node file: ${h}`);
   return unrepairable.length > 0 ? 1 : 0;
 }

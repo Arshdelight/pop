@@ -9,8 +9,9 @@ import {
 } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { fetchMine, storeDocumentRemote } from '../client.js';
-import { runDelete } from './lifecycle.js';
+import { storeDocumentRemote } from '../client.js';
+import { runDelete, resolveClaimRef } from './lifecycle.js';
+import { shortHash } from '../render.js';
 
 export interface EditOpts {
   dataDir?: string;
@@ -29,10 +30,6 @@ function readStdin(): string {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function short(hash: string): string {
-  return hash.slice('sha256:'.length, 'sha256:'.length + 10);
 }
 
 /**
@@ -60,7 +57,7 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
  * practi edit <hash>：非交互编辑一个 direct 根——新文档（file/--json/stdin）→ 新哈希换注册。
  * 编辑即修订：根节点自动追加 revisions（from = 旧根哈希；spec §2.2 历史指针，允许悬空、永不校验）。
  * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
- * 纯本地操作：远端旧版仍在，结束时提示 push + delete 同步。
+ * 纯本地操作：远端旧版仍在，结束时提示 push + remove --remote 同步。
  */
 export async function runEdit(opts: EditOpts): Promise<number> {
   const ref = opts.positional[0];
@@ -94,18 +91,7 @@ async function remoteEdit(opts: EditOpts, dataDir: string, ref: string, text: st
 
   let oldRoot: string;
   try {
-    const mine = await fetchMine(dataDir, state.remote.url);
-    const hits = mine.filter((r) => r.root_hash === ref || r.root_hash.startsWith(`sha256:${ref.replace(/^sha256:/, '')}`));
-    if (hits.length === 0) {
-      console.error(`error: ${ref} is not one of your remote claims — remote edit replaces YOUR claim;`);
-      console.error('       list them with `practi pull`-visible roots or check the hub (search --scope me)');
-      return 1;
-    }
-    if (hits.length > 1) {
-      console.error(`error: hash prefix "${ref}" matches ${hits.length} of your remote claims — give more hex`);
-      return 1;
-    }
-    oldRoot = hits[0].root_hash;
+    oldRoot = await resolveClaimRef(dataDir, state.remote.url, ref);
   } catch (e) {
     console.error(`error: ${(e as Error).message}`);
     return 1;
@@ -140,11 +126,16 @@ async function remoteEdit(opts: EditOpts, dataDir: string, ref: string, text: st
   try {
     const stored = await storeDocumentRemote(dataDir, state.remote.url, doc);
     newRoot = stored.rootHash;
-    console.log(`edited:   ${oldRoot} -> ${newRoot}  (on the hub — it parsed and hashed the tree)`);
   } catch (e) {
     console.error(`error: remote edit failed — ${(e as Error).message} (the old claim is untouched)`);
     return 1;
   }
+  if (newRoot === oldRoot) {
+    // 与本地路同规：内容哈希相同=无事可换，绝不能走 DELETE（否则空转一次编辑会把自己的认领撤掉）
+    console.log(`unchanged: ${oldRoot} (content hashes identically — claim kept)`);
+    return 0;
+  }
+  console.log(`edited:   ${oldRoot} -> ${newRoot}  (on the hub — it parsed and hashed the tree)`);
 
   const code = await runDelete({ dataDir, positional: [oldRoot] });
   if (code !== 0) {
@@ -215,8 +206,11 @@ function localEdit(opts: EditOpts, dataDir: string, ref: string, text: string): 
     const dead = collectUnreachable(loadWorkspace(dataDir), state.direct);
     for (const h of dead) fs.unlinkSync(nodeFilePath(dataDir, h));
     console.log(
-      `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(short).join(', ')}` : ''}`
+      `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(shortHash).join(', ')}` : ''}`
     );
+    if (dead.length > 0) {
+      console.log('hint:     blobs stay with their bytes — `practi gc` sweeps orphans when you want');
+    }
   }
   console.log(`remote:   the hub still holds the old version — sync with \`practi push\` then \`practi remove ${oldRoot} --remote\``);
   return 0;

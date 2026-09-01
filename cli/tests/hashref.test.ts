@@ -40,13 +40,13 @@ describe('hash refs are uniform across commands', () => {
     expect(r.stderr).toContain('not a full hash');
   });
 
-  it('comment list normalizes a bare full hash (auth gate, not parse error)', async () => {
+  it('comment list normalizes a bare full hash (anonymous read path, not parse error)', async () => {
     const dir = tempDataDir();
     await init(dir);
+    await pop(dir, ['remote', 'set', 'http://127.0.0.1:9']); // 匿名读也要指向死端口，绝不碰真网
     const r = await pop(dir, ['comment', 'list', 'b'.repeat(64)]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('not logged in');
-    expect(r.stderr).not.toContain('not a full hash');
+    expect(r.stderr).not.toContain('not a full hash'); // 解析过了，卡在连不上
   });
 
   it('comment list refuses a short prefix up front', async () => {

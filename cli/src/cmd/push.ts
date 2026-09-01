@@ -13,7 +13,7 @@ export interface PushOpts {
  * - 先分页取 hub 上「我的」认领表（mine），diff 出本地认领而 hub 我还没认领的，
  *   只传这些（带 hash 只推该 direct；不带推全部 direct）——不再全量 POST。
  * - 走 POST /api/v1/pop（内容寻址幂等）：hub 没有就存，有则 idempotent 不重复写，
- *   且每次上传都获得 DIRECT 认领。默认存为 PRIVATE；公开仍需 submit 审核。
+ *   且每次上传都获得 DIRECT 认领。默认存为 PRIVATE；公开仍需 practi publish 送审。
  */
 export async function runPush(opts: PushOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -48,6 +48,11 @@ export async function runPush(opts: PushOpts): Promise<number> {
       resolved = resolveNodeRef(ws, ref);
     } catch (e) {
       console.error(`push failed: ${ref} — ${(e as Error).message}`);
+      failed++;
+      continue;
+    }
+    if (!state.direct.includes(resolved)) {
+      console.error(`push failed: ${ref} — ${resolved} is not one of your direct pops (push exports YOUR direct roots; indirect nodes travel inside them)`);
       failed++;
       continue;
     }

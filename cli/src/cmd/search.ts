@@ -58,7 +58,13 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
 
 /** 混合：本地半场 + 远端半场。远端失败不掩本地结果（照样渲染），但 exit 1 示警。 */
 async function mixedSearch(opts: SearchOpts, dataDir: string, q: string): Promise<number> {
-  const local = collectLocal(dataDir, q);
+  // 未初始化的 data dir 上本地半场降级为空（远端照常）——开箱即搜是混合默认的承诺
+  let local: { hits: ReturnType<typeof collectLocal>['hits']; nodesCount: number };
+  try {
+    local = collectLocal(dataDir, q);
+  } catch {
+    local = { hits: [], nodesCount: 0 };
+  }
   const shownLocal = local.hits.slice(0, opts.limit);
 
   let rows: SearchRow[] = [];
@@ -115,7 +121,7 @@ async function remoteSearch(opts: SearchOpts, dataDir: string, q: string): Promi
     return 1;
   }
   if (opts.json) {
-    console.log(JSON.stringify({ results: rows, total }, null, 2));
+    console.log(JSON.stringify({ query: q, results: rows, total }, null, 2));
     return 0;
   }
   if (rows.length === 0) {

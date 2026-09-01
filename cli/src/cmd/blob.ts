@@ -21,6 +21,11 @@ export interface BlobOpts {
  * Attachments are immutable content: the emitted entry goes into the author's
  * document JSON (then `practi new`), never mutated onto an existing node.
  */
+/** decodeURIComponent 的 URIError 兜底：a%zz 这类坏转义用原名 */
+function safeDecode(s: string): string {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 export async function runBlobAdd(opts: BlobOpts): Promise<number> {
   const target = opts.positional[0];
   if (!target) {
@@ -72,7 +77,7 @@ async function blobFromUrl(url: string, name: string | undefined): Promise<numbe
   }
   const mimeExt = mimeFromName(base);
   printEntry({
-    name: name ?? (base && base !== '/' ? decodeURIComponent(base) : 'attachment'),
+    name: name ?? (base && base !== '/' ? safeDecode(base) : 'attachment'),
     hash: sha256(bytes),
     mime: contentType && contentType !== 'application/octet-stream' ? contentType : mimeExt,
     size: bytes.length,

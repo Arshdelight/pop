@@ -29,6 +29,12 @@ function readStdin(): string {
  * requires --remote (publishing needs the document on the hub first).
  */
 export async function runNew(opts: NewOpts): Promise<number> {
+  // 旗标组合的语义错误先于 IO 报（missing.json --publish 应报 --publish requires --remote 而非 ENOENT）
+  if (opts.publish === true && opts.remote !== true) {
+    console.error('error: --publish requires --remote — publishing needs the document on the hub first');
+    return 1;
+  }
+
   let text: string | undefined;
   if (opts.json !== undefined) text = opts.json;
   else if (opts.file) text = fs.readFileSync(opts.file, 'utf8');
@@ -38,11 +44,6 @@ export async function runNew(opts: NewOpts): Promise<number> {
   if (text === undefined || text.trim() === '') {
     console.error('usage: practi new <file.json> | practi new --json \'<json text>\' | practi new < file.json');
     console.error('       [--remote (create on the hub only)] [--publish (submit for review; requires --remote)]');
-    return 1;
-  }
-
-  if (opts.publish === true && opts.remote !== true) {
-    console.error('error: --publish requires --remote — publishing needs the document on the hub first');
     return 1;
   }
 
@@ -77,9 +78,9 @@ function localNew(dataDir: string, doc: unknown): number {
       console.error(`  ${i.code}: ${i.message}${i.hint ? ` (${i.hint})` : ''}`);
     }
     console.error(`warning:  stored but NOT registered as direct — ${issues.length} validation issue(s)`);
-  } else {
-    console.log('status:   valid, registered as direct');
+    return 1; // 存了但没注册成=没办成正事，与 edit 同类失败及 --remote 的服务端 422 对齐
   }
+  console.log('status:   valid, registered as direct');
   return 0;
 }
 

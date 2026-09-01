@@ -33,7 +33,7 @@ export function runConfig(opts: ConfigOpts): number {
   } catch {
     ws = null;
   }
-  const direct = state.direct.length;
+  const direct = ws ? state.direct.filter((h) => ws.nodes.has(h)).length : state.direct.length;
   const indirect = ws ? ws.nodes.size - direct : 0;
   const creds = loadCredentials(dataDir);
   console.log(`practi:    ${CLI_VERSION}   pop-spec: ${POP_SPEC_VERSION}`);
