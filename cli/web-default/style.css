@@ -86,9 +86,9 @@ ol.io-list li { padding: 2px 0; }
 .io-spec { display: block; font-size: 13px; line-height: 1.5; color: var(--brand-40); }
 .io-from, .att-meta { color: var(--brand-30); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
 /* from 反解命中的 #编号引用：小号等宽+点状下划线提示可悬停（title=来源节点名） */
-/* 通用悬停气泡（同 hub Tooltip 观感）：任何带 data-tip 的元素悬停弹深色气泡 */
+/* 通用悬停气泡（对齐 hub Tooltip.tsx 皮肤）：白底深蓝字+浅边框+投影，hover .5s 延迟出现 */
 [data-tip] { position: relative; }
-[data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); background: var(--primary); color: #fff; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; line-height: 1.4; padding: 4px 10px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease .35s; z-index: 20; }
+[data-tip]::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); background: #fff; color: var(--brand); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; line-height: 1.4; padding: 2px 8px; border: 1px solid rgba(226, 232, 240, .9); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -2px rgba(0, 0, 0, .1); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease .5s; z-index: 20; }
 [data-tip]:hover::after { opacity: 1; }
 /* from 反解命中的 #编号引用：可点跳转（data-path 委托） */
 .io-ref { color: var(--brand-50); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; cursor: pointer; border-bottom: 1px dotted var(--brand-30); text-decoration: none; }
@@ -141,7 +141,8 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 视图三 tab（侧栏最顶）：向导正文 / StandardView / document，切换内容区形态。
    共用一枚胶囊：容器持边框与圆角，tab 自身无边框，选中以胶囊内填充块呈现 */
 .side-tabs { display: flex; gap: 2px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: #fff; }
-.side-tab { flex: 1; border: none; border-radius: 999px; background: transparent; color: var(--brand-40); font: inherit; font-size: 12px; padding: 4px 0; cursor: pointer; }
+.side-tab { flex: 1; border: none; border-radius: 999px; background: transparent; color: var(--brand-40); font: inherit; font-size: 12px; padding: 4px 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.side-tab svg { width: 16px; height: 16px; }
 .side-tab:hover { color: var(--brand); }
 .side-tab.on { background: rgba(0, 51, 102, .1); color: var(--brand); font-weight: 500; }
 /* JSON 视图：pretty 渲染，当前节点/其子树 steps 命中行整行铺浅蓝底（编辑器选中行形态） */
