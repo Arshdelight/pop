@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
-import { loadNotes, subtreeHashes, insertNote, updateNote, removeNote } from './notes.js';
+import { loadNotes, subtreeHashes, insertNote, updateNote, removeNote, NOTES_FILE } from './notes.js';
 import { runNew } from './cmd/new.js';
 import { runPull } from './cmd/pull.js';
 import { runPush } from './cmd/push.js';
@@ -35,8 +35,9 @@ const STATIC_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-/** live reload 客户端：连 SSE、收到 reload 事件整页刷新（只读浏览器无状态，整刷即热更） */
-const LR_SCRIPT = "(function(){var es=new EventSource('/_lr');es.addEventListener('reload',function(){location.reload()});})();";
+/** live reload 客户端：连 SSE，收到 reload 整页刷新（只读页面无状态，整刷即热更）；
+ *  收到 notes（笔记文件变更，服务器侧已不对其整刷）转发为 DOM 事件，详情页自行局部更新 */
+const LR_SCRIPT = "(function(){var es=new EventSource('/_lr');es.addEventListener('reload',function(){location.reload()});es.addEventListener('notes',function(){document.dispatchEvent(new CustomEvent('practi:notes'))});})();";
 
 function injectLiveReload(html: string): string {
   const tag = '<script src="/_lr.js" defer></script>';
@@ -460,16 +461,29 @@ function sseHandshake(req: http.IncomingMessage, res: http.ServerResponse, clien
 }
 
 /** 监听 roots（递归；平台不支持时降级单层，再失败静默跳过——live reload 是锦上添花，不致命）。
- *  事件去抖：一次保存或一条 practi 命令会喷一串文件事件，合并成一次 reload */
+ *  事件去抖：一次保存或一条 practi 命令会喷一串文件事件，合并成一次广播。
+ *  notes.json 例外：不触发整页 reload（写字段的页面自己会局部更新，整刷会白屏闪烁），
+ *  改发轻量 notes 事件——前端只重拉笔记数据重绘右栏，内容区/滚动位/草稿全程不动 */
 function watchLive(roots: string[], clients: Set<http.ServerResponse>): void {
-  let timer: NodeJS.Timeout | null = null;
-  const onChange = () => {
-    if (timer) return;
-    timer = setTimeout(() => {
-      timer = null;
-      if (clients.size === 0) return;
-      for (const res of clients) res.write('event: reload\ndata: 1\n\n');
-    }, 150);
+  let reloadTimer: NodeJS.Timeout | null = null;
+  let notesTimer: NodeJS.Timeout | null = null;
+  const broadcast = (event: 'reload' | 'notes') => {
+    if (clients.size === 0) return;
+    for (const res of clients) res.write(`event: ${event}\ndata: 1\n\n`);
+  };
+  const onChange = (_event: string, filename: string | null) => {
+    const isNotes = filename !== null && path.basename(filename) === NOTES_FILE;
+    const unknown = filename === null; // 个别平台不给文件名：保守起见两种事件都发——宁多推一次不漏
+    if (!isNotes || unknown) {
+      if (reloadTimer === null) {
+        reloadTimer = setTimeout(() => { reloadTimer = null; broadcast('reload'); }, 150);
+      }
+    }
+    if (isNotes || unknown) {
+      if (notesTimer === null) {
+        notesTimer = setTimeout(() => { notesTimer = null; broadcast('notes'); }, 150);
+      }
+    }
   };
   for (const root of roots) {
     if (!fs.existsSync(root)) continue;

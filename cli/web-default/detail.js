@@ -730,6 +730,13 @@ function loadNotesData() {
     .catch(function () { /* 笔记是锦上添花：拉取失败静默，文档照常显示 */ });
 }
 
+// 另一终端写笔记（CLI/别的页面）→ 服务器发 notes 轻事件 → 只重拉笔记，绝不整刷。
+// 行内编辑中先不响应：重渲染会丢焦点，等保存/取消后自然同步
+document.addEventListener('practi:notes', function () {
+  if (editingId) return;
+  loadNotesData();
+});
+
 fetch('/doc/' + encodeURIComponent(HASH) + '.json')
   .then(function (r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
