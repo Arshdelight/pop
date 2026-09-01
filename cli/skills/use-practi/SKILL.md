@@ -157,7 +157,7 @@ practi clone <hash>        # fetch a public POP and claim it (local direct + rem
 practi submit [hash]       # PRIVATE → PENDING_REVIEW; auto review passes → public (already-approved skips re-review); default: all direct
 practi unpublish [hash]    # withdraw a submission / take a published POP out of public
 practi remove <hash> --remote # withdraw your claim on the remote (hash required; local workspace
-                               # untouched; `practi delete <hash>` remains an alias)
+                               # untouched)
 ```
 
 - Reads of published docs are anonymous; writes and private reads need `practi login`.

@@ -106,14 +106,14 @@ describe('practi remove --remote: delegates to the hub claim withdrawal (delete 
     expect(directOf((await pop(dir, ['ls', '--json'])).stdout)).toEqual([root]);
   });
 
-  it('practi delete routes to the same remote path (alias wiring)', async () => {
+  it('practi delete is retired (unknown command) — remove --remote is the only face', async () => {
     const dir = tempDataDir();
     await init(dir);
     const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Alias check' })])).stdout);
 
     const r = await pop(dir, ['delete', root]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain('not logged in'); // 与 remove --remote 同一条远端路，本地不动
-    expect(directOf((await pop(dir, ['ls', '--json'])).stdout)).toEqual([root]);
+    expect(r.stderr).toContain('unknown command: delete');
+    expect(directOf((await pop(dir, ['ls', '--json'])).stdout)).toEqual([root]); // 本地不动
   });
 });

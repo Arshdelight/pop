@@ -9,7 +9,7 @@ import { runDelete } from './lifecycle.js';
  * practi remove <hash>：把一个 direct 根从本地目录拿掉——注册层操作（direct≈git refs，
  * refs 的增删不产生新 commit，不走内容层换根那条 edit 路）。默认按 edit 同款规则 GC
  * 从剩余 direct 出发不可达的节点（共享的间接节点保得住）；--keep 保留。
- * --remote 改为撤远端认领（原 practi delete 的活；delete 保留为别名）。
+ * --remote 改为撤远端认领（原 practi delete 的活；delete 已退役，这是唯一面孔）。
  * 笔记不动：钉在旧哈希上的自动成为悬空组（note list 殿后展示）。
  */
 

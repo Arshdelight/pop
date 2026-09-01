@@ -51,7 +51,7 @@ practi unpublish [hash]            withdraw a submission / take one back out of 
 practi remove <hash> [--keep]      take a direct pop out of the local directory (registry op;
                                GCs nodes unreachable from the rest — shared indirect nodes survive)
 practi remove <hash> --remote      withdraw your claim on the remote (hash required; local
-                               untouched; `practi delete <hash>` remains an alias)
+                               workspace untouched)
 practi blob add <file-or-url>     stage an attachment; emits the attachment entry
                                (hashes the bytes, stores local blobs in the workspace)
 practi note add <node> -m "<text>"  pin a local learning note to any node hash (sidecar
@@ -76,7 +76,7 @@ The CLI defaults its remote to **https://practihub.com** — `practi login` work
 
 ### Edit
 
-Editing is replacing: content addressing means an edit produces a **new root hash**. `practi edit <hash> <file.json>` (or `--json` / stdin) validates and stores the new tree, swaps the old root out of the direct registration, and auto-appends a revision record on the root (`from` = old root hash — a history pointer that may dangle by design, never validated). Nodes no longer reachable from any direct root are garbage-collected — the local counterpart of the hub's claim reconciliation: content still referenced by another direct POP survives, exclusive descendants go (`--keep` preserves them; `--message` sets the revision note; `--no-revision` skips it). Purely local — the hub still holds the old version: sync with `practi push` + `practi delete <old-root>`.
+Editing is replacing: content addressing means an edit produces a **new root hash**. `practi edit <hash> <file.json>` (or `--json` / stdin) validates and stores the new tree, swaps the old root out of the direct registration, and auto-appends a revision record on the root (`from` = old root hash — a history pointer that may dangle by design, never validated). Nodes no longer reachable from any direct root are garbage-collected — the local counterpart of the hub's claim reconciliation: content still referenced by another direct POP survives, exclusive descendants go (`--keep` preserves them; `--message` sets the revision note; `--no-revision` skips it). Purely local — the hub still holds the old version: sync with `practi push` + `practi remove <old-root> --remote`.
 
 ### Push, pull & clone
 
@@ -122,7 +122,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 - `practi submit [hash]` submits your direct pops for public review (`PRIVATE → PENDING_REVIEW`; an auto review passes before they go public — already-approved content skips re-review). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
 - `practi unpublish [hash]` withdraws a pending submission or takes a published POP back out of public distribution (`→ PRIVATE`).
-- `practi delete <hash>` removes your direct claim on the remote (children's indirect claims are reclaimed; a document with no claims left is hard-deleted). Explicit hash required — there is no delete-all. Pure remote operation: your local workspace is untouched, and pushing the same content again recreates it (fresh row, PRIVATE).
+- `practi remove <hash> --remote` removes your direct claim on the remote (children's indirect claims are reclaimed; a document with no claims left is hard-deleted). Explicit hash required — there is no delete-all. Pure remote operation: your local workspace is untouched, and pushing the same content again recreates it (fresh row, PRIVATE).
 
 ## License
 

@@ -23,13 +23,13 @@ export async function runUnpublish(opts: LifecycleOpts): Promise<number> {
 }
 
 /**
- * practi delete <hash>：删除自己在 remote 上的 DIRECT 认领（无认领的文档被硬删除）。
+ * practi remove <hash> --remote：删除自己在 remote 上的 DIRECT 认领（无认领的文档被硬删除）。
  * DELETE /api/v1/pop/:ref。必须显式给 hash（不做默认全删）；纯远端操作，本地工作区不动，
  * 再次 push 同内容会重建（新行，PRIVATE）。
  */
 export async function runDelete(opts: LifecycleOpts): Promise<number> {
   if (opts.positional.length === 0) {
-    console.error('usage: practi delete <hash>   (explicit hash required — no default)');
+    console.error('usage: practi remove <hash> --remote   (explicit hash required — no default)');
     return 1;
   }
   return runLifecycle(opts, undefined, 'deleted');
@@ -51,7 +51,7 @@ async function runLifecycle(
   if (refs.length === 0) {
     console.error(action
       ? 'error: no direct pops to ' + action + ' (none registered)'
-      : 'usage: practi delete <hash>');
+      : 'usage: practi remove <hash> --remote');
     return 1;
   }
 

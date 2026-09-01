@@ -21,7 +21,7 @@ import { runSearch } from './cmd/search.js';
 import { runComment } from './cmd/comment.js';
 import { runNote } from './cmd/note.js';
 import { runRemove } from './cmd/remove.js';
-import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
+import { runSubmit, runUnpublish } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
 import { runSkill } from './cmd/skill.js';
@@ -79,7 +79,7 @@ usage:
   practi remote show | remove       inspect / clear the remote
   practi remove <hash> [--keep]     take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
-       | practi remove <hash> --remote   withdraw the claim on the remote instead (alias: delete)
+       | practi remove <hash> --remote   withdraw the claim on the remote instead
   practi repair                     backfill missing claim timestamps from node file times
                                  (idempotent; stamped claims are never touched)
   practi search [query...]          search pops — no flag = mixed (local workspace first, then
@@ -382,11 +382,6 @@ async function main(argv: string[]): Promise<number> {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi unpublish [hash]   (default: all direct pops)'); return 0; }
       return runUnpublish({ dataDir: str(values['data-dir']), positional: positionals });
-    }
-    case 'delete': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help || positionals.length === 0) { console.log('usage: practi delete <hash>   (explicit hash required)'); return 0; }
-      return runDelete({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'blob': {
       const sub = rest[0];

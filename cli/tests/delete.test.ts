@@ -2,34 +2,27 @@ import { describe, expect, it } from 'vitest';
 import { createdRoot, init, pop, tempDataDir, writeDoc } from './helpers.js';
 
 /**
- * `pop delete <hash>` is a REMOTE-only operation (lifecycle.ts → DELETE on the
- * hub; the local workspace is deliberately untouched). There is no offline
- * local-unregister command, so the no-network coverage here pins two facts:
- * the argument contract, and that an offline delete fails fast (before any
- * network call) while the local registration survives.
+ * `practi delete` 已退役（2026-09-01 命令面定案：一个动词留一个）：
+ * 撤远端认领的唯一面孔是 `practi remove <hash> --remote`。
+ * 本文件钉住退役事实：delete 现在是未知命令；remove --remote 承接其全部行为。
  */
-describe('pop delete: remote-only by design', () => {
-  it('without a hash: index.ts answers with the usage on stdout, exit 0 (argless delete is a help, not an error)', async () => {
+describe('practi delete is retired; remove --remote is the one face', () => {
+  it('delete answers with unknown command, exit 1', async () => {
     const dir = tempDataDir();
     await init(dir);
-    const r = await pop(dir, ['delete']);
-    expect(r.code).toBe(0);
-    expect(r.stdout).toContain('usage: practi delete');
-    expect(r.stderr).toBe('');
+    const r = await pop(dir, ['delete', 'sha256:whatever']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('unknown command: delete');
   });
 
-  it('offline: fails fast (not logged in) and leaves the local registration intact', async () => {
+  it('remove --remote still carries the behavior (offline: fails fast, local intact)', async () => {
     const dir = tempDataDir();
     await init(dir);
-    const created = await pop(dir, ['new', writeDoc(dir, { name: 'Local pop', content: 'stays' })]);
-    const root = createdRoot(created.stdout);
+    const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Local pop', content: 'stays' })])).stdout);
 
-    const r = await pop(dir, ['delete', root]);
+    const r = await pop(dir, ['remove', root, '--remote']);
     expect(r.code).toBe(1);
-    // requireCredentials throws before any HTTP call — no network dependency in the test
     expect(r.stderr).toContain('not logged in');
-
-    // the local direct registration is untouched (delete never edits practi.json)
     const ls = await pop(dir, ['ls', '--json']);
     expect(JSON.parse(ls.stdout).direct.map((v: { hash: string }) => v.hash)).toEqual([root]);
   });
