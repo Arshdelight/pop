@@ -46,7 +46,8 @@ practi pull [hash]                sync YOUR claims from the remote (default: all
 practi search [query...]          search POPs — no flag = mixed (local workspace first, then
                                the hub); --local only the workspace; --remote only the hub
                                [--scope public|me|all] applies to the hub half; --limit N; --json
-practi submit [hash]               submit POPs for public review (default: all direct)
+practi publish [hash]              try to publish POPs — PRIVATE → review → public (default: all direct;
+                               hash prefix OK)
 practi unpublish [hash]            withdraw a submission / take one back out of public
 practi remove <hash>               take a direct pop out of the local directory (registry op;
                                GCs nodes unreachable from the rest — shared indirect nodes survive)
@@ -120,7 +121,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 ### Lifecycle (submit / unpublish / delete)
 
-- `practi submit [hash]` submits your direct pops for public review (`PRIVATE → PENDING_REVIEW`; an auto review passes before they go public — already-approved content skips re-review). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
+- `practi publish [hash]` tries to publish your direct pops (hash prefix OK) (`PRIVATE → PENDING_REVIEW`; an auto review passes before they go public — already-approved content skips re-review). Omit the hash to submit all direct pops — non-PRIVATE ones are skipped and counted as failures.
 - `practi unpublish [hash]` withdraws a pending submission or takes a published POP back out of public distribution (`→ PRIVATE`).
 - `practi remove <hash> --remote` removes your direct claim on the remote (children's indirect claims are reclaimed; a document with no claims left is hard-deleted). Explicit hash required — there is no delete-all. Pure remote operation: your local workspace is untouched, and pushing the same content again recreates it (fresh row, PRIVATE).
 

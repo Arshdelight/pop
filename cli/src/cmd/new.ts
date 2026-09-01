@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { runSubmit } from './lifecycle.js';
+import { runPublish } from './lifecycle.js';
 import { storeDocumentRemote } from '../client.js';
 
 export interface NewOpts {
@@ -104,9 +104,9 @@ async function remoteNew(opts: NewOpts, dataDir: string, doc: unknown): Promise<
   console.log(`status:   ${stored.status}, claimed${stored.idempotent ? ' (already existed)' : ''}`);
 
   if (opts.publish === true) {
-    const code = await runSubmit({ dataDir, positional: [stored.rootHash] });
+    const code = await runPublish({ dataDir, positional: [stored.rootHash] });
     if (code !== 0) {
-      console.error('publish:  submit failed — the document is created on the hub (PRIVATE); run `practi submit <hash>` after fixing');
+      console.error('publish:  submit failed — the document is created on the hub (PRIVATE); run `practi publish <hash>` after fixing');
       return 1;
     }
   }

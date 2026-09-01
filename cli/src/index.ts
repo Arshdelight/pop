@@ -21,7 +21,7 @@ import { runSearch } from './cmd/search.js';
 import { runComment } from './cmd/comment.js';
 import { runNote } from './cmd/note.js';
 import { runRemove } from './cmd/remove.js';
-import { runSubmit, runUnpublish } from './cmd/lifecycle.js';
+import { runPublish, runUnpublish } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
 import { runSkill } from './cmd/skill.js';
@@ -95,7 +95,8 @@ usage:
                                   foreign skills enter POP by authoring, not import)
   practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
   practi spec                       print pop-spec.md (bundled with the SDK; no network)
-  practi submit [hash]              submit pops for public review (default: all direct)
+  practi publish [hash]             try to publish — PRIVATE → review, machine-passed → public (default: all
+                                 direct pops; hash prefix OK)
   practi unpublish [hash]           withdraw a submission / take one back out of public
   practi update                     self-update via npm (checks the registry's latest)
   practi version | --version        show CLI + pop-spec versions
@@ -371,10 +372,10 @@ async function main(argv: string[]): Promise<number> {
         remote: values.remote === true,
       });
     }
-    case 'submit': {
+    case 'publish': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi submit [hash]   (default: all direct pops)'); return 0; }
-      return runSubmit({ dataDir: str(values['data-dir']), positional: positionals });
+      if (values.help) { console.log('usage: practi publish [hash]   (try to publish: PRIVATE → review; default: all direct pops; hash prefix OK)'); return 0; }
+      return runPublish({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'unpublish': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });

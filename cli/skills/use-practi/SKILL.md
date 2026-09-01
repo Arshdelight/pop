@@ -154,7 +154,8 @@ practi search [query...]   # no flag = mixed: local workspace first, then the hu
                                # title hits rank first; empty = browse; hashes/prefixes match locally
 practi pull [hash]         # sync YOUR claims from the remote (default: all of mine)
 practi clone <hash>        # fetch a public POP and claim it (local direct + remote claim)
-practi submit [hash]       # PRIVATE → PENDING_REVIEW; auto review passes → public (already-approved skips re-review); default: all direct
+practi publish [hash]      # try to publish: PRIVATE → PENDING_REVIEW; auto review passes → public
+                               # (already-approved skips re-review); default: all direct; hash prefix OK
 practi unpublish [hash]    # withdraw a submission / take a published POP out of public
 practi remove <hash> --remote # withdraw your claim on the remote (hash required; local workspace
                                # untouched)
