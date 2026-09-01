@@ -41,6 +41,8 @@ var POP_I18N = (function () {
       endPractice: '实践完结',
       revisions: function (n) { return '修订 (' + n + ')'; },
       refines: function (n) { return '改进 (' + n + ')'; },
+      secNotes: function (n) { return '笔记 (' + n + ')'; },
+      noteTip: '本地学习笔记——practi note 添加，不上传',
       docFail: function (s) { return '文档加载失败（' + s + '）'; },
       backMine: '← 我的实践'
     },
@@ -74,6 +76,8 @@ var POP_I18N = (function () {
       endPractice: 'end of practice',
       revisions: function (n) { return 'revisions (' + n + ')'; },
       refines: function (n) { return 'refines (' + n + ')'; },
+      secNotes: function (n) { return 'notes (' + n + ')'; },
+      noteTip: 'local learning notes via practi note (never uploaded)',
       docFail: function (s) { return 'failed to load document (' + s + ')'; },
       backMine: '← My practices'
     }

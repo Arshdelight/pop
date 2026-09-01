@@ -1,6 +1,7 @@
-import { execFile } from 'node:child_process';
+import { execFile, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -131,4 +132,42 @@ export function writeDoc(dataDir: string, doc: unknown): string {
   const file = path.join(dataDir, 'doc.json');
   fs.writeFileSync(file, JSON.stringify(doc, null, 2), 'utf8');
   return file;
+}
+
+/* ── web server spawn helpers (shared by endpoint tests: spawn the real CLI
+   via tsx, wait for /healthz, talk HTTP) ── */
+
+/** 空闲端口预分配：listen(0) 拿端口再释放给 web server（本机测试竞态可接受） */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address() as net.AddressInfo;
+      srv.close(() => resolve(port));
+    });
+    srv.on('error', reject);
+  });
+}
+
+export function spawnWeb(dataDir: string, port: number): ChildProcess {
+  return execFile(
+    process.execPath,
+    ['--import', 'tsx', CLI_ENTRY, 'web', '--data-dir', dataDir, '--port', String(port), '--no-open'],
+    { cwd: CLI_ROOT, env: { ...process.env, PRACTI_HOME: dataDir }, windowsHide: true },
+    () => {}, // exit is expected at teardown; keep the callback alive so no EPIPE crash
+  );
+}
+
+export async function untilHealthy(port: number, child: ChildProcess, timeoutMs = 15_000): Promise<string> {
+  const base = `http://127.0.0.1:${port}`;
+  const t0 = Date.now();
+  for (;;) {
+    if (child.exitCode !== null) throw new Error(`web server exited early with code ${child.exitCode}`);
+    if (Date.now() - t0 > timeoutMs) throw new Error('web server did not become healthy in time');
+    try {
+      const r = await fetch(`${base}/healthz`);
+      if (r.ok) return base;
+    } catch { /* not up yet */ }
+    await new Promise(r => setTimeout(r, 200));
+  }
 }

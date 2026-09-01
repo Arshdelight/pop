@@ -39,6 +39,10 @@ practi unpublish [hash]            withdraw a submission / take one back out of 
 practi delete <hash>               remove your direct claim on the remote (hash required)
 practi blob add <file-or-url>     stage an attachment; emits the attachment entry
                                (hashes the bytes, stores local blobs in the workspace)
+practi note add <node> -m "<text>"  pin a local learning note to any node hash (sidecar
+                               notes.json, never uploaded; hash prefix OK)
+practi note list [hash] [--json]  list notes — all (grouped by document) or a subtree
+practi note edit|delete <note-id>  edit (-m "<text>") or remove a note (id prefix OK)
 ```
 
 The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the remote provider and the registered **direct** roots, each with a claim timestamp (time lives on the claim event, never inside content-addressed nodes — the git refs/reflog split; indirect = every other node the direct POPs reference).
@@ -91,6 +95,12 @@ Editing is replacing: content addressing means an edit produces a **new root has
   Commands run one at a time (queued). `new` accepts JSON text only — no file paths. The built-in frontend does not use this endpoint; it exists for DIY frontends dropped into `<data-dir>/web/`.
 - **Frontend files** — the UI is plain HTML/CSS/JS served from the CLI's bundled `web-default/`. To customize, drop files into `<data-dir>/web/` — files there **override the built-in ones file-by-file** (missing files fall back to the default). Delete a file to return to the built-in version.
 - **Live reload** — the server watches the data dir and the frontend directories; every page (built-in or custom) auto-reloads in the browser when a frontend file changes or when another terminal runs `practi new` / `practi pull`. Editing the frontend is a save-and-see loop, no rebuild, no restart.
+
+### Notes
+
+- `practi note` keeps **local learning notes** in `notes.json` next to `practi.json` — a sidecar, like `claims`. Each note is pinned to a node hash: content addressing gives the pin exact semantics (the note is about *that version* of the node, and can never drift with edits). Notes never enter the POP protocol body and are never uploaded.
+- The division of labor with the remote: **notes = your learning/reproduction experience (local, private)**; **`practi comment` = content authenticity (public, on the hub)**.
+- The write door is the CLI, so humans and agents go through the same gate: `practi note add <node-hash> -m "step 3 needs admin rights on Windows"` while reproducing a practice. `practi web` displays notes per node in the wizard view (amber dots in the outline mark nodes that carry notes).
 
 ### Lifecycle (submit / unpublish / delete)
 

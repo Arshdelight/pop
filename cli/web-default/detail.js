@@ -10,6 +10,8 @@ var navStack = []; // 走过的路径栈，Prev 回退用（避开只读全局 w
 var nodeIndex = null; // 哈希→树内路径登记簿（数据窗 nodeIndex），inputs.from 反解用
 var view = 'wizard';  // 内容区视图：wizard | sv | doc（侧栏顶部三 tab）
 var svJson = null;    // StandardView JSON 缓存（首次切到该 tab 才拉取）
+var notesByHash = {}; // 本地学习笔记（/api/notes），按节点哈希分组；写入口在 CLI（practi note）
+var hashByPath = {};  // nodeIndex 的逆映射（树内路径 → 哈希）；根（空路径）= HASH 本身
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -53,6 +55,15 @@ function goTo(p) {
 
 function shortHash(h) {
   return String(h).length > 16 ? String(h).slice(0, 16) + '…' : String(h);
+}
+
+function notesFor(hash) {
+  return notesByHash[hash] || [];
+}
+
+/** 当前节点哈希：根=HASH（URL 里那份），树内=逆登记簿 */
+function hashAt(p) {
+  return p.length ? hashByPath[p.join(',')] : HASH;
 }
 
 // ── 渲染 ──────────────────────────────────────────────
@@ -193,13 +204,13 @@ function sideHtml() {
     tabIconBtn('doc', 'tabDoc', '<path d="M8 5h13"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="M3 10a2 2 0 0 0 2 2h3"/><path d="M3 5v12a2 2 0 0 0 2 2h3"/>') +
     '</div>' +
     '<p class="side-count">' + POP_I18N.t('stepCount', total) + '</p>' +
-    '<a href="#" class="side-item side-root" data-path="">' + escapeHtml(doc.name) + '</a>';
+    '<a href="#" class="side-item side-root" data-path="">' + (notesFor(HASH).length ? '<span class="side-dot" data-tip="' + escapeHtml(POP_I18N.t('noteTip')) + '"></span>' : '') + escapeHtml(doc.name) + '</a>';
   (function walkSide(n, prefix, depth, p) {
     (n.children || []).forEach(function (c, i) {
       var num = prefix + (i + 1);
       var cp = p.concat([i]);
       html += '<a href="#" class="side-item" data-path="' + cp.join(',') + '" style="padding-left:' + (14 + depth * 14) + 'px">' +
-        '<span class="side-num">' + num + '</span>' + escapeHtml(c.name) + '</a>';
+        '<span class="side-num">' + num + '</span>' + (notesFor(hashAt(cp)).length ? '<span class="side-dot" data-tip="' + escapeHtml(POP_I18N.t('noteTip')) + '"></span>' : '') + escapeHtml(c.name) + '</a>';
       if (c.children && c.children.length) walkSide(c, num + '.', depth + 1, cp);
     });
   })(doc, '', 0, []);
@@ -270,8 +281,33 @@ function nodeHtml(node) {
   html += proseHtml(node);
   if (node.type === 'action') html += outputsHtml(node) + attHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
+  // 本地学习笔记钉在节点卡末尾（sidecar，不属文档本体，JSON 两视图不出现）
+  html += notesHtml(hashAt(path));
   // revisions 已挪到左侧大纲底部（全文档汇总）；refines 同处
   return html;
+}
+
+// ── 学习笔记（/api/notes，本地 sidecar notes.json → practi note 命令写入门）──
+// 空节点整块不出现；label 带气泡说明来源（本地、不上传），正文纯文本 pre-wrap
+
+function notesHtml(hash) {
+  var list = notesFor(hash);
+  if (!list.length) return '';
+  return '<div class="section-sm"><div class="label" data-tip="' + escapeHtml(POP_I18N.t('noteTip')) + '">' +
+    POP_I18N.t('secNotes', list.length) + '</div>' +
+    list.map(function (n) {
+      return '<div class="note-item"><span class="note-time">' +
+        escapeHtml(fmtNoteTime(n.createdAt)) + '</span>' +
+        '<div class="note-body">' + escapeHtml(n.content || '') + '</div></div>';
+    }).join('') + '</div>';
+}
+
+/** ISO → 浏览器本地时区的 YYYY-MM-DD HH:mm（个人日记口径：时间属于看的人，不属于服务器） */
+function fmtNoteTime(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso || '');
+  function p(x) { return (x < 10 ? '0' : '') + x; }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
 function loopNote(node) {
@@ -511,6 +547,37 @@ POP_I18N.onChange(function () {
 
 var HASH = decodeURIComponent((location.pathname.split('/pop/')[1] || '').replace(/\.json$/, ''));
 
+// nodeIndex（哈希→路径）逆成 hashByPath（路径→哈希）：笔记按哈希钉，侧栏/节点卡按路径定位
+function buildHashByPath() {
+  hashByPath = {};
+  if (!nodeIndex) return;
+  for (var h in nodeIndex) hashByPath[nodeIndex[h].join(',')] = h;
+}
+
+/** 笔记到货后的重绘：侧栏（琥珀点）必更；向导正文仅当前节点确实有笔记才重绘，
+ *  并保住滚动位（render 自带的回顶是导航语义，这里不是导航） */
+function onNotesArrived() {
+  if (!doc) return;
+  document.getElementById('side').innerHTML = sideHtml();
+  if (view !== 'wizard' || !notesFor(hashAt(path)).length) return;
+  var y = window.scrollY;
+  render();
+  window.scrollTo(0, y);
+}
+
+function loadNotesData() {
+  fetch('/api/notes?ref=' + encodeURIComponent(HASH))
+    .then(function (r) { return r.ok ? r.json() : { notes: [] }; })
+    .then(function (j) {
+      notesByHash = {};
+      (j.notes || []).forEach(function (n) {
+        (notesByHash[n.hash] = notesByHash[n.hash] || []).push(n);
+      });
+      onNotesArrived();
+    })
+    .catch(function () { /* 笔记是锦上添花：拉取失败静默，文档照常显示 */ });
+}
+
 fetch('/doc/' + encodeURIComponent(HASH) + '.json')
   .then(function (r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -520,9 +587,11 @@ fetch('/doc/' + encodeURIComponent(HASH) + '.json')
     // 数据窗=加法演进：树字段在顶层，nodeIndex 是后加的兄弟键（老响应没有它 → 哈希兜底）
     doc = d;
     nodeIndex = d.nodeIndex || null;
+    buildHashByPath();
     document.title = doc.name + ' — practi';
     document.getElementById('side').innerHTML = sideHtml();
     render();
+    loadNotesData();
   })
   .catch(function (err) {
     document.getElementById('app').innerHTML =

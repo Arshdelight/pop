@@ -18,6 +18,7 @@ import { runPull } from './cmd/pull.js';
 import { runClone } from './cmd/clone.js';
 import { runSearch } from './cmd/search.js';
 import { runComment } from './cmd/comment.js';
+import { runNote } from './cmd/note.js';
 import { runSubmit, runUnpublish, runDelete } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
@@ -54,6 +55,9 @@ usage:
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
                                  no arg = ~/.practi; a path is recorded in
                                  ~/.practi-home and becomes the default)
+  practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar
+                                 notes.json, never uploaded — learning/reproduction
+                                 focus; remote authenticity lives in practi comment)
   practi new <file.json>            create a POP from a JSON document
        | practi new --json '<text>'
        | practi new < file.json
@@ -142,6 +146,27 @@ async function main(argv: string[]): Promise<number> {
       });
       if (values.help) { console.log('usage: practi ls [-a] [--json]'); return 0; }
       return runLs({ dataDir: str(values['data-dir']), all: values.all === true, json: values.json === true });
+    }
+    case 'note': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          message: { type: 'string' as const, short: 'm' },
+          json: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi note add|list|edit|delete   (see `practi note` help)');
+        return 0;
+      }
+      return runNote({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        message: values.message,
+        json: values.json === true,
+      });
     }
     case 'new': {
       const { values, positionals } = parseArgs({

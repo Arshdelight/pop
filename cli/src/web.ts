@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
+import { loadNotes, subtreeHashes } from './notes.js';
 import { runNew } from './cmd/new.js';
 import { runPull } from './cmd/pull.js';
 import { runPush } from './cmd/push.js';
@@ -101,6 +102,10 @@ function handle(
   }
   if (pathname === '/api/directs') {
     send(res, 200, 'application/json; charset=utf-8', JSON.stringify(directsPayload(dataDir, ws, state), null, 2));
+    return;
+  }
+  if (pathname === '/api/notes') {
+    notesRoute(req, res, dataDir, ws);
     return;
   }
   if (pathname === '/api/run') {
@@ -356,6 +361,29 @@ function directsPayload(dataDir: string, ws: ReturnType<typeof openWorkspace>, s
       };
     });
     return { dataDir, docs };
+}
+
+/** 笔记数据窗：GET /api/notes?ref=<hash> → 该节点子树内的本地笔记（存入顺序=时间正序）。
+ *  独立只读端点、纯加法（不碰既有数据窗）；写入口在 CLI（practi note）。ref 缺失 400、
+ *  解析不到 404——错误对齐其它路由的纯文本口径。notes.json 在 dataDir 下，live reload
+ *  天然覆盖：另一终端 note add 后页面自动刷新出笔记 */
+function notesRoute(req: http.IncomingMessage, res: http.ServerResponse, dataDir: string, ws: ReturnType<typeof openWorkspace>): void {
+  const ref = new URL(req.url ?? '/', 'http://localhost').searchParams.get('ref');
+  if (!ref) {
+    send(res, 400, 'text/plain; charset=utf-8', 'E_ARGS: missing ?ref=<hash>');
+    return;
+  }
+  let hash: string;
+  try {
+    hash = resolveNodeRef(ws, ref);
+  } catch (e) {
+    const msg = e instanceof PracticeError ? `${e.code}: ${e.message}` : String(e);
+    send(res, 404, 'text/plain; charset=utf-8', msg);
+    return;
+  }
+  const set = subtreeHashes(ws, hash);
+  const notes = loadNotes(dataDir).notes.filter(n => set.has(n.hash));
+  send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ notes }, null, 2));
 }
 
 function sseHandshake(req: http.IncomingMessage, res: http.ServerResponse, clients: Set<http.ServerResponse>): void {

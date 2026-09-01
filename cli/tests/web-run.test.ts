@@ -1,8 +1,6 @@
-import { execFile, type ChildProcess } from 'node:child_process';
-import net from 'node:net';
-import { fileURLToPath } from 'node:url';
+import { type ChildProcess } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CLI_ENTRY, createdRoot, init, tempDataDir } from './helpers.js';
+import { createdRoot, freePort, init, spawnWeb, tempDataDir, untilHealthy } from './helpers.js';
 
 /**
  * POST /api/run 端点：spawn 真 CLI 的 web server（tsx 直跑 src），用 node fetch 打真 HTTP。
@@ -18,44 +16,6 @@ const TREE = {
     { name: 'Pour', content: 'Pour along the wall to 70% full.' },
   ],
 };
-
-const CLI_ROOT = fileURLToPath(new URL('..', import.meta.url));
-
-/** 空闲端口预分配：listen(0) 拿端口再释放给 web server（本机测试竞态可接受） */
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address() as net.AddressInfo;
-      srv.close(() => resolve(port));
-    });
-    srv.on('error', reject);
-  });
-}
-
-function spawnWeb(dataDir: string, port: number): ChildProcess {
-  const child = execFile(
-    process.execPath,
-    ['--import', 'tsx', CLI_ENTRY, 'web', '--data-dir', dataDir, '--port', String(port), '--no-open'],
-    { cwd: CLI_ROOT, env: { ...process.env, PRACTI_HOME: dataDir }, windowsHide: true },
-    () => {}, // exit is expected at teardown; keep the callback alive so no EPIPE crash
-  );
-  return child;
-}
-
-async function untilHealthy(port: number, child: ChildProcess, timeoutMs = 15_000): Promise<string> {
-  const base = `http://127.0.0.1:${port}`;
-  const t0 = Date.now();
-  for (;;) {
-    if (child.exitCode !== null) throw new Error(`web server exited early with code ${child.exitCode}`);
-    if (Date.now() - t0 > timeoutMs) throw new Error('web server did not become healthy in time');
-    try {
-      const r = await fetch(`${base}/healthz`);
-      if (r.ok) return base;
-    } catch { /* not up yet */ }
-    await new Promise(r => setTimeout(r, 200));
-  }
-}
 
 async function run(base: string, body: unknown, origin?: string): Promise<{ status: number; json: any }> {
   const r = await fetch(`${base}/api/run`, {
