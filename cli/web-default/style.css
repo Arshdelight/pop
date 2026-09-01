@@ -185,27 +185,22 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 侧栏大纲的笔记标记：琥珀点=这个节点有我的笔记（与纯导航的蓝系拉开一档） */
 .side-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #d97706; margin-right: 6px; vertical-align: 1px; }
 
-/* ── 右侧笔记栏：header 开关钮 + 当前节点的笔记工作台（≥1280px 常驻第三列）── */
-/* 详情页 header：auto 边距从设置钮挪到笔记钮——笔记钮带着设置钮一起靠右、自身在齿轮左边
-   （设置钮的 margin-left:auto 是 index 页的定位，详情页必须收回，否则笔记钮被挤到贴 brand） */
-.notes-btn { position: relative; margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: none; border-radius: 8px; background: transparent; color: var(--brand-40); cursor: pointer; }
-body.detail-page .settings-btn { margin-left: 0; }
-.notes-btn svg { width: 18px; height: 18px; }
-.notes-btn:hover { background: var(--hover-bg); color: var(--brand); }
-.notes-btn.on { color: var(--brand); }
-.notes-btn .side-dot { display: none; position: absolute; top: 4px; right: 4px; margin: 0; }
-.notes-btn .side-dot.has { display: inline-block; }
-#note-side { display: none; }
-@media (min-width: 1280px) {
-  /* 第三列与左侧大纲同构：sticky 全高、浅底、右缘细线；off=开关钮收起 */
-  #note-side { display: flex; flex-direction: column; position: sticky; top: 49px; height: calc(100dvh - 49px); width: 18rem; flex: none; border-left: 1px solid var(--border); background: #f8fafc; padding: 14px 14px 16px; overflow-y: auto; }
-  #note-side.off { display: none; }
-  /* 底部操作区让位右栏（开栏时） */
-  body.notes-open .nav { right: 18rem; }
-}
+/* ── 右侧笔记栏：悬浮抽屉，盖在内容区右缘之上——展开收起只平移自身，内容区零位移 ── */
+#note-side { position: fixed; top: 49px; bottom: 0; right: 0; z-index: 30; width: 18rem; display: flex; flex-direction: column; background: #f8fafc; border-left: 1px solid var(--border); box-shadow: 0 0 24px rgba(0, 51, 102, .08); padding: 14px 14px 16px; transform: translateX(100%); transition: transform .25s ease; }
+#note-side.open { transform: translateX(0); }
+/* 展开收起舌片：钉在面板左缘、垂直居中、凸出面板外——收起后停在屏幕右缘仍可点。
+   溢出裁剪放内层列表，面板自身保持 visible，否则 absolute 的舌片会被裁掉 */
+#note-toggle { position: absolute; left: -26px; top: 50%; transform: translateY(-50%); width: 26px; height: 56px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-right: none; border-radius: 8px 0 0 8px; background: #f8fafc; color: var(--brand-40); cursor: pointer; }
+#note-toggle:hover { color: var(--brand); }
+#note-toggle svg { width: 14px; height: 14px; transition: transform .25s ease; }
+#note-side.open #note-toggle svg { transform: rotate(180deg); }
+#note-toggle .side-dot { display: none; position: absolute; top: 7px; left: 50%; margin: 0 0 0 -3px; }
+#note-toggle .side-dot.has { display: inline-block; }
+/* 舌片气泡朝左开（默认朝上会被屏幕右缘截断） */
+#note-toggle[data-tip]::after { left: auto; right: calc(100% + 8px); top: 50%; bottom: auto; transform: translateY(-50%); }
+#note-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
 .nside-head { margin-bottom: 10px; }
 .nside-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--brand-50); }
-.nside-node { margin: 2px 0 0; font-size: 13px; font-weight: 500; color: var(--brand); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nside-empty { font-size: 12px; line-height: 1.6; color: var(--brand-40); margin: 0 0 10px; }
 .nside-err { font-size: 12px; line-height: 1.5; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 6px 10px; margin: 0 0 10px; overflow-wrap: break-word; }
 .nside-item { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }

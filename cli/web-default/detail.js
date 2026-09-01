@@ -12,10 +12,10 @@ var view = 'wizard';  // 内容区视图：wizard | sv | doc（侧栏顶部三 t
 var svJson = null;    // StandardView JSON 缓存（首次切到该 tab 才拉取）
 var notesByHash = {}; // 本地学习笔记（/api/notes），按节点哈希分组；写入口=CLI（practi note）+ 右栏（POST /api/notes）
 var hashByPath = {};  // nodeIndex 的逆映射（树内路径 → 哈希）；根（空路径）= HASH 本身
-var notesOpen = true;   // 右侧笔记栏开合（localStorage practi.notesSide，默认开）
+var notesOpen = false;  // 右栏开合：默认折叠；首载若本文档有笔记则自动展开（不持久化，每页按规则重判）
+var notesTouched = false; // 用户本页手动开合过——之后自动规则不再介入
 var editingId = null;   // 右栏里正在行内编辑的 note id（null=无；底部新增框常驻）
 var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动作或重渲染即清）
-try { notesOpen = localStorage.getItem('practi.notesSide') !== '0'; } catch (e) { /* 隐私模式：默认开 */ }
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -305,55 +305,49 @@ function fmtNoteTime(iso) {
 // 空文档也有面板（底部常驻输入框），解决「有笔记才可见」的发现性问题。
 // note 的第二个写入门（其一=CLI practi note）：POST /api/notes，CSRF 闸与 /api/run 同规格
 
-var NOTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4"/><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><path d="M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.706 1.257l-.268 2.358a1 1 0 0 0 .69 1.089l2.358.268a2 2 0 0 0 1.257-.706z"/></svg>';
 var PENCIL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>';
 var TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
+/** 开合同步：抽屉动画由 CSS transition 承担，这里只切类 */
 function applyNotesOpen() {
   var panel = document.getElementById('note-side');
-  if (panel) panel.classList.toggle('off', !notesOpen);
-  document.body.classList.toggle('notes-open', notesOpen);
-  var btn = document.querySelector('.notes-btn');
-  if (btn) btn.classList.toggle('on', notesOpen);
+  if (panel) panel.classList.toggle('open', notesOpen);
 }
 
-/** header 开关钮（设置钮左边）：笔记本图标 + 琥珀点（当前节点有笔记才亮） */
-function mountNoteToggle() {
-  var header = document.querySelector('header');
-  if (!header) return;
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'notes-btn';
+/** 展开收起舌片：钉在面板左缘垂直居中（静态 HTML），收起后留在屏幕右缘仍可点。
+ *  琥珀点 = 当前节点有笔记 */
+function wireNoteToggle() {
+  var btn = document.getElementById('note-toggle');
+  if (!btn) return;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>' +
+    '<span class="side-dot"></span>';
   btn.setAttribute('aria-label', POP_I18N.t('notePanel'));
   btn.setAttribute('data-tip', POP_I18N.t('notePanel'));
-  btn.innerHTML = NOTE_ICON + '<span class="side-dot"></span>';
   btn.addEventListener('click', function () {
     notesOpen = !notesOpen;
-    try { localStorage.setItem('practi.notesSide', notesOpen ? '1' : '0'); } catch (e) { /* 同 lang */ }
-    applyNotesOpen();
+    notesTouched = true;
+    noteErrorMsg = null;
     renderNoteSide();
   });
-  var settings = header.querySelector('.settings-btn');
-  if (settings) header.insertBefore(btn, settings);
-  else header.appendChild(btn);
 }
 
 function renderNoteSide() {
   var panel = document.getElementById('note-side');
   if (!panel) return;
-  var btnDot = document.querySelector('.notes-btn .side-dot');
+  applyNotesOpen();
+  var btnDot = document.querySelector('#note-toggle .side-dot');
   if (btnDot) btnDot.classList.toggle('has', notesFor(hashAt(path)).length > 0);
-  if (!notesOpen) { panel.innerHTML = ''; return; }
-  // 重渲染保打字稿：输入框里的草稿跨导航/刷新存活
+  var list = document.getElementById('note-list');
+  if (!list) return;
+  // 重渲染保打字稿：输入框里的草稿跨导航/刷新存活（保存成功后的清空在 afterNoteWrite 做）
   var draft = '';
   var prevInput = document.getElementById('note-add-input');
   if (prevInput) draft = prevInput.value;
-  var list = notesFor(hashAt(path));
-  var html = '<div class="nside-head"><p class="nside-title">' + POP_I18N.t('secNotes', list.length) + '</p>' +
-    '<p class="nside-node">' + escapeHtml(walk(path).name) + '</p></div>';
+  var notes = notesFor(hashAt(path));
+  var html = '<div class="nside-head"><p class="nside-title">' + POP_I18N.t('secNotes', notes.length) + '</p></div>';
   if (noteErrorMsg) html += '<p class="nside-err">' + escapeHtml(noteErrorMsg) + '</p>';
-  if (!list.length) html += '<p class="nside-empty">' + escapeHtml(POP_I18N.t('noteEmpty')) + '</p>';
-  html += list.map(function (n) {
+  if (!notes.length) html += '<p class="nside-empty">' + escapeHtml(POP_I18N.t('noteEmpty')) + '</p>';
+  html += notes.map(function (n) {
     if (editingId === n.id) return noteFormHtml(n);
     return '<div class="nside-item">' +
       '<div class="nside-meta"><span class="note-time">' + escapeHtml(fmtNoteTime(n.createdAt)) + '</span>' +
@@ -366,7 +360,7 @@ function renderNoteSide() {
   html += '<div class="nside-add">' +
     '<textarea id="note-add-input" class="nside-input" placeholder="' + escapeHtml(POP_I18N.t('notePlaceholder')) + '"></textarea>' +
     '<button type="button" class="btn btn-primary nside-save" data-act="note-add">' + escapeHtml(POP_I18N.t('noteSave')) + '</button></div>';
-  panel.innerHTML = html;
+  list.innerHTML = html;
   if (draft) {
     var input = document.getElementById('note-add-input');
     if (input) input.value = draft;
@@ -402,10 +396,15 @@ function postNote(body) {
   });
 }
 
-/** 写成功后的统一收口：服务端是唯一真相，重拉 → onNotesArrived 同步右栏与节点卡 */
-function afterNoteWrite() {
+/** 写成功后的统一收口：服务端是唯一真相，重拉 → onNotesArrived 同步右栏。
+ *  clearAdd=true（新增成功）先清空输入框——否则重渲染的草稿保活会把已保存内容填回去 */
+function afterNoteWrite(clearAdd) {
   editingId = null;
   noteErrorMsg = null;
+  if (clearAdd) {
+    var input = document.getElementById('note-add-input');
+    if (input) input.value = '';
+  }
   loadNotesData();
 }
 
@@ -416,17 +415,17 @@ function noteFail(e) {
 
 function saveEditNote(id, content) {
   if (!content.trim()) return;
-  postNote({ op: 'edit', id: id, content: content }).then(afterNoteWrite).catch(noteFail);
+  postNote({ op: 'edit', id: id, content: content }).then(function () { afterNoteWrite(false); }).catch(noteFail);
 }
 
 function saveAddNote() {
   var input = document.getElementById('note-add-input');
   if (!input || !input.value.trim()) return;
-  postNote({ op: 'add', hash: hashAt(path), content: input.value }).then(afterNoteWrite).catch(noteFail);
+  postNote({ op: 'add', hash: hashAt(path), content: input.value }).then(function () { afterNoteWrite(true); }).catch(noteFail);
 }
 
 function deleteNoteById(id) {
-  postNote({ op: 'delete', id: id }).then(afterNoteWrite).catch(noteFail);
+  postNote({ op: 'delete', id: id }).then(function () { afterNoteWrite(false); }).catch(noteFail);
 }
 
 function loopNote(node) {
@@ -687,10 +686,9 @@ document.addEventListener('keydown', function (e) {
   }
 });
 
-// 开关钮插在设置齿轮左边——lang.js 的设置钮在 DOMContentLoaded 才注入（其监听先注册先
-// 执行，届时必已存在），所以这里也挂 DOMContentLoaded，同步执行会扑空掉到 header 尾部
+// 右栏舌片事件接线（元素静态在 HTML；提示文案等 lang.js 就绪，故挂 DOMContentLoaded）
 document.addEventListener('DOMContentLoaded', function () {
-  mountNoteToggle();
+  wireNoteToggle();
   applyNotesOpen();
 });
 
@@ -725,6 +723,8 @@ function loadNotesData() {
       (j.notes || []).forEach(function (n) {
         (notesByHash[n.hash] = notesByHash[n.hash] || []).push(n);
       });
+      // 默认折叠；首载本文档有笔记则自动展开（用户手动开合过就不再自动介入）
+      if (!notesTouched && (j.notes || []).length) notesOpen = true;
       onNotesArrived();
     })
     .catch(function () { /* 笔记是锦上添花：拉取失败静默，文档照常显示 */ });
