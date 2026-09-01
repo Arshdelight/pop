@@ -6,6 +6,10 @@ import { spawn } from 'node:child_process';
 import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
+import { runNew } from './cmd/new.js';
+import { runPull } from './cmd/pull.js';
+import { runPush } from './cmd/push.js';
+import { runLogin, runLogout, runMe } from './cmd/login.js';
 
 export interface WebOpts {
   dataDir?: string;
@@ -41,7 +45,7 @@ function injectLiveReload(html: string): string {
 export function runWeb(opts: WebOpts): number {
   const dataDir = opts.dataDir ?? defaultDataDir();
   // validate the data dir up front so a typo fails fast instead of on first request
-  const ws = openWorkspace(dataDir);
+  openWorkspace(dataDir);
   const url = `http://127.0.0.1:${opts.port}/`;
 
   // live reload：SSE 客户端池 + 文件/数据监听。监听面 = 整个 data dir（nodes/、
@@ -55,7 +59,9 @@ export function runWeb(opts: WebOpts): number {
 
   const server = http.createServer((req, res) => {
     try {
-      handle(req, res, dataDir, ws, clients);
+      // ws 每请求重建：命令写入（本端点的 /api/run，或另一终端的 practi new/pull）
+      // 必须立即可见，不能拿启动时的快照过滤数据窗
+      handle(req, res, dataDir, openWorkspace(dataDir), clients);
     } catch (e) {
       if (e instanceof PracticeError) {
         send(res, 404, 'text/plain; charset=utf-8', `${e.code}: ${e.message}`);
@@ -95,6 +101,10 @@ function handle(
   }
   if (pathname === '/api/directs') {
     send(res, 200, 'application/json; charset=utf-8', JSON.stringify(directsPayload(dataDir, ws, state), null, 2));
+    return;
+  }
+  if (pathname === '/api/run') {
+    void handleRun(req, res, dataDir);
     return;
   }
   if (pathname === '/' || pathname === '/index.html') {
@@ -146,6 +156,144 @@ function handle(
   // 静态资产兜底（style.css / app.js / 自定义前端文件）：放在最后，不与 /pop /blobs /doc 抢路由
   if (serveStatic(res, pathname.slice(1), dataDir)) return;
   send(res, 404, 'text/plain; charset=utf-8', 'not found');
+}
+
+// ── POST /api/run：写动作端点（DIY 前端消费，官方 web-default 不用）──
+// 复用 CLI 命令函数，白名单对齐 CLI 实际命令。刻意不含 edit（交互编辑器）、
+// update（自更新会动自身进程）、migrate（动数据目录）；new 只收 json 文本
+// 不收 file 路径——不给 web 进程任意路径读文件的能力。后续按需加法扩。
+
+interface RunSpec {
+  /** 校验 args 并执行；返回 CLI 退出码。参数不合法抛 ApiError(400) */
+  run(args: Record<string, unknown>, dataDir: string): Promise<number> | number;
+}
+
+class ApiError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+  }
+}
+
+function asStr(v: unknown): string | undefined {
+  if (v !== undefined && typeof v !== 'string') throw new ApiError(400, 'string argument expected');
+  return v;
+}
+
+const RUNNABLE: Record<string, RunSpec> = {
+  new: {
+    run: (a, d) => {
+      const json = asStr(a.json);
+      if (!json || !json.trim()) throw new ApiError(400, 'new requires args.json (POP document text)');
+      return runNew({ dataDir: d, json, positional: [] });
+    },
+  },
+  pull: {
+    run: (a, d) => runPull({ dataDir: d, positional: hashArg(a) }),
+  },
+  push: {
+    run: (a, d) => runPush({ dataDir: d, positional: hashArg(a) }),
+  },
+  login: {
+    // OAuth 授权流：web 进程内起 loopback 回调 + 开系统浏览器，请求挂起至授权完成
+    run: (a, d) => runLogin({ dataDir: d, noOpen: a.noOpen === true }),
+  },
+  logout: { run: (_a, d) => runLogout({ dataDir: d }) },
+  me: { run: (_a, d) => runMe({ dataDir: d }) },
+};
+
+function hashArg(a: Record<string, unknown>): string[] {
+  const hash = asStr(a.hash);
+  return hash ? [hash] : [];
+}
+
+/** 命令输出捕获：命令函数走 console.log/error，调用期间临时替换收集，finally 恢复。
+ *  进程级替换在并发下有竞态 → runQueue 互斥，同一时刻只跑一条命令（写操作本就不应并发） */
+let runQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueRun<T>(fn: () => Promise<T>): Promise<T> {
+  const next = runQueue.then(fn, fn);
+  runQueue = next.catch(() => {});
+  return next;
+}
+
+async function captureConsole(fn: () => Promise<number> | number): Promise<{ code: number; out: string; err: string }> {
+  const out: string[] = [];
+  const errBuf: string[] = [];
+  const origLog = console.log;
+  const origErr = console.error;
+  console.log = (...a: unknown[]) => void out.push(a.join(' '));
+  console.error = (...a: unknown[]) => void errBuf.push(a.join(' '));
+  try {
+    return { code: await fn(), out: out.join('\n'), err: errBuf.join('\n') };
+  } finally {
+    console.log = origLog;
+    console.error = origErr;
+  }
+}
+
+/** 安全闸：浏览器跨站 POST 必带 Origin；Origin 的 host 必须等于请求的 Host 头
+ *  （即 127.0.0.1:port 本身），否则 403——挡 CSRF 与 DNS rebinding */
+function sameOrigin(req: http.IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+  if (typeof origin !== 'string' || typeof host !== 'string') return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+async function handleRun(req: http.IncomingMessage, res: http.ServerResponse, dataDir: string): Promise<void> {
+  const fail = (status: number, message: string) => send(res, status, 'application/json; charset=utf-8', JSON.stringify({ error: message }));
+  try {
+    if (req.method !== 'POST') throw new ApiError(405, 'POST only');
+    if (!sameOrigin(req)) throw new ApiError(403, 'same-origin POST required (Origin header missing or foreign)');
+    const ctype = String(req.headers['content-type'] ?? '');
+    if (!ctype.startsWith('application/json')) throw new ApiError(415, 'content-type must be application/json');
+
+    const body = await readBody(req, 2 * 1024 * 1024);
+    let parsed: { cmd?: unknown; args?: Record<string, unknown> };
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      throw new ApiError(400, 'request body is not valid JSON');
+    }
+    const spec = typeof parsed.cmd === 'string' ? RUNNABLE[parsed.cmd] : undefined;
+    if (!spec) throw new ApiError(400, `unknown cmd — runnable: ${Object.keys(RUNNABLE).join(', ')}`);
+    const args = parsed.args ?? {};
+
+    const result = await enqueueRun(() =>
+      captureConsole(() => spec.run(args, dataDir)).catch(e => {
+        // 参数校验错误透传为 4xx；命令自身的异常对齐 CLI 顶层语义（打印 + 退出码 1），
+        // 命令失败是结果不是服务器错误，不该是 500
+        if (e instanceof ApiError) throw e;
+        return { code: 1, out: '', err: e instanceof Error ? e.message : String(e) };
+      }),
+    );
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify(result));
+  } catch (e) {
+    if (e instanceof ApiError) fail(e.status, e.message);
+    else fail(500, e instanceof Error ? e.message : String(e));
+  }
+}
+
+async function readBody(req: http.IncomingMessage, limit: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > limit) {
+        reject(new ApiError(413, 'request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
 }
 
 /** 节点指纹登记簿（哈希→树内 children 下标路径），/doc 数据窗附带：前端把 inputs.from

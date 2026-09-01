@@ -74,9 +74,21 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 ### Web
 
-`practi web` serves a read-only local UI on `127.0.0.1` (default port 4317). Data and presentation are separated:
+`practi web` serves a local UI on `127.0.0.1` (default port 4317). Data and presentation are separated:
 
 - **Data window** — plain JSON endpoints backed by the workspace: `GET /api/directs` (directory list: hash, name, description, step/output counts), `GET /pop/<hash>.json` (§7 standard view), `GET /doc/<hash>.json` (document tree + `nodeIndex`, a hash→tree-path registry for resolving `inputs.from` references), `GET /blobs/<hash>` (attachment bytes).
+- **Action endpoint** — `POST /api/run` lets a custom frontend trigger CLI commands directly. Request: `{ "cmd": "<name>", "args": { ... } }` with `content-type: application/json` and a same-origin `Origin` header (browser fetch from the page itself satisfies both). Response: `{ "code": <CLI exit code>, "out": "<stdout>", "err": "<stderr>" }`. Runnable commands (the whitelist mirrors the CLI, deliberately narrow):
+
+  | cmd | args | effect |
+  |---|---|---|
+  | `new` | `{ json: "<POP document text>" }` | create a POP, register it as direct |
+  | `pull` | `{ hash? }` | sync your hub claims into the local workspace |
+  | `push` | `{ hash? }` | push local claim deltas to the hub |
+  | `login` | `{ noOpen? }` | OAuth login (opens the system browser; the request hangs until you finish authorization) |
+  | `logout` | — | revoke and drop stored credentials |
+  | `me` | — | show the current login state |
+
+  Commands run one at a time (queued). `new` accepts JSON text only — no file paths. The built-in frontend does not use this endpoint; it exists for DIY frontends dropped into `<data-dir>/web/`.
 - **Frontend files** — the UI is plain HTML/CSS/JS served from the CLI's bundled `web-default/`. To customize, drop files into `<data-dir>/web/` — files there **override the built-in ones file-by-file** (missing files fall back to the default). Delete a file to return to the built-in version.
 - **Live reload** — the server watches the data dir and the frontend directories; every page (built-in or custom) auto-reloads in the browser when a frontend file changes or when another terminal runs `practi new` / `practi pull`. Editing the frontend is a save-and-see loop, no rebuild, no restart.
 
