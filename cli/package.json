@@ -1,6 +1,6 @@
 {
   "name": "@arshdelight/practi",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Local registry CLI for POP (Protocol of Practice): manage a personal, content-addressed collection of practice documents on top of @arshdelight/pop-sdk. Syncs to PractiHub.",
   "type": "module",
   "bin": {
