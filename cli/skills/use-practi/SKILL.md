@@ -126,7 +126,8 @@ practi edit <hash> doc.json --remote
                                # against your remote claims) swaps to the new document; nothing local
 practi remove <hash>         # take a direct pop out of the local directory (registry op; GCs
                                # unreachable nodes — shared indirect nodes survive)
-practi show <hash>           # aggregate view; --json machine view; --doc full document form
+practi show <hash>           # aggregate view; --json machine view (steps carry content —
+                               # the one-read reproduction view); --doc full document form
                                # local first (hash prefix OK); a full hash missing locally falls
                                # back to the hub — content is re-hashed before display, a
                                # found-but-mismatched hash is an error, never shown
@@ -143,6 +144,7 @@ practi migrate [path] [--keep] # cut: move the workspace (old dir removed after 
 
 - `practi new` validates through the SDK, persists the content-addressed tree, registers the root as direct, and prints the root hash with `status: valid, registered as direct`. On validation issues the tree is stored but **not** registered — read the printed `E_*` issues, fix the JSON, re-run.
 - `practi show` accepts a unique hash prefix (≥4 hex digits); `--doc` emits the expanded document — the starting point for forking or refining.
+- **Reading vs editing**: to follow or reproduce a practice, read the aggregate view (`show`, or `show --json` — steps come with their content, one read is enough); to edit, fork, or reason about the op structure (choice branches, loop bodies, set sections), read `--doc` — the aggregate flattens those by design.
 
 ## Remote workflow
 

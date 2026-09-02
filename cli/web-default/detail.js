@@ -83,7 +83,8 @@ function render() {
   var node = walk(path);
   // 三视图：向导正文 / StandardView JSON / document JSON——侧栏大纲始终是导航脊柱，
   // 底部 Prev/Next 也常驻（在 JSON 视图里换节点=高亮跟着走）
-  app.innerHTML = (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
+  app.innerHTML = topbarHtml() + (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
+  enhanceCodeBlocks(app);
   updateTabs();
   markSide();
   renderNoteSide(); // 右栏跟人走：每次导航换节点都重渲染（草稿保真在 renderNoteSide 内部处理）
@@ -105,14 +106,19 @@ function render() {
 // set 孩子的后代不递归聚合、天生不在视图里——老实不高亮
 
 function jsonSectionHtml() {
+  // label 行右侧复制按钮：复用 data-code-copy 委托（编码 JSON 文本）
+  function labelRow(text, json) {
+    return '<div class="label-row"><div class="label">' + POP_I18N.t(text) + '</div>' +
+      '<button type="button" class="codeblock-copy json-copy" data-code-copy="' + encodeURIComponent(JSON.stringify(json, null, 2)) + '" aria-label="copy json">' + COPY_SVG + '</button></div>';
+  }
   if (view === 'doc') {
-    return '<div class="section-sm"><div class="label">' + POP_I18N.t('labelDocJson') + '</div>' +
+    return '<div class="section-sm">' + labelRow('labelDocJson', doc) +
       '<pre class="json-pre">' + jsonHtml(doc, markDoc) + '</pre></div>';
   }
   if (svJson === null) {
     return '<div class="section-sm"><div class="label">' + POP_I18N.t('labelSvJson') + '</div><p class="op-note">' + POP_I18N.t('loading') + '</p></div>';
   }
-  return '<div class="section-sm"><div class="label">' + POP_I18N.t('labelSvJson') + '</div>' +
+  return '<div class="section-sm">' + labelRow('labelSvJson', svJson) +
     '<pre class="json-pre">' + jsonHtml(svJson, markSv) + '</pre></div>';
 }
 
@@ -478,6 +484,125 @@ function proseHtml(node) {
   return sectionWrap(proseLite(content, node));
 }
 
+// ── 围栏代码块增强：highlight.js 按语言高亮（未标注自动探测，relevance>=3 才信——
+// 与 hub PopCodeBlock / D:/Dev/practi 桌面端同款逻辑），外包深色卡：
+// 顶栏=语言标签 + 复制按钮（委托 data-code-copy）。hljs 缺库（DIY 覆盖前端）时跳过。
+function enhanceCodeBlocks(root) {
+  if (typeof hljs === 'undefined') return;
+  var codes = root.querySelectorAll('.prose pre > code, .prose pre');
+  for (var i = 0; i < codes.length; i++) {
+    var el = codes[i];
+    var pre = el.tagName === 'PRE' ? el : el.parentElement;
+    if (!pre || pre.parentElement && pre.parentElement.classList.contains('codeblock')) continue;
+    if (el.tagName !== 'CODE') {
+      // proseLite 回落路径：<pre> 直接包文本——包一层 code 再走同一条路
+      var codeEl = document.createElement('code');
+      codeEl.textContent = pre.textContent;
+      pre.textContent = '';
+      pre.appendChild(codeEl);
+      el = codeEl;
+    }
+    var raw = el.textContent.replace(/^[`]{3}[\w-]*\r?\n/, '').replace(/\r?\n[`]{3}$/, '');
+    var m = /language-([\w-]+)/.exec(el.className);
+    var lang = m && hljs.getLanguage(m[1]) ? m[1] : '';
+    var detected = '';
+    var html;
+    if (lang) {
+      html = hljs.highlight(raw, { language: lang }).value;
+      detected = lang;
+    } else {
+      var r = hljs.highlightAuto(raw, AUTO_LANGS);
+      html = r.value;
+      detected = r.relevance >= 3 ? (r.language || '') : '';
+    }
+    var wrap = document.createElement('div');
+    wrap.className = 'codeblock';
+    var head = document.createElement('div');
+    head.className = 'codeblock-head';
+    head.innerHTML = '<span></span><button type="button" class="codeblock-copy" data-code-copy="' +
+      encodeURIComponent(raw) + '" aria-label="copy code">' + COPY_SVG + '</button>';
+    head.querySelector('span').textContent = detected;
+    var newPre = document.createElement('pre');
+    var newCode = document.createElement('code');
+    newCode.className = 'hljs';
+    newCode.innerHTML = html;
+    newPre.appendChild(newCode);
+    wrap.appendChild(head);
+    wrap.appendChild(newPre);
+    pre.parentElement.replaceChild(wrap, pre);
+  }
+}
+
+function flashCopied(btn) {
+  if (btn.getAttribute('data-flashing') || btn.textContent.trim() !== '') return;
+  btn.setAttribute('data-flashing', '1');
+  btn.innerHTML = CHECK_SVG;
+  setTimeout(function () {
+    btn.innerHTML = COPY_SVG;
+    btn.removeAttribute('data-flashing');
+  }, 1500);
+}
+
+// 自动探测语言子集（与 hub PopCodeBlock 的 AUTO_LANGS 同步）：css/html/xml/markdown
+// 极易误报（winget 命令被判成 css），排除后未命中就退回无标签
+var AUTO_LANGS = ['bash', 'shell', 'powershell', 'json', 'javascript', 'typescript', 'python', 'sql', 'yaml', 'ini', 'rust', 'go', 'java', 'c', 'cpp', 'csharp', 'diff', 'makefile']
+  .filter(function (l) { return hljs.getLanguage(l); });
+
+var COPY_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+var CHECK_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+// 轻量 toast（hub notify 同观感）：底部居中深色胶囊，1.6s 自动消退
+function showToast(text) {
+  var el = document.getElementById('web-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'web-toast';
+    el.className = 'web-toast';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span></span>';
+  el.querySelector('span').textContent = text;
+  el.classList.add('show');
+  clearTimeout(el.__timer);
+  el.__timer = setTimeout(function () { el.classList.remove('show'); }, 1600);
+}
+
+// ── 内容列顶栏（hub 同款）：返回（历史 back，兜底回目录）+ 文档信息弹窗。
+// 本地文档没有状态/上传者/认领/浏览这些 hub 数据，弹窗只列节点数与根哈希 ──
+var FP_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>';
+var INFO_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+var BACK_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';
+
+function topbarHtml() {
+  return '<div class="detail-topbar">' +
+    '<button type="button" class="topbar-btn" data-top="back">' + BACK_SVG + '<span>' + POP_I18N.t('back') + '</span></button>' +
+    '<button type="button" class="topbar-btn topbar-icon" data-top="info" aria-label="' + POP_I18N.t('metaInfo') + '" title="' + POP_I18N.t('metaInfo') + '">' + INFO_SVG + '</button>' +
+    '</div>';
+}
+
+function openInfoDialog() {
+  closeInfoDialog();
+  var overlay = document.createElement('div');
+  overlay.id = 'info-overlay';
+  overlay.innerHTML =
+    '<div class="info-card" role="dialog" aria-label="' + POP_I18N.t('metaInfo') + '">' +
+    '<div class="info-head"><div class="info-title">' + POP_I18N.t('metaInfo') + '</div>' +
+    '<button type="button" class="info-close" aria-label="close">' + INFO_SVG + '</button></div>' +
+    '<div class="info-row"><span class="info-key">' + POP_I18N.t('nodeCount', countNodes(doc)) + '</span></div>' +
+    '<button type="button" class="info-hash-btn" data-code-copy="' + encodeURIComponent(HASH) + '" title="' + POP_I18N.t('copied') + '">' +
+    FP_SVG + '<span class="info-hash">' + escapeHtml(HASH) + '</span>' + COPY_SVG + '</button>' +
+    '</div>';
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeInfoDialog();
+  });
+  document.body.appendChild(overlay);
+}
+
+function closeInfoDialog() {
+  var el = document.getElementById('info-overlay');
+  if (el) el.remove();
+}
+
 function sectionWrap(body) {
   return '<div class="section-sm"><div class="label">' + POP_I18N.t('secContent') + '</div><div class="prose">' + body + '</div></div>';
 }
@@ -495,6 +620,11 @@ function renderMarkdown(content, node) {
   // 只转义 < 与 &（足以挡内联 HTML 注入）；> 保留——行首 "> " 是块引用语法
   src = src.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   var html = marked.parse(src, { gfm: true, breaks: false, async: false });
+  // marked 在 code 段内会把预转义产生的 & 再转一次（&lt; 变 &amp;lt;，页面显示字面
+  // &lt;）——code 段内 &amp; 还原回 &：预转义的 &lt; 复原、原文的字面 & 仍只剩一层
+  html = html.replace(/(<code[^>]*>)([\s\S]*?)(<\/code>)/g, function (m0, open, body, close) {
+    return open + body.replace(/&amp;/g, '&') + close;
+  });
   return html.replace(/<a href="mailto:[^"]*">([^<]*)<\/a>/g, '$1');
 }
 
@@ -649,6 +779,31 @@ function navHtml() {
 // ── 事件（委托：innerHTML 重渲染不需要重复绑监听） ──
 
 document.addEventListener('click', function (e) {
+  var top = e.target.closest('[data-top]');
+  if (top) {
+    if (top.getAttribute('data-top') === 'back') {
+      if (history.length > 1) history.back();
+      else location.href = '/';
+    } else if (top.getAttribute('data-top') === 'info') {
+      openInfoDialog();
+    }
+    return;
+  }
+  if (e.target.closest('#info-overlay .info-close')) {
+    closeInfoDialog();
+    return;
+  }
+  var copyBtn = e.target.closest('[data-code-copy]');
+  if (copyBtn) {
+    var text = decodeURIComponent(copyBtn.getAttribute('data-code-copy'));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashCopied(copyBtn);
+        showToast(POP_I18N.t('copied'));
+      }, function () {});
+    }
+    return;
+  }
   var tab = e.target.closest('[data-view]');
   if (tab) {
     view = tab.getAttribute('data-view');

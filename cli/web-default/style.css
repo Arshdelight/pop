@@ -68,7 +68,10 @@ a:hover { text-decoration: underline; }
 
 /* ── 详情页（向导模式）：一次一节点，op 决定呈现 ── */
 /* 内容列=详情页唯一的滚动容器（应用壳布局）；gutter 常驻防长文档切换时内容左右微移 */
-.detail { max-width: 48rem; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 110px; }
+/*.detail 是滚动容器且拉满全宽——滚动条在窗口最右而非内容列右缘；
+  内容限宽由子元素承担（.nav 是 fixed 定位，排除在限宽外）*/
+.detail { max-width: none; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 110px; }
+.detail > *:not(.nav) { max-width: 48rem; margin-inline: auto; }
 .node-title { font-size: 22px; font-weight: 700; color: var(--brand); margin: 8px 0 4px; }
 .node-desc { color: var(--brand-60); margin: 0 0 12px; }
 .op-note { font-size: 13px; color: var(--brand-40); font-style: italic; margin: 0 0 8px; }
@@ -77,6 +80,30 @@ a:hover { text-decoration: underline; }
 .section-sm .prose p:first-child { margin-top: 0; }
 .section-sm .prose p:last-child { margin-bottom: 0; }
 .prose pre { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 13px; margin: 12px 0; }
+/* 围栏代码块深色卡（detail.js enhanceCodeBlocks 生成，与 hub PopCodeBlock 统一：
+   GitHub Dark 底 #0d1117 + 顶栏语言标签/复制按钮）；未增强的 pre 仍走上方白底规则 */
+.codeblock { margin: 12px 0; border-radius: 12px; overflow: hidden; background: #0d1117; }
+.codeblock-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #161b22; border-bottom: 1px solid #262c36; padding: 4px 12px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 10px; color: #94a3b8; user-select: none; }
+.codeblock-copy { display: flex; align-items: center; gap: 4px; border: none; background: none; color: #94a3b8; cursor: pointer; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-family: inherit; }
+.codeblock-copy:hover { color: #f1f5f9; background: rgba(255, 255, 255, .1); }
+.codeblock pre { margin: 0; border: none; border-radius: 0; background: #0d1117; color: #c9d1d9; padding: 14px 16px; font-size: 13px; }
+.codeblock pre code { background: transparent; border: none; padding: 0; font-size: inherit; color: inherit; }
+/* hljs token 色板：与 hub globals.css 同源（github-dark），两处同步改 */
+.codeblock .hljs { color: #c9d1d9; }
+.codeblock .hljs-doctag, .codeblock .hljs-keyword, .codeblock .hljs-meta .hljs-keyword, .codeblock .hljs-template-tag, .codeblock .hljs-template-variable, .codeblock .hljs-type, .codeblock .hljs-variable.language_ { color: #ff7b72; }
+.codeblock .hljs-title, .codeblock .hljs-title.class_, .codeblock .hljs-title.class_.inherited__, .codeblock .hljs-title.function_ { color: #d2a8ff; }
+.codeblock .hljs-attr, .codeblock .hljs-attribute, .codeblock .hljs-literal, .codeblock .hljs-meta, .codeblock .hljs-number, .codeblock .hljs-operator, .codeblock .hljs-variable, .codeblock .hljs-selector-attr, .codeblock .hljs-selector-class, .codeblock .hljs-selector-id { color: #79c0ff; }
+.codeblock .hljs-regexp, .codeblock .hljs-string, .codeblock .hljs-meta .hljs-string { color: #a5d6ff; }
+.codeblock .hljs-built_in, .codeblock .hljs-symbol { color: #ffa657; }
+.codeblock .hljs-comment, .codeblock .hljs-code, .codeblock .hljs-formula { color: #8b949e; }
+.codeblock .hljs-name, .codeblock .hljs-quote, .codeblock .hljs-selector-tag, .codeblock .hljs-selector-pseudo { color: #7ee787; }
+.codeblock .hljs-subst { color: #c9d1d9; }
+.codeblock .hljs-section { color: #1f6feb; font-weight: bold; }
+.codeblock .hljs-bullet { color: #f2cc60; }
+.codeblock .hljs-emphasis { color: #c9d1d9; font-style: italic; }
+.codeblock .hljs-strong { color: #c9d1d9; font-weight: bold; }
+.codeblock .hljs-addition { color: #aff5b4; background-color: #033a16; }
+.codeblock .hljs-deletion { color: #ffdcd7; background-color: #67060c; }
 .prose figure { margin: 14px 0; }
 .prose img { max-width: 100%; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 .prose figcaption { font-size: 12px; color: var(--brand-40); text-align: center; margin-top: 4px; }
@@ -121,8 +148,13 @@ ol.io-list li { padding: 2px 0; }
 .io-ref:hover { color: var(--brand); text-decoration: none; }
 .section-sm { margin-top: 18px; }
 .section-sm .label { font-size: 12px; font-weight: 600; color: var(--brand-50); margin-bottom: 6px; }
+/* JSON 视图 label 行：label 居左 + 复制按钮居右（按钮复用 .codeblock-copy 深色样式，在浅底上取中性色） */
+.label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.label-row .label { margin-bottom: 0; }
+.label-row .json-copy { color: var(--brand-40); }
+.label-row .json-copy:hover { color: var(--brand); background: rgba(0, 51, 102, .06); }
 .att-list li { padding: 4px 0; }
-.child-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 14px; color: var(--brand-60); background: #fff; }
+.child-card { display: block; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 14px; color: var(--brand-60); background: #fff; }
 button.child-card { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 button.child-card:hover { border-color: var(--brand); color: var(--brand); }
 .child-desc { font-size: 12px; color: var(--brand-40); margin-top: 2px; display: block; }
@@ -145,7 +177,9 @@ body.note-open .nav { right: 18rem; }
 body.detail-page { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
 body.detail-page > header { flex: none; }
 .shell { display: flex; align-items: stretch; flex: 1; min-height: 0; position: relative; }
-.shell main { flex: 1; min-width: 0; }
+/* main 右缘留 26px 舌片竖轨：#note-toggle 固定钉右缘，不留轨会盖住 main 自己的滚动条
+   （面板展开时同理——轨在 main 与面板之间） */
+.shell main { flex: 1; min-width: 0; margin-right: 26px; }
 .side { display: none; }
 .side-count { font-size: 12px; font-weight: 500; color: var(--brand-40); margin: 0 0 8px; }
 .side-item { display: block; border-radius: 6px; padding: 6px 10px; font-size: 13px; line-height: 1.45; color: var(--brand-60); }
@@ -176,7 +210,7 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .side-tab:hover { color: var(--brand); }
 .side-tab.on { background: rgba(0, 51, 102, .1); color: var(--brand); font-weight: 500; }
 /* JSON 视图：pretty 渲染，当前节点/其子树 steps 命中行整行铺浅蓝底（编辑器选中行形态） */
-.json-pre { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.6; color: var(--brand); overflow-x: auto; white-space: pre; }
+.json-pre { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; line-height: 1.6; color: var(--brand); overflow: auto; white-space: pre; max-height: calc(100dvh - 260px); }
 .json-pre .jk { color: var(--brand-60); }
 /* 行级块：短行铺满可视宽、长行铺到内容末尾，高亮行首尾与缩进、逗号全部入色带 */
 .json-pre .ln { display: block; width: max-content; min-width: 100%; }
@@ -232,3 +266,28 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .nside-input:focus { outline: none; cursor: text; caret-color: auto; color: var(--primary); }
 
 /* LR kick */
+
+/* 复制 toast：对齐 hub sonner（richColors, position=top-center）——白底细边浅投影、
+   绿色对勾圆标居左，顶部居中下滑淡入 */
+.web-toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-8px); background: #fff; color: #1f2937; font-size: 13px; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, .08); display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60; }
+.web-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── 内容列顶栏（hub 同款）：返回居左、Info 居右；.detail > * 规则天然把它限宽居中 ── */
+.detail-topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 18px; }
+.topbar-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e7eb; background: #fff; color: rgba(0, 51, 102, .6); border-radius: 8px; height: 32px; padding: 0 12px; font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.topbar-btn:hover { color: var(--brand); border-color: #d1d5db; background: #f9fafb; }
+.topbar-icon { width: 32px; padding: 0; justify-content: center; }
+/* 文档信息弹窗（hub InfoDialog 同构：白卡、居中、遮罩） */
+#info-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .4); z-index: 50; display: flex; align-items: center; justify-content: center; }
+.info-card { width: 320px; max-width: calc(100vw - 32px); background: #fff; border-radius: 8px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, .1); padding: 24px; }
+.info-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.info-title { font-size: 17px; font-weight: 700; color: var(--brand); }
+.info-close { border: none; background: none; color: var(--brand-40); cursor: pointer; padding: 2px; display: flex; }
+.info-close:hover { color: var(--brand); }
+.info-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; color: var(--brand); }
+.info-row .info-key { color: var(--brand-60); }
+/* 哈希整行按钮（hub InfoDialog 同款）：指纹图标+等宽哈希+复制图标，hover 沉到全色 */
+.info-hash-btn { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border: 1px solid #e5e7eb; background: #fff; border-radius: 8px; padding: 8px 10px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; color: rgba(0, 51, 102, .6); cursor: pointer; transition: color .15s, border-color .15s; }
+.info-hash-btn:hover { color: var(--brand); border-color: #d1d5db; }
+.info-hash-btn .info-hash { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.info-hash-btn svg:last-child { opacity: .4; flex-shrink: 0; }

@@ -117,7 +117,8 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
     return 0;
   }
 
-  const view = aggregateView(hash, nodes);
+  // --json 传 full：机器视图带每步正文，AI 一次读全免逐哈希往返；人类文本仍走紧凑骨架
+  const view = aggregateView(hash, nodes, opts.json ? { full: true } : undefined);
   if (opts.json) {
     console.log(JSON.stringify(view, null, 2));
     return 0;

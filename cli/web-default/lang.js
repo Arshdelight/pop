@@ -10,9 +10,9 @@ var POP_I18N = (function () {
   // 字典值：字符串，或函数（复数/拼接类文案按参数生成）
   var M = {
     zh: {
-      settings: '设置', language: '语言', done: '完成',
+      settings: '设置', language: '语言', done: '完成', copied: '已复制', back: '返回', metaInfo: '文档信息',
       tabWizard: '步骤', tabSv: '标准视图', tabDoc: '文档树',
-      labelDocJson: '文档 JSON', labelSvJson: 'StandardView JSON',
+      labelDocJson: '文档 JSON', labelSvJson: '标准视图 JSON',
       // 目录页
       pageTitle: '我的实践',
       thDocument: '文档', thNodes: '节点', thAdded: '添加时间',
@@ -51,7 +51,7 @@ var POP_I18N = (function () {
       backMine: '← 我的实践'
     },
     en: {
-      settings: 'Settings', language: 'Language', done: 'Done',
+      settings: 'Settings', language: 'Language', done: 'Done', copied: 'Copied', back: 'Back', metaInfo: 'Document info',
       tabWizard: 'Todo', tabSv: 'StandardView', tabDoc: 'Document',
       labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',

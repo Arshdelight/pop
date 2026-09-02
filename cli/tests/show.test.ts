@@ -36,6 +36,8 @@ describe('pop show: hash addressing (full hash and unique prefix)', () => {
     expect(view.type).toBe('practice');
     expect(view.name).toBe('Make tea');
     expect(view.steps.map((s: { name: string }) => s.name)).toEqual(['Boil water', 'Pour']);
+    // --json is the full reproduction view: each step carries its content (one read, no per-step re-query)
+    expect(view.steps[0].content).toBe('Heat the drinking water to boiling.');
   });
 
   it('by unique short prefix: resolves to the same node (there are no local names)', async () => {

@@ -67,7 +67,7 @@ practi remote set <url>           set the remote provider (e.g. https://practihu
 practi remote show | remove       inspect / clear the remote
 practi search [query...]          search pops (remote by default; --local the workspace)
                                [--local] [--scope public|me|all] [--limit N] [--json]
-practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK; --json steps carry content — the reproduction view)
 practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
 practi skill update                refresh the installed use-practi skill (--dir to target another dir)
 practi skill uninstall             remove the installed use-practi skill
