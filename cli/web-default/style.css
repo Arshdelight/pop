@@ -106,6 +106,20 @@ a:hover { text-decoration: underline; }
 .codeblock .hljs-deletion { color: #ffdcd7; background-color: #67060c; }
 .prose figure { margin: 14px 0; }
 .prose img { max-width: 100%; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+/* 图文流内联媒体限高（大图不撑爆内容列），点开灯箱看原图；灯箱只含当前节点；
+   禁选——点击图片不落文本光标（图片两侧的 I-beam 根因） */
+.prose figure.media { text-align: left; user-select: none; }
+.prose figure.media img { max-height: 180px; width: auto; object-fit: contain; cursor: pointer; }
+.prose figure.media figcaption { text-align: left; }
+/* 图注气泡跟随光标（JS 单例浮层）：皮肤同 [data-tip] */
+#media-tip { position: fixed; background: #fff; color: var(--brand); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; line-height: 1.4; padding: 2px 8px; border: 1px solid rgba(226, 232, 240, .9); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -2px rgba(0, 0, 0, .1); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease; z-index: 70; }
+#media-tip.show { opacity: 1; }
+#lightbox { position: fixed; inset: 0; background: rgba(13, 17, 23, .92); z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; user-select: none; cursor: default; }
+#lightbox img { max-width: 92vw; max-height: 84vh; border-radius: 8px; }
+#lightbox .lb-cap { color: #e6edf3; font-size: 14px; margin-top: 12px; text-align: center; max-width: 80vw; }
+#lightbox .lb-count { color: rgba(230, 237, 243, .55); font-size: 12px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+#lightbox .lb-close { position: absolute; top: 16px; right: 16px; border: none; background: none; color: rgba(230, 237, 243, .75); cursor: pointer; padding: 4px; display: flex; }
+#lightbox .lb-close:hover { color: #fff; }
 .prose figcaption { font-size: 12px; color: var(--brand-40); text-align: center; margin-top: 4px; }
 /* markdown 全语法排版（对齐 hub MarkdownView 的 prose 观感）：标题品牌色、链接 primary
    无下划线 hover 下划线、行内 code 浅底胶囊、块内 code 交还 pre 默认、blockquote 弱化竖线、
@@ -153,7 +167,6 @@ ol.io-list li { padding: 2px 0; }
 .label-row .label { margin-bottom: 0; }
 .label-row .json-copy { color: var(--brand-40); }
 .label-row .json-copy:hover { color: var(--brand); background: rgba(0, 51, 102, .06); }
-.att-list li { padding: 4px 0; }
 .child-card { display: block; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 14px; color: var(--brand-60); background: #fff; }
 button.child-card { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 button.child-card:hover { border-color: var(--brand); color: var(--brand); }
@@ -284,6 +297,16 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 .info-title { font-size: 17px; font-weight: 700; color: var(--brand); }
 .info-close { border: none; background: none; color: var(--brand-40); cursor: pointer; padding: 2px; display: flex; }
 .info-close:hover { color: var(--brand); }
+/* 附件弹窗：与 Info 弹窗同皮肤，固定尺寸（内容少不缩水）、列表内滚 */
+#att-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .4); z-index: 50; display: flex; align-items: center; justify-content: center; }
+.att-card { width: 380px; height: 400px; display: flex; flex-direction: column; }
+.att-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.att-row { padding: 8px 0; border-bottom: 1px solid rgba(226, 232, 240, .7); font-size: 13px; }
+.att-row:last-child { border-bottom: none; }
+.att-row a { color: var(--primary); text-decoration: none; font-weight: 500; }
+.att-row a:hover { text-decoration: underline; }
+.att-row .att-meta { display: block; font-size: 11px; color: var(--brand-40); margin-top: 2px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
 .info-row { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; color: var(--brand); }
 .info-row .info-key { color: var(--brand-60); }
 /* 哈希整行按钮（hub InfoDialog 同款）：指纹图标+等宽哈希+复制图标，hover 沉到全色 */

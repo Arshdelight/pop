@@ -83,8 +83,9 @@ function render() {
   var node = walk(path);
   // 三视图：向导正文 / StandardView JSON / document JSON——侧栏大纲始终是导航脊柱，
   // 底部 Prev/Next 也常驻（在 JSON 视图里换节点=高亮跟着走）
-  app.innerHTML = topbarHtml() + (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
+  app.innerHTML = topbarHtml(node) + (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
   enhanceCodeBlocks(app);
+  enhanceMedia(app);
   updateTabs();
   markSide();
   renderNoteSide(); // 右栏跟人走：每次导航换节点都重渲染（草稿保真在 renderNoteSide 内部处理）
@@ -297,7 +298,7 @@ function nodeHtml(node) {
 
   if (node.type === 'action') html += inputsHtml(node);
   html += proseHtml(node);
-  if (node.type === 'action') html += outputsHtml(node) + attHtml(node);
+  if (node.type === 'action') html += outputsHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
   // 笔记只住右侧栏（不进内容区）：revisions 已挪到左侧大纲底部（全文档汇总）；refines 同处
   return html;
@@ -533,6 +534,132 @@ function enhanceCodeBlocks(root) {
   }
 }
 
+// ── 内联媒体增强 + 灯箱：marked 输出的独占 <p><img></p> 与 proseLite 的 figure
+// 统一成 figure.media，限高不撑爆内容列；图注（alt）走 data-tip 悬停气泡，
+// 不再常驻图片下方。点击开灯箱看原图，滚轮在图片列表内循环切换。向导视图
+// 一次只渲染一个节点，列表收集自当前内容区——天然只含本节点的图，滚不出其它节点 ──
+function enhanceMedia(root) {
+  var figs = [];
+  var imgs = root.querySelectorAll('.prose img');
+  for (var i = 0; i < imgs.length; i++) {
+    var img = imgs[i];
+    var fig = img.closest('figure');
+    if (!fig) {
+      // marked 路径：img 独占一个 <p> 才升格 figure（行内混排的小图不动）
+      var p = img.parentElement;
+      if (!p || p.tagName !== 'P' || p.childNodes.length !== 1) continue;
+      fig = document.createElement('figure');
+      p.replaceWith(fig);
+      fig.appendChild(img);
+    } else {
+      // proseLite 路径自带 figcaption：文字转进 data-tip，元素撤下
+      var capEl = fig.querySelector('figcaption');
+      if (capEl) capEl.remove();
+    }
+    fig.classList.add('media');
+    var alt = img.getAttribute('alt') || '';
+    if (alt) fig.setAttribute('data-cap', alt); // 图注走跟随光标的浮层气泡（#media-tip）
+    figs.push(fig);
+  }
+  for (var j = 0; j < figs.length; j++) {
+    (function (fig, idx) {
+      var im = fig.querySelector('img');
+      // 悬停判定只挂 img：figure 占满整列，挂 figure 会让空白处也出气泡
+      im.addEventListener('mouseenter', function (e) { showMediaTip(fig.getAttribute('data-cap'), e); });
+      im.addEventListener('mousemove', function (e) { moveMediaTip(e); });
+      im.addEventListener('mouseleave', hideMediaTip);
+      im.addEventListener('click', function () {
+        openLightbox(figs.map(function (f) { return f.querySelector('img'); }), idx);
+      });
+    })(figs[j], j);
+  }
+}
+
+// 跟随光标的图注气泡：单例浮层 #media-tip，进出图片显示/隐藏、move 跟手
+// （[data-tip]::after 是静态定位，跟不了光标；皮肤同款白底深蓝字）
+function showMediaTip(text, e) {
+  if (!text) return;
+  var tip = ensureMediaTip();
+  tip.textContent = text;
+  tip.classList.add('show');
+  moveMediaTip(e);
+}
+function moveMediaTip(e) {
+  var tip = document.getElementById('media-tip');
+  if (!tip || !tip.classList.contains('show')) return;
+  // 避让光标：偏移 16/32，且靠近视口边时翻到另一侧（上→下、右→左），
+  // 光标怎么移都不会压进气泡（气泡本身 pointer-events:none，只是视觉避让）
+  var w = tip.offsetWidth, h = tip.offsetHeight;
+  var x = e.clientX + 16;
+  var y = e.clientY - h - 16;
+  if (x + w > window.innerWidth - 8) x = e.clientX - w - 16;
+  if (y < 8) y = e.clientY + 20;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+function hideMediaTip() {
+  var tip = document.getElementById('media-tip');
+  if (tip) tip.classList.remove('show');
+}
+function ensureMediaTip() {
+  var tip = document.getElementById('media-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'media-tip';
+    document.body.appendChild(tip);
+  }
+  return tip;
+}
+
+var lbKeydown = null;
+
+function openLightbox(list, idx) {
+  closeLightbox();
+  var cur = idx;
+  var overlay = document.createElement('div');
+  overlay.id = 'lightbox';
+  var stage = document.createElement('img');
+  var cap = document.createElement('div');
+  cap.className = 'lb-cap';
+  var count = document.createElement('div');
+  count.className = 'lb-count';
+  var close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'lb-close';
+  close.setAttribute('aria-label', 'close');
+  close.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+  function draw() {
+    var img = list[cur];
+    stage.src = img.getAttribute('src');
+    stage.alt = img.getAttribute('alt') || '';
+    cap.textContent = img.getAttribute('alt') || '';
+    count.textContent = (cur + 1) + ' / ' + list.length;
+  }
+  overlay.appendChild(close);
+  overlay.appendChild(stage);
+  overlay.appendChild(cap);
+  overlay.appendChild(count);
+  // 滚轮循环切换（down=下一张、up=上一张，头尾环绕）
+  overlay.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    cur = (cur + (e.deltaY > 0 ? 1 : list.length - 1)) % list.length;
+    draw();
+  }, { passive: false });
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay || e.target === close) closeLightbox();
+  });
+  lbKeydown = function (e) { if (e.key === 'Escape') closeLightbox(); };
+  document.addEventListener('keydown', lbKeydown);
+  document.body.appendChild(overlay);
+  draw();
+}
+
+function closeLightbox() {
+  var el = document.getElementById('lightbox');
+  if (el) el.remove();
+  if (lbKeydown) { document.removeEventListener('keydown', lbKeydown); lbKeydown = null; }
+}
+
 function flashCopied(btn) {
   if (btn.getAttribute('data-flashing') || btn.textContent.trim() !== '') return;
   btn.setAttribute('data-flashing', '1');
@@ -571,13 +698,68 @@ function showToast(text) {
 // 本地文档没有状态/上传者/认领/浏览这些 hub 数据，弹窗只列节点数与根哈希 ──
 var FP_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>';
 var INFO_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+var CLIP_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
 var BACK_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';
 
-function topbarHtml() {
+/** 节点附件平铺（附件跟随节点：practice 无附件表，action 列自己的） */
+function sizeLabel(bytes) {
+  if (bytes === undefined || bytes === null) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function collectAttachments(node) {
+  var out = [];
+  var atts = node && node.type === 'action' && node.attachments ? node.attachments : [];
+  for (var i = 0; i < atts.length; i++) {
+    var a = atts[i];
+    out.push({
+      name: a.name,
+      href: a.url || ('/blobs/' + a.hash),
+      meta: [a.mime, sizeLabel(a.size), a.hash ? shortHash(a.hash) : ''].filter(Boolean).join(' · ')
+    });
+  }
+  return out;
+}
+
+function topbarHtml(node) {
+  var atts = collectAttachments(node);
+  var attachBtn = atts.length
+    ? '<button type="button" class="topbar-btn" data-top="attach" aria-label="' + POP_I18N.t('docAttach') + '" data-tip="' + escapeHtml(POP_I18N.t('docAttach')) + '">' + CLIP_SVG + '<span>(' + atts.length + ')</span></button>'
+    : '';
   return '<div class="detail-topbar">' +
     '<button type="button" class="topbar-btn" data-top="back">' + BACK_SVG + '<span>' + POP_I18N.t('back') + '</span></button>' +
-    '<button type="button" class="topbar-btn topbar-icon" data-top="info" aria-label="' + POP_I18N.t('metaInfo') + '" title="' + POP_I18N.t('metaInfo') + '">' + INFO_SVG + '</button>' +
+    '<div class="topbar-right">' + attachBtn +
+    '<button type="button" class="topbar-btn topbar-icon" data-top="info" aria-label="' + POP_I18N.t('metaInfo') + '" data-tip="' + escapeHtml(POP_I18N.t('metaInfo')) + '">' + INFO_SVG + '</button></div>' +
     '</div>';
+}
+
+/** 附件弹窗：固定尺寸，列表超出内滚（多附件不撑屏） */
+function openAttDialog(node) {
+  closeAttDialog();
+  var atts = collectAttachments(node);
+  var rows = atts.map(function (a) {
+    return '<div class="att-row"><a href="' + escapeHtml(a.href) + '" target="_blank" rel="noopener">' + escapeHtml(a.name) + '</a>' +
+      '<span class="att-meta">' + escapeHtml(a.meta) + '</span></div>';
+  }).join('');
+  var overlay = document.createElement('div');
+  overlay.id = 'att-overlay';
+  overlay.innerHTML =
+    '<div class="info-card att-card" role="dialog" aria-label="' + POP_I18N.t('docAttach') + '">' +
+    '<div class="info-head"><div class="info-title">' + POP_I18N.t('docAttach') + '</div>' +
+    '<button type="button" class="info-close" aria-label="close">' + INFO_SVG + '</button></div>' +
+    '<div class="att-scroll">' + rows + '</div>' +
+    '</div>';
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeAttDialog();
+  });
+  document.body.appendChild(overlay);
+}
+
+function closeAttDialog() {
+  var el = document.getElementById('att-overlay');
+  if (el) el.remove();
 }
 
 function openInfoDialog() {
@@ -705,16 +887,7 @@ function outputsHtml(node) {
   return '<div class="section-sm"><div class="label">' + POP_I18N.t('secOutputs') + '</div><ol class="io-list">' + outs.map(ioItem).join('') + '</ol></div>';
 }
 
-function attHtml(node) {
-  var atts = node.attachments || [];
-  if (!atts.length) return '';
-  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secAttachments') + '</div><ul class="att-list">' + atts.map(function (a) {
-    var href = a.url || ('/blobs/' + a.hash);
-    var meta = [a.mime, a.hash ? shortHash(a.hash) : ''].filter(Boolean).join(' · ');
-    return '<li><a href="' + escapeHtml(href) + '">' + escapeHtml(a.name) + '</a>' +
-      (meta ? ' <span class="att-meta">' + escapeHtml(meta) + '</span>' : '') + '</li>';
-  }).join('') + '</ul></div>';
-}
+// 正文的附件小节已撤（信息进顶栏附件按钮弹窗，附件跟随节点）
 
 // ── practice 的孩子呈现（按 op 分形态） ──
 
@@ -786,11 +959,17 @@ document.addEventListener('click', function (e) {
       else location.href = '/';
     } else if (top.getAttribute('data-top') === 'info') {
       openInfoDialog();
+    } else if (top.getAttribute('data-top') === 'attach') {
+      openAttDialog(walk(path));
     }
     return;
   }
   if (e.target.closest('#info-overlay .info-close')) {
     closeInfoDialog();
+    return;
+  }
+  if (e.target.closest('#att-overlay .info-close')) {
+    closeAttDialog();
     return;
   }
   var copyBtn = e.target.closest('[data-code-copy]');
