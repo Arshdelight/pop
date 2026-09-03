@@ -538,6 +538,23 @@ function enhanceCodeBlocks(root) {
 // 统一成 figure.media，限高不撑爆内容列；图注（alt）走 data-tip 悬停气泡，
 // 不再常驻图片下方。点击开灯箱看原图，滚轮在图片列表内循环切换。向导视图
 // 一次只渲染一个节点，列表收集自当前内容区——天然只含本节点的图，滚不出其它节点 ──
+/** 本地 blob 缺字节（/blobs/hash 404）→ 占位卡片（hub MediaMissingCard 同观感）：
+ *  附件存在（hash 在手）、字节不在本机——非破图。 */
+function mediaMissingCard(fig) {
+  var im = fig.querySelector('img');
+  var alt = fig.getAttribute('data-cap') || (im && im.getAttribute('alt')) || '';
+  var src = (im && im.getAttribute('src')) || '';
+  var hash = src.indexOf('/blobs/') === 0 ? src.slice('/blobs/'.length) : '';
+  var el = document.createElement('div');
+  el.className = 'media-missing';
+  el.innerHTML =
+    '<svg class="mm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3h.5a2 2 0 0 1 2 2v.5"/><path d="M21 12v3a2 2 0 0 1-2 2h-1"/><path d="m3 13 3.6-3.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 0 2.8 0L19 12.2"/><circle cx="15" cy="9" r="2"/><path d="M3 7v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>' +
+    '<span class="mm-title">' + escapeHtml(alt || '附件') + '</span>' +
+    (hash ? '<span class="mm-hash">' + escapeHtml(hash.length > 16 ? hash.slice(0, 16) + '…' : hash) + '</span>' : '') +
+    '<span class="mm-badge">未找到</span>';
+  fig.replaceWith(el);
+}
+
 function enhanceMedia(root) {
   var figs = [];
   var imgs = root.querySelectorAll('.prose img');
@@ -564,12 +581,21 @@ function enhanceMedia(root) {
   for (var j = 0; j < figs.length; j++) {
     (function (fig, idx) {
       var im = fig.querySelector('img');
+      // 字节缺失兜底：error 时换占位卡片；enhance 晚于加载失败（404 缓存瞬回）的
+      // 用 complete+naturalWidth 补判（onLoad 时序教训——别依赖单一路径）
+      if (im.complete && im.naturalWidth === 0) {
+        mediaMissingCard(fig);
+        return;
+      }
+      im.addEventListener('error', function () { mediaMissingCard(fig); });
       // 悬停判定只挂 img：figure 占满整列，挂 figure 会让空白处也出气泡
       im.addEventListener('mouseenter', function (e) { showMediaTip(fig.getAttribute('data-cap'), e); });
       im.addEventListener('mousemove', function (e) { moveMediaTip(e); });
       im.addEventListener('mouseleave', hideMediaTip);
       im.addEventListener('click', function () {
-        openLightbox(figs.map(function (f) { return f.querySelector('img'); }), idx);
+        // 换过卡片的 fig 已脱离 DOM（灯箱列表不得混入破图）：现取活节点重排索引
+        var live = figs.filter(function (f) { return document.contains(f); });
+        openLightbox(live.map(function (f) { return f.querySelector('img'); }), Math.max(0, live.indexOf(fig)));
       });
     })(figs[j], j);
   }

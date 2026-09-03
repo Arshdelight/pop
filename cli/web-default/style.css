@@ -111,6 +111,13 @@ a:hover { text-decoration: underline; }
 .prose figure.media { text-align: left; user-select: none; }
 .prose figure.media img { max-height: 180px; width: auto; object-fit: contain; cursor: pointer; }
 .prose figure.media figcaption { text-align: left; }
+/* 本地 blob 缺字节（/blobs/hash 404）→ 占位卡片（hub MediaMissingCard 同观感：
+   附件存在（hash 在手）、字节不在本机——非破图） */
+.media-missing { display: flex; align-items: center; gap: 10px; margin: 10px 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--border-light); user-select: none; }
+.media-missing .mm-icon { width: 16px; height: 16px; flex: none; color: var(--brand-40); }
+.media-missing .mm-title { font-size: 14px; color: var(--brand-60); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-missing .mm-hash { margin-left: auto; flex: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--brand-40); }
+.media-missing .mm-badge { flex: none; font-size: 10px; color: var(--brand-50); background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
 /* 图注气泡跟随光标（JS 单例浮层）：皮肤同 [data-tip] */
 #media-tip { position: fixed; background: #fff; color: var(--brand); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px; line-height: 1.4; padding: 2px 8px; border: 1px solid rgba(226, 232, 240, .9); border-radius: 6px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -2px rgba(0, 0, 0, .1); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s ease; z-index: 70; }
 #media-tip.show { opacity: 1; }
