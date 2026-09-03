@@ -15,8 +15,10 @@ export interface BlobOpts {
  * Stage an attachment and emit the ready-to-paste attachment entry.
  * - Local file: hashed + stored into the workspace blob channel (when the data
  *   dir is initialized), entry emitted without url.
- * - http(s) URL: fetched once to compute the identity hash, entry emitted WITH
- *   the source url (bytes stay external, spec §5 — identity remains the hash).
+ * - http(s) URL: fetched once (25MB cap), bytes ALSO stored into the workspace
+ *   blob channel, entry emitted without url (2026-09-03 本地口径：指针纯 hash，
+ *   bytes 一律走 blobs/<2hex>/<64hex> 内容寻址布局——url 只是导入途径，不进指针；
+ *   spec §5 允许 url 字段，practi 不产生也不消费，hub 端 E_ATTACH_URL 拒收).
  *
  * Attachments are immutable content: the emitted entry goes into the author's
  * document JSON (then `practi new`), never mutated onto an existing node.
@@ -33,7 +35,7 @@ export async function runBlobAdd(opts: BlobOpts): Promise<number> {
     return 1;
   }
   const dataDir = opts.dataDir ?? defaultDataDir();
-  if (/^https?:\/\//i.test(target)) return blobFromUrl(target, opts.name);
+  if (/^https?:\/\//i.test(target)) return blobFromUrl(target, opts.name, dataDir);
   return blobFromFile(target, opts.name, dataDir);
 }
 
@@ -57,7 +59,7 @@ function blobFromFile(target: string, name: string | undefined, dataDir: string)
 
 const MAX_URL_BYTES = 25 * 1024 * 1024;
 
-async function blobFromUrl(url: string, name: string | undefined): Promise<number> {
+async function blobFromUrl(url: string, name: string | undefined, dataDir: string): Promise<number> {
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error(`fetch ${url} → HTTP ${res.status}`);
   const contentType = res.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
@@ -76,12 +78,17 @@ async function blobFromUrl(url: string, name: string | undefined): Promise<numbe
     base = '';
   }
   const mimeExt = mimeFromName(base);
+  const hash = sha256(bytes);
+  if (isInitialized(dataDir)) {
+    const stored = storeBlob(dataDir, bytes);
+    if (stored !== hash) throw new Error('internal error: stored blob hash mismatch');
+    console.log(`stored:  ${stored}  (in ${dataDir})`);
+  }
   printEntry({
     name: name ?? (base && base !== '/' ? safeDecode(base) : 'attachment'),
-    hash: sha256(bytes),
+    hash,
     mime: contentType && contentType !== 'application/octet-stream' ? contentType : mimeExt,
     size: bytes.length,
-    url,
   });
   return 0;
 }

@@ -742,7 +742,9 @@ function collectAttachments(node) {
     var a = atts[i];
     out.push({
       name: a.name,
-      href: a.url || ('/blobs/' + a.hash),
+      // 本地口径（2026-09-03）：指针纯 hash——字节一律走 workspace blobs（blobs/<2hex>/<64hex>
+      // 即 hash 映射表），附件 url 不消费（spec 允许该字段，practi 不产生也不读）
+      href: '/blobs/' + a.hash,
       meta: [a.mime, sizeLabel(a.size), a.hash ? shortHash(a.hash) : ''].filter(Boolean).join(' · ')
     });
   }
@@ -872,13 +874,14 @@ function paraHtml(text) {
   }).join('');
 }
 
-// §5.1 media：http(s) 外链原样；按名命中附件 → url ?? /blobs/hash；未命中留原文
+// §5.1 media：按名命中附件 → /blobs/hash（本地口径：指针纯 hash，url 不消费）；
+// http(s) 外链 target 仅旧文档防御性渲染（v1.1.0 起非法语法，新文档不可写）；未命中留原文
 function mediaUrl(target, node) {
   if (/^https?:\/\//i.test(target)) return target;
   if (!node || node.type !== 'action' || !node.attachments) return null;
   for (var i = 0; i < node.attachments.length; i++) {
     if (node.attachments[i].name === target) {
-      return node.attachments[i].url || ('/blobs/' + node.attachments[i].hash);
+      return '/blobs/' + node.attachments[i].hash;
     }
   }
   return null;
