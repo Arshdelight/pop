@@ -58,7 +58,7 @@ Media (images, files, video) ride along as content-addressed blobs with in-node 
 - Content references media with the Markdown image syntax `![caption](attachment-name)` (spec §5.1) — the target is the attachment **name**, resolved node-locally against this node's attachment list.
 - The pointer's `hash` participates in the node hash; `url` does not — you may rehost or change the url without changing identity, and verification is by hash (fetch → recompute sha256 → compare).
 - With no `url`, bytes travel the local blob channel (`storeBlob` / `readBlob`); blob layout `blobs/<first 2 hex>/<64 hex>`.
-- A raw http(s) URL target in content is a valid external reference and is exempt from hash reconciliation (there is no hash to verify against).
+- A raw http(s) URL target in content is **not** valid grammar (v1.1.0) — `E_MEDIA_REF` like any other non-name target; external bytes are mutable and unauditable. Use an attachment, or a plain markdown link when no media is intended.
 
 ## API surface
 

@@ -70,16 +70,16 @@ export function validateWorkspace(ws: Workspace): ValidationIssue[] {
       // Inline media reference reconciliation (spec §5.1): ![caption](name) in
       // content must hit this node's attachment list. Names must be unique per
       // node (content resolves by name); practices carry no attachments, so not checked here.
+      // v1.1.0: the target must be exactly an attachment name — http(s) URL targets
+      // are not valid grammar, they fail like any other non-name target.
       const attachmentNames = new Set((node.attachments ?? []).map(a => a.name));
       for (const ref of extractMediaRefs(node.content)) {
-        // http(s) URL targets are valid external references (§5.1) — best-effort, not validated
-        if (/^https?:\/\//i.test(ref)) continue;
         if (!attachmentNames.has(ref)) {
           issues.push({
             code: 'E_MEDIA_REF',
             file,
             message: `content references media "![](…)" named "${ref}", which is not in this node's attachments`,
-            hint: 'inline references resolve by name against this node\'s attachments; http(s) URL targets are valid external references and are exempt',
+            hint: 'inline references resolve by name against this node\'s attachments; http(s) URL targets are not valid grammar — attach the file (v1.1.0) or use a plain markdown link',
             line: mediaRefLine(text, ref),
           });
         }

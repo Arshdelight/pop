@@ -4,4 +4,4 @@
  * constant is the machine-readable answer to "which protocol revision am I
  * speaking" — bump it together with the spec.
  */
-export const POP_SPEC_VERSION = '1.0.2';
+export const POP_SPEC_VERSION = '1.1.0';

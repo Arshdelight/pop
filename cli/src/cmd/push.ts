@@ -9,6 +9,24 @@ export interface PushOpts {
 }
 
 /**
+ * hub 政策（2026-09-03）：hub 不收附件指针 url（E_ATTACH_URL 整篇拒收）——push 前置空。
+ * url 不进哈希（§3.2 剥离），置空不改变 root_hash/文档身份；纯函数重建，本地工作区
+ * 原件保留 url（溯源）。将来 blob 上传正门上线后，这里改为「先传字节、指针保持无 url」。
+ */
+export function stripAttachmentUrls<T>(node: T): T {
+  const out = { ...(node as Record<string, unknown>) };
+  if (Array.isArray(out.attachments)) {
+    out.attachments = (out.attachments as Record<string, unknown>[]).map(
+      ({ url: _url, ...rest }) => rest,
+    );
+  }
+  if (Array.isArray(out.children)) {
+    out.children = (out.children as unknown[]).map(stripAttachmentUrls);
+  }
+  return out as unknown as T;
+}
+
+/**
  * practi push [hash]：把本地认领增量推送到 practihub（git push 的对象协商语义）。
  * - 先分页取 hub 上「我的」认领表（mine），diff 出本地认领而 hub 我还没认领的，
  *   只传这些（带 hash 只推该 direct；不带推全部 direct）——不再全量 POST。
@@ -67,7 +85,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
     try {
       const node = ws.nodes.get(ref);
       if (!node) throw new Error(`node not found: ${ref}`);
-      const doc = exportSubtree(node, ws.nodes);
+      const doc = stripAttachmentUrls(exportSubtree(node, ws.nodes));
       const res = await authedFetch(dataDir, state.remote.url, '/api/v1/pop', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

@@ -6,7 +6,7 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 **Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding.
 
-**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.0.2. The spec covers only the protocol; everything else lives here.
+**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.1.0. The spec covers only the protocol; everything else lives here.
 
 ## Quick start
 
@@ -105,6 +105,7 @@ Semver from 1.0.0: evolution adds optional fields where possible (existing ident
 
 ## History
 
-- **1.0.2** (2026-08-27) — §9 no longer names a concrete auth mechanism: authentication and its scopes are hub policy, full stop. §6 clarifies that resource guards (nesting depth, payload size) are implementation policy — refuse with `E_SCHEMA`, never silently drop content. No format change; hashes are unaffected.
+- **1.1.0** (2026-09-03) — §5.1: inline media references resolve exclusively against the node's attachment list; `![caption](https://…)` external URL targets are no longer valid grammar (`E_MEDIA_REF`). External bytes are mutable and unauditable — a reviewed link does not stay reviewed. Ordinary markdown links in `content` and an attachment pointer's optional `url` fetch hint (§5) are unchanged. Documents that never used external media references are unaffected; their hashes are unchanged.
+- **1.0.2**- **1.0.2** (2026-08-27) — §9 no longer names a concrete auth mechanism: authentication and its scopes are hub policy, full stop. §6 clarifies that resource guards (nesting depth, payload size) are implementation policy — refuse with `E_SCHEMA`, never silently drop content. No format change; hashes are unaffected.
 - **1.0.1** (2026-08-25) — validation clarification (§5.1): inline code spans are code, never scanned for media syntax (fenced blocks already were). No format change; hashes are unaffected.
 - **1.0.0** (2026-08-22) — first release. Nodes carry no ids: the content hash is the only address, and the root hash is a Merkle root over the whole tree (same hash ⇒ same content, descendants included). Children may be inlined or referenced by `{ hash }` — interchangeable on identity. Attachments are content-addressed blobs with optional external urls.

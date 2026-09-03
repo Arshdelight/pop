@@ -108,7 +108,7 @@ The command prints a ready-to-paste object. Put it on the **action's** `attachme
 }
 ```
 
-- `![caption](attachment-name)` resolves node-locally against this node's own list; attachment names must be unique within a node; a referenced but missing name → `E_MEDIA_REF`. A raw `![caption](https://…)` target is an external reference, exempt.
+- `![caption](attachment-name)` resolves node-locally against this node's own list; attachment names must be unique within a node; any target that is not exactly an entry of that list — http(s) URLs included — is `E_MEDIA_REF` (v1.1.0: external media references are not valid grammar; use an attachment or a plain markdown link).
 - Pointers hash, bytes don't: changed bytes → changed blob hash → changed pointer → a new node identity. Attachments are immutable content — the entry goes into the document **before** `practi new`, never mutated onto an existing node.
 - `practi push` transports **pointers only**; blob bytes never leave the machine.
 

@@ -247,18 +247,19 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
  * Inline media reference validation (spec §5.1): ![caption](attachment-name)
  * in action content must hit this node's attachment list. Same treatment as
  * from — rejected at import; practices carry no attachment list, so they are skipped.
+ * v1.1.0: the target must be exactly an attachment name — http(s) URL targets are
+ * not valid grammar (external bytes are mutable and unauditable); they fail here
+ * like any other non-name target.
  */
 function resolveMediaRefs(p: Planned): void {
   if (!p.isPractice) {
     const names = new Set(p.attachments.map(a => a.name));
     for (const ref of extractMediaRefs(p.content)) {
-      // http(s) URL targets are valid external references (§5.1) — best-effort, not validated
-      if (/^https?:\/\//i.test(ref)) continue;
       if (!names.has(ref)) {
         throw new PracticeError(
           'E_MEDIA_REF',
           `${p.path}.content: media reference "![](…)" names "${ref}", which is not in this node's attachments`,
-          { hint: 'inline references resolve by name against this node\'s attachments; http(s) URL targets are valid external references and are exempt', },
+          { hint: 'inline references resolve by name against this node\'s attachments; http(s) URL targets are not valid grammar — attach the file (v1.1.0) or use a plain markdown link', },
         );
       }
     }

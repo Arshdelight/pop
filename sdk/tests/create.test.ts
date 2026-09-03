@@ -175,7 +175,7 @@ describe('create: build a practice tree in one shot', () => {
     expect(richView.metadata).toEqual({ 'x-tools': ['Bash', 'Read'], 'x-version': 2, 'x-flags': { verbose: true } });
   });
 
-  it('inline media references: dangling name → E_MEDIA_REF; http(s) URL target is a valid external reference', async () => {
+  it('inline media references: dangling name → E_MEDIA_REF; http(s) URL target is also E_MEDIA_REF (v1.1.0)', async () => {
     const dir = await setup();
     const h = `sha256:${'a'.repeat(64)}`;
     await expect(
@@ -187,18 +187,20 @@ describe('create: build a practice tree in one shot', () => {
         ...T,
       }),
     ).rejects.toMatchObject({ code: 'E_MEDIA_REF' });
-    // http(s) URL targets are valid external references (§5.1) — no attachment-table entry required, best-effort
-    const okUrl = await runCreate(dir, {
-      file: writeDoc(dir, { name: 'x2', children: [{ name: 'y2', content: '![external](https://e.com/x.png)' }] }),
-      ...T,
-    });
-    expect(okUrl.count).toBe(2);
-    // scheme matching is case-insensitive (RFC 3986)
-    const okUpper = await runCreate(dir, {
-      file: writeDoc(dir, { name: 'x3', children: [{ name: 'y3', content: '![external](HTTPS://e.com/x.png)' }] }),
-      ...T,
-    });
-    expect(okUpper.count).toBe(2);
+    // v1.1.0: external URL targets are not valid grammar — mutable, unauditable bytes
+    await expect(
+      runCreate(dir, {
+        file: writeDoc(dir, { name: 'x2', children: [{ name: 'y2', content: '![external](https://e.com/x.png)' }] }),
+        ...T,
+      }),
+    ).rejects.toMatchObject({ code: 'E_MEDIA_REF' });
+    // uppercase scheme is equally rejected
+    await expect(
+      runCreate(dir, {
+        file: writeDoc(dir, { name: 'x3', children: [{ name: 'y3', content: '![external](HTTPS://e.com/x.png)' }] }),
+        ...T,
+      }),
+    ).rejects.toMatchObject({ code: 'E_MEDIA_REF' });
     // Matching pair → tree builds (blob existence is validate's job; import checks name resolution only)
     const ok = await runCreate(dir, {
       file: writeDoc(dir, {
