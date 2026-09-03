@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openWorkspace, subtreeFiles } from '../workspace.js';
 import { runPublish } from './lifecycle.js';
 import { storeDocumentRemote } from '../client.js';
 
@@ -64,7 +64,11 @@ export async function runNew(opts: NewOpts): Promise<number> {
 function localNew(dataDir: string, doc: unknown): number {
   const ws = openWorkspace(dataDir);
   const { root, count } = createFromDoc(ws, doc);
-  const issues = validateWorkspace(loadWorkspace(dataDir));
+  // 门禁只统计本次子树：其它文档的历史问题不连坐本次注册（v1.1.0 前的外链引用/
+  // 缺字节旧附件只在其自身被 new/edit 时才拦）
+  const loaded = loadWorkspace(dataDir);
+  const mine = subtreeFiles(loaded, root);
+  const issues = validateWorkspace(loaded).filter((i) => mine.has(i.file));
 
   const state = loadState(dataDir);
   if (issues.length === 0 && claimDirect(state, root)) {

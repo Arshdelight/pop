@@ -93,7 +93,7 @@ practi blob add <file-or-url> [--name <name>]
 ```
 
 - **Local file** — hashed and stored into the workspace blob channel (`blobs/<2 hex>/<64 hex>`); emits the entry without `url`. Needs an initialized workspace (`practi init`), or validation later reports `E_BLOB_MISSING`.
-- **http(s) URL** — fetched once to compute the identity hash (25 MB limit); emits the entry **with** `url` — bytes stay external, identity remains the hash.
+- **http(s) URL** — fetched once (25 MB limit); the bytes are ALSO stored into the workspace blob channel and the entry is emitted **without** `url` (2026-09-03: practi pointers are pure hash — the url is just the import channel; spec §5 still allows the field, the hub rejects it via `E_ATTACH_URL`).
 
 The command prints a ready-to-paste object. Put it on the **action's** `attachments`, then reference it from `content`:
 

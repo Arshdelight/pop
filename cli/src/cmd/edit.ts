@@ -8,7 +8,7 @@ import {
   type Workspace,
 } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openWorkspace, subtreeFiles } from '../workspace.js';
 import { storeDocumentRemote } from '../client.js';
 import { runDelete, resolveClaimRef } from './lifecycle.js';
 import { shortHash } from '../render.js';
@@ -181,7 +181,10 @@ function localEdit(opts: EditOpts, dataDir: string, ref: string, text: string): 
   }
 
   const { root: newRoot, count } = createFromDoc(ws, doc);
-  const issues = validateWorkspace(loadWorkspace(dataDir));
+  // 门禁只统计本次子树：其它文档的历史问题不连坐本次 swap-in（与 new 同口径）
+  const loaded = loadWorkspace(dataDir);
+  const mine = subtreeFiles(loaded, newRoot);
+  const issues = validateWorkspace(loaded).filter((i) => mine.has(i.file));
   if (issues.length > 0) {
     for (const i of issues) {
       console.error(`  ${i.code}: ${i.message}${i.hint ? ` (${i.hint})` : ''}`);

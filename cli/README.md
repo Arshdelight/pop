@@ -94,7 +94,7 @@ Editing is replacing: content addressing means an edit produces a **new root has
 - `practi push [hash]` pushes **only the local claims the remote doesn't already have for you** (git-style): it first fetches your claim list (`/mine`, paginated), diffs against your local **direct** roots, and uploads just the new ones via `POST /api/v1/pop` (content-addressed, idempotent). Documents are stored **PRIVATE**; making one public is a separate review step (submit → auto review), keeping "record first, publish later" intact.
 - `practi pull [hash]` syncs **your own** claims from the remote: it fetches your claim list (`/mine`, paginated), diffs against your local direct roots, and pulls the missing documents (registered as **direct**). It never touches the public library — there is no ownership guessing; anything outside your claims is public content for `practi clone`.
 - `practi clone <hash>` fetches a **public** document and claims it (fork semantics): the document lands in your workspace, is registered as a local **direct** root, and is pushed back to the remote so the claim is consistent both ways. Cloning something you already claim is idempotent.
-- Attachments: the hub does not store attachment bytes, so push sends the document with attachment pointers only; blobs stay local (or external `url` if provided).
+- Attachments: the hub does not store attachment bytes, so push sends the document with attachment pointers only; blobs stay local in the workspace blob channel (`blobs/<2hex>/<64hex>`). Pointers are pure hash — `practi` never emits or consumes the optional `url` field (the hub rejects it via `E_ATTACH_URL`), and push strips any `url` from legacy documents before sending (the root hash is unchanged, §3.2).
 
 ### Search
 

@@ -549,9 +549,9 @@ function mediaMissingCard(fig) {
   el.className = 'media-missing';
   el.innerHTML =
     '<svg class="mm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3h.5a2 2 0 0 1 2 2v.5"/><path d="M21 12v3a2 2 0 0 1-2 2h-1"/><path d="m3 13 3.6-3.6a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 0 2.8 0L19 12.2"/><circle cx="15" cy="9" r="2"/><path d="M3 7v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2"/><line x1="2" x2="22" y1="2" y2="22"/></svg>' +
-    '<span class="mm-title">' + escapeHtml(alt || '附件') + '</span>' +
+    '<span class="mm-title">' + escapeHtml(alt || POP_I18N.t('mediaAttach')) + '</span>' +
     (hash ? '<span class="mm-hash">' + escapeHtml(hash.length > 16 ? hash.slice(0, 16) + '…' : hash) + '</span>' : '') +
-    '<span class="mm-badge">未找到</span>';
+    '<span class="mm-badge">' + POP_I18N.t('mediaMissing') + '</span>';
   fig.replaceWith(el);
 }
 

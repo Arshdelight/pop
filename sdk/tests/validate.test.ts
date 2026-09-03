@@ -172,6 +172,11 @@ describe('validate: structural invariants (spec §6)', () => {
     expect(ref.message).toContain('ghost.png');
     expect(fs.readFileSync(path.join(dir, ref.file), 'utf8').split('\n')[ref.line! - 1]).toContain('ghost.png');
 
+    // v1.1.0: http(s) URL targets are not valid grammar — E_MEDIA_REF on the validate path too
+    editBoil('See ![ext](https://cdn.example.com/hero.jpeg)', [{ name: 'shot.png', hash }]);
+    check = await runValidate(dir, { json: true });
+    expect(check.issues.some(i => i.code === 'E_MEDIA_REF' && i.message.includes('cdn.example.com'))).toBe(true);
+
     // duplicate attachment names → E_SCHEMA (content resolves by name; names must be unique per node)
     editBoil('![fig](shot.png)', [
       { name: 'shot.png', hash },
