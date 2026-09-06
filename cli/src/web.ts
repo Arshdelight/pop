@@ -71,6 +71,30 @@ export function runWeb(opts: WebOpts): number {
     }
   });
 
+  // 端口占用是常人操作（重复开 practi web），不该甩 Node 堆栈——给出人话 + 出路
+  server.on('error', (e: NodeJS.ErrnoException) => {
+    if (e.code !== 'EADDRINUSE') throw e;
+    console.error(`port ${opts.port} is already in use.`);
+    http.get({ host: '127.0.0.1', port: opts.port, path: '/healthz', timeout: 1000 }, r => {
+      const chunks: Buffer[] = [];
+      r.on('data', c => void chunks.push(c));
+      r.on('end', () => {
+        if (Buffer.concat(chunks).toString('utf8') === 'ok') {
+          console.error('it looks like another practi web is already serving there.');
+          console.error(`open ${url} directly, or start on a different port: practi web --port <other>`);
+        } else {
+          console.error('something else occupies it — try: practi web --port <other>');
+        }
+      });
+    }).on('error', () => {
+      console.error('something else occupies it — try: practi web --port <other>');
+    }).on('timeout', function (this: http.ClientRequest) {
+      this.destroy();
+      console.error('something else occupies it — try: practi web --port <other>');
+    });
+    setTimeout(() => process.exit(1), 1500);
+  });
+
   server.listen(opts.port, '127.0.0.1', () => {
     console.log(`practi web: ${url}`);
     console.log(`data dir: ${dataDir}`);
