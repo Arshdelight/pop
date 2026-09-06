@@ -1,20 +1,17 @@
 ---
 name: use-practi
-description: Record, search, read, publish, evaluate, and manage practice
-  documents with the practi CLI — a local, content-addressed registry of POP
-  (Protocol of Practice) documents that syncs to a hub (default PractiHub). Use
-  whenever the user wants to save what was just done as a reusable practice
-  ("record this practice", "save this session", "turn this into steps"), search
-  or read practices ("search practices", "has anyone done X", "find a how-to"),
-  evaluate them ("what do people say about this practice", "comment on this
-  step", "is this practice any good"), annotate your own learning ("take a note
-  on this step", "note what I learned while reproducing"), or manage them
-  ("publish", "submit for review", "unpublish", "delete my practice") — even
-  when practi is not mentioned by name. Also for any explicit practi CLI usage
-  (practi new, practi show, practi ls, practi push, practi pull, practi clone,
-  practi search, practi comment, practi note, practi login, practi blob add,
-  practi skill import, practi skill export, …), and for converting between
-  formats ("turn this skill into a POP", "export this practice as a skill").
+description: Record, search, read, and manage practice documents with the
+  practi CLI — a local, content-addressed registry of POP (Protocol of
+  Practice) documents. Use whenever the user wants to save what was just done
+  as a reusable practice ("record this practice", "save this session", "turn
+  this into steps"), search or read practices ("search my practices", "find a
+  how-to I saved"), annotate your own learning ("take a note on this step",
+  "note what I learned while reproducing"), or manage them ("delete my
+  practice", "clean orphan blobs") — even when practi is not mentioned by name.
+  Also for any explicit practi CLI usage (practi new, practi show, practi ls,
+  practi search, practi note, practi blob add, practi skill import, practi
+  skill export, …), and for converting between formats ("turn this skill into
+  a POP", "export this practice as a skill").
 ---
 
 One JSON document = one practice tree. Leaves are **actions** — atomic skills; interior nodes are **practices** — compositions. Everything except `name` is optional, and type is inferred: a node with `children` is a practice, one without is an action.
@@ -25,20 +22,17 @@ Three principles hold everywhere:
 - **A document format, not a workflow engine.** Nothing executes. Judgment — waiting times, acceptance prose, loop predicates — stays in human-readable text.
 - **Prose before fields.** What needs no machine semantics belongs in `content`; a field exists only when structure earns its place.
 
-The data directory (default `~/.practi`) is the workspace: nodes content-addressed under `nodes/*.md`; `practi.json` records the remote and the registered **direct** roots (indirect = every other node the direct POPs reference). Learning notes live beside it in a `notes.json` sidecar (local only).
+The data directory (default `~/.practi`) is the workspace: nodes content-addressed under `nodes/*.md`; `practi.json` records the registered **direct** roots (indirect = every other node the direct POPs reference). Learning notes live beside it in a `notes.json` sidecar (local only).
 
 ## Setup
 
 ```bash
 npm install -g @arshdelight/practi
 practi init          # initialize the workspace
-practi config        # data dir, remote, registry summary
-practi login         # OAuth in the browser; --no-open prints the URL for headless agents
+practi config        # data dir and registry summary
 ```
 
-The remote defaults to https://practihub.com — `practi remote set <url>` only when pointing at another hub. Credentials live in `practi.auth.json` (kept out of `practi.json`, auto-refreshing): log in once, keep using `practi` without prompts. `practi me` verifies the session; `practi logout` revokes and clears it; `practi login --reauth` redoes both steps in one command.
-
-Local use needs no account; logging in only matters for publishing, commenting, and syncing. (Upgrades from the pre-rename `pop` CLI keep working: the old data directory and credentials are found automatically.)
+Everything is local and offline: no account, no network. (Upgrades from the pre-rename `pop` CLI keep working: the old data directory is found automatically.)
 
 ## Writing a document
 
@@ -93,7 +87,7 @@ practi blob add <file-or-url> [--name <name>]
 ```
 
 - **Local file** — hashed and stored into the workspace blob channel (`blobs/<2 hex>/<64 hex>`); emits the entry without `url`. Needs an initialized workspace (`practi init`), or validation later reports `E_BLOB_MISSING`.
-- **http(s) URL** — fetched once (25 MB limit); the bytes are ALSO stored into the workspace blob channel and the entry is emitted **without** `url` (2026-09-03: practi pointers are pure hash — the url is just the import channel; spec §5 still allows the field, the hub rejects it via `E_ATTACH_URL`).
+- **http(s) URL** — fetched once (25 MB limit); the bytes are ALSO stored into the workspace blob channel and the entry is emitted **without** `url` (practi pointers are pure hash — the url is just the import channel; spec §5 still allows the field).
 
 The command prints a ready-to-paste object. Put it on the **action's** `attachments`, then reference it from `content`:
 
@@ -108,32 +102,21 @@ The command prints a ready-to-paste object. Put it on the **action's** `attachme
 }
 ```
 
-- `![caption](attachment-name)` resolves node-locally against this node's own list; attachment names must be unique within a node; any target that is not exactly an entry of that list — http(s) URLs included — is `E_MEDIA_REF` (v1.1.0: external media references are not valid grammar; use an attachment or a plain markdown link).
+- `![caption](attachment-name)` resolves node-locally against this node's own list; attachment names must be unique within a node; any target that is not exactly an entry of that list — http(s) URLs included — is `E_MEDIA_REF` (external media references are not valid grammar; use an attachment or a plain markdown link).
 - Pointers hash, bytes don't: changed bytes → changed blob hash → changed pointer → a new node identity. Attachments are immutable content — the entry goes into the document **before** `practi new`, never mutated onto an existing node.
-- `practi push` transports **pointers only**; blob bytes never leave the machine.
 
 ## Local workflow
 
 ```bash
 practi new doc.json          # or: practi new --json '<text>'  /  practi new < doc.json (stdin)
-practi new doc.json --remote [--publish]
-                               # --remote creates on the hub ONLY (the hub parses + hashes the
-                               # authoring JSON; nothing written locally — it returns on the next
-                               # practi pull); --publish also submits it for review (requires --remote)
 practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
-practi edit <hash> doc.json --remote
-                               # replace on the hub ONLY — your claim on <hash> (prefix OK, checked
-                               # against your remote claims) swaps to the new document; nothing local
 practi remove <hash>         # take a direct pop out of the local directory (registry op; GCs
                                # unreachable nodes — shared indirect nodes survive)
 practi show <hash>           # aggregate view; --json machine view (steps carry content —
                                # the one-read reproduction view); --doc full document form
-                               # local first (hash prefix OK); a full hash missing locally falls
-                               # back to the hub — content is re-hashed before display, a
-                               # found-but-mismatched hash is an error, never shown
 practi ls [-a]               # direct roots; -a adds indirect nodes
-practi ls --remote           # YOUR claims on the hub (direct only; -a is local-only)
-practi search --local <q>    # offline search over every stored node (name/description/content; hash prefixes too)
+practi search <q>            # offline search over every stored node
+                               # (name/description/content; hash prefixes too; empty = browse)
 practi web                   # browse direct POPs in a local web UI
 practi gc [--apply]          # free orphan blobs — bytes no stored node references
                                # (dry-run by default; --apply removes)
@@ -146,42 +129,6 @@ practi migrate [path] [--keep] # cut: move the workspace (old dir removed after 
 - `practi show` accepts a unique hash prefix (≥4 hex digits); `--doc` emits the expanded document — the starting point for forking or refining.
 - **Reading vs editing**: to follow or reproduce a practice, read the aggregate view (`show`, or `show --json` — steps come with their content, one read is enough); to edit, fork, or reason about the op structure (choice branches, loop bodies, set sections), read `--doc` — the aggregate flattens those by design.
 
-## Remote workflow
-
-```bash
-practi push [hash]         # push new local claims (fetch /mine, diff, upload only new ones); stored PRIVATE — record first, publish later
-practi search [query...]   # no flag = mixed: local workspace first, then the hub;
-                               # --local only the workspace; --remote only the hub;
-                               # --scope public|me|all applies to the hub half; --limit N; --json;
-                               # title hits rank first; empty = browse; hashes/prefixes match locally
-practi pull [hash]         # sync YOUR claims from the remote (default: all of mine)
-practi clone <hash>        # fetch a public POP and claim it (local direct + remote claim)
-practi publish [hash]      # try to publish: PRIVATE → PENDING_REVIEW; auto review passes → public
-                               # (already-approved skips re-review); default: all direct; hash prefix OK
-practi unpublish [hash]    # withdraw a submission / take a published POP out of public
-practi remove <hash> --remote # withdraw your claim on the remote (hash prefix OK; local workspace
-                               # untouched)
-```
-
-- Reads of published docs are anonymous; writes and private reads need `practi login`.
-- Re-pushing the same content is idempotent (content-addressed); pushing again after withdrawing the remote claim recreates it — fresh record, PRIVATE.
-
-## Evaluating practices
-
-```bash
-practi comment list <hash> [--node <hash>]   # comments: whole-doc = that document's own; --node = a shared node across the network
-practi comment tally <hash>                  # support/neutral/oppose distribution
-practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "<text>"
-practi comment edit <comment-id> -m "<text>" # free edit (author only)
-practi comment delete <comment-id>           # hard delete (author only)
-practi comment report <comment-id> --reason illegal|infringement|spam|other [--detail "<why>"]
-```
-
-- Comments are a **hub extension**, not part of the POP protocol: flat (no replies), one per (user, node), valence required (default neutral), free edit, hard delete. They never touch the document or its hash.
-- **Viewing** — `list <hash>` shows comments made in that document's context; `--node <hash>` shows a shared node's comments across every document that uses it (the DAG view). `tally` prints the support/neutral/oppose distribution — display-only, never a score, never a ranking input.
-- **Review** — comments are publish-then-review (automated content safety); a flagged comment is hidden and editing it resubmits it. Reported comments go through platform review with the source document as context; a confirmed report deletes the comment and notifies its author.
-- **Endorsement is reuse** — a "support" comment is just a note. The real endorsement is structural: publishing a document that references a node is what endorses it.
-
 ## Local notes
 
 ```bash
@@ -191,7 +138,7 @@ practi note edit <note-id> -m "<text>"   # 8-hex id, unique prefix works
 practi note delete <note-id>
 ```
 
-- Notes are **local and private** — a `notes.json` sidecar, never uploaded. Division of labor with comments: a note is your learning/reproduction experience (what actually worked, where you deviated, dead ends); a comment is public judgment on content authenticity.
+- Notes are **local** — a `notes.json` sidecar. A note is your learning/reproduction experience: what actually worked, where you deviated, dead ends.
 - A note pins to **any** node hash, not just document roots — annotate the exact step that taught you something. Content addressing makes the pin exact: a note always refers to precisely this version of the content, and edits that replace a node leave the old note in place (kept, listed last as dangling).
 - `--json` prints a flat machine list (no grouping); human output groups by owning document, newest document first. `practi web` renders and edits the viewed document's notes in a right-hand panel — same file, same data as the CLI.
 
@@ -211,7 +158,7 @@ practi skill import <dir>                # replay a `practi skill export` direct
 | Code | Trigger |
 |---|---|
 | `E_SCHEMA` | shape violation: unknown field anywhere, derived fields on a practice, op/children/loop on an action, duplicate attachment names, unresolvable `@label` |
-| `E_DANGLING` | a `{hash}` child not stored locally / on the hub |
+| `E_DANGLING` | a `{hash}` child not stored locally |
 | `E_FLOW_FROM` | `from` names no node in scope |
 | `E_HASH_FORMAT` | not `sha256:` + 64 lowercase hex |
 | `E_MEDIA_REF` | inline media reference with no matching attachment |
@@ -219,8 +166,7 @@ practi skill import <dir>                # replay a `practi skill export` direct
 
 ## Workflow quick reference
 
-- **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid` → `practi show <hash>` to review → optional `practi push`.
-- **Find prior art** — `practi search <query>` → `practi clone <hash>` → `practi show <hash>`.
-- **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"`. Notes stay local; public endorsement is a comment or a `refines`.
-- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Local only: sync the hub afterwards with `practi push` then `practi remove <old-root> --remote`. Editing is replacing — new content lives under a new root hash. Improving **someone else's** (or an indirect) practice is a new document with `refines` set, via `practi new`.
-- **Evaluate / see what people say** — `practi comment list <hash>` → `practi comment tally <hash>`; leave feedback with `practi comment add <hash> --node <hash> --valence support|neutral|oppose -m "…"`.
+- **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid` → `practi show <hash>` to review.
+- **Find prior art** — `practi search <query>` → `practi show <hash>`.
+- **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"` (notes stay local).
+- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Editing is replacing — new content lives under a new root hash. Improving an indirect practice is a new document with `refines` set, via `practi new`.

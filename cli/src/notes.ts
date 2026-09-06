@@ -4,11 +4,10 @@ import path from 'node:path';
 import type { Workspace } from '@arshdelight/pop-sdk';
 
 /**
- * 学习笔记（本地 sidecar，不进协议、不上 hub）：notes.json，扁平数组，每条钉在一个
+ * 学习笔记（本地 sidecar，不进协议）：notes.json，扁平数组，每条钉在一个
  * 节点哈希上。设计站位与 state.claims 相同——时间与个人痕迹不属于内容寻址的节点本体，
  * 属于「人对这一版内容的经验」，侧挂存储。内容寻址白送的语义：笔记永远指向这一版
  * 内容，不会有「笔记跟着编辑漂移」的问题（edit 换根后旧笔记成为孤儿，保留不删）。
- * 与远端 comment 的分工：note=个人学习/复现经验（本地），comment=内容真实性（公共）。
  */
 export const NOTES_FILE = 'notes.json';
 

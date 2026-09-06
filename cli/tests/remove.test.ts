@@ -17,7 +17,6 @@ function allNodes(lsJson: string): { hash: string; name: string }[] {
 }
 
 // practi remove — 注册层操作：把 direct 根从本地目录拿掉（direct≈git refs，增删不产生新 commit）。
-// --remote 委托 lifecycle 的远端认领撤除（delete 是它的别名）。
 describe('practi remove: local directory removal', () => {
   it('takes the root out of direct, GCs its exclusive nodes, prunes the claim stamp', async () => {
     const dir = tempDataDir();
@@ -83,32 +82,17 @@ describe('practi remove: local directory removal', () => {
     expect(r.stderr).toContain('not one of your direct pops');
   });
 
-  it('argless remove is a usage error (stderr + exit 1); --remote flavors the hint', async () => {
+  it('argless remove is a usage error (stderr + exit 1)', async () => {
     const dir = tempDataDir();
     await init(dir);
     const r = await pop(dir, ['remove']);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain('usage: practi remove');
-
-    const rr = await pop(dir, ['remove', '--remote']);
-    expect(rr.code).toBe(1);
-    expect(rr.stderr).toContain('explicit hash required');
   });
 });
 
-describe('practi remove --remote: delegates to the hub claim withdrawal (delete stays an alias)', () => {
-  it('offline: fails fast (not logged in) and leaves the local registration intact', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Local stays' })])).stdout);
-
-    const r = await pop(dir, ['remove', root, '--remote']);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain('not logged in');
-    expect(directOf((await pop(dir, ['ls', '--json'])).stdout)).toEqual([root]);
-  });
-
-  it('practi delete is retired (unknown command) — remove --remote is the only face', async () => {
+describe('practi delete stays retired (unknown command)', () => {
+  it('practi delete is retired (unknown command)', async () => {
     const dir = tempDataDir();
     await init(dir);
     const root = createdRoot((await pop(dir, ['new', writeDoc(dir, { name: 'Alias check' })])).stdout);

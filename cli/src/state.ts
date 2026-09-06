@@ -8,13 +8,8 @@ export const STATE_FILE = 'practi.json';
 const LEGACY_STATE_FILE = 'pop.json';
 export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
-/** 默认 remote：开箱即连官方 hub；自建/本地 hub 用 `practi remote set <url>` 覆盖 */
-export const DEFAULT_REMOTE_URL = 'https://practihub.com';
-
 export interface State {
   schema: 1;
-  /** Remote provider (e.g. https://practihub.com) */
-  remote?: { url: string };
   /** Root hashes the user created/imported themselves (own uploads, §9.1 "direct") */
   direct: string[];
   /** 认领时刻（collapsed reflog）：hash → ISO 时间。节点是内容寻址的、内容不携带时间，
@@ -25,7 +20,7 @@ export interface State {
 }
 
 /** 注册 direct 认领的唯一咽喉点：入列 + 盖认领时刻。幂等——已在列则不动，
- *  首次认领时间得以保留（删掉重认领才会重盖）。new/edit/clone/pull/skill 一律走这里，
+ *  首次认领时间得以保留（删掉重认领才会重盖）。new/edit/skill 一律走这里，
  *  别处直接 push state.direct 会绕过盖戳。 */
 export function claimDirect(state: State, hash: string): boolean {
   if (state.direct.includes(hash)) return false;
@@ -114,13 +109,8 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
-function asString(v: unknown): string | undefined {
-  return typeof v === 'string' ? v : undefined;
-}
-
 export function loadState(dataDir: string): State {
-  // 未配置（或 practi.json 不存在/损坏）时回落默认 remote：开箱即连官方 hub
-  const base: State = { schema: 1, direct: [], remote: { url: DEFAULT_REMOTE_URL } };
+  const base: State = { schema: 1, direct: [] };
   const p = statePath(dataDir);
   const legacy = legacyStatePath(dataDir);
   const file = fs.existsSync(p) ? p : fs.existsSync(legacy) ? legacy : null;
@@ -129,8 +119,6 @@ export function loadState(dataDir: string): State {
     const rec = asRecord(JSON.parse(fs.readFileSync(file, 'utf8')));
     if (rec === null) return base;
     const state: State = { schema: 1, direct: [] };
-    const remoteUrl = asString(asRecord(rec.remote)?.url);
-    state.remote = remoteUrl ? { url: remoteUrl } : { url: DEFAULT_REMOTE_URL };
     if (Array.isArray(rec.direct)) {
       state.direct = rec.direct.filter((x): x is string => typeof x === 'string' && HASH_RE.test(x));
     }

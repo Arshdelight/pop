@@ -24,7 +24,7 @@ export function openWorkspace(dataDir: string): Workspace {
 }
 
 /** 节点文件的系统 mtime：这份内容落进本工作区的时刻（new/edit=创建或编辑时刻；
- *  clone/pull=拉取时刻，非原创时刻）。repair 用它给老数据补认领戳 */
+ *  导入时刻，非原创时刻）。repair 用它给老数据补认领戳 */
 export function nodeFileTime(dataDir: string, hash: string): string | null {
   try {
     return fs.statSync(path.join(dataDir, 'nodes', `${hash.slice('sha256:'.length)}.md`)).mtime.toISOString();

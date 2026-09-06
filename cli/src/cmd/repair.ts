@@ -7,7 +7,7 @@ export interface RepairOpts {
 
 /** 幂等补戳：给没有 claims 的 direct 根按节点文件 mtime 回填认领时刻。
  *  已有戳的一律不动（重跑零副作用）；节点文件缺失的警告跳过并记为失败。
- *  mtime 语义=内容落进本工作区的时刻（new/edit=创建或编辑；clone/pull=拉取），
+ *  mtime 语义=内容落进本工作区的时刻（new/edit=创建或编辑），
  *  是老数据（claims 表出现前认领的）能拿到的最接近证据。 */
 export function runRepair(opts: RepairOpts): number {
   const dataDir = opts.dataDir ?? defaultDataDir();

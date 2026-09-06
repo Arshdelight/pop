@@ -3,7 +3,6 @@ import { parseArgs } from 'node:util';
 import { PracticeError } from '@arshdelight/pop-sdk';
 import { runInit } from './cmd/init.js';
 import { runConfig } from './cmd/config.js';
-import { runRemote } from './cmd/remote.js';
 import { runRepair } from './cmd/repair.js';
 import { runMigrate } from './cmd/migrate.js';
 import { runLs } from './cmd/ls.js';
@@ -11,17 +10,11 @@ import { runNew } from './cmd/new.js';
 import { runEdit } from './cmd/edit.js';
 import { runGc } from './cmd/gc.js';
 import { runShow } from './cmd/show.js';
-import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
-import { runPush } from './cmd/push.js';
-import { runPull } from './cmd/pull.js';
-import { runClone } from './cmd/clone.js';
 import { runSearch } from './cmd/search.js';
-import { runComment } from './cmd/comment.js';
 import { runNote } from './cmd/note.js';
 import { runRemove } from './cmd/remove.js';
-import { runPublish, runUnpublish } from './cmd/lifecycle.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
 import { runSkill } from './cmd/skill.js';
@@ -33,62 +26,37 @@ function printVersion(): number {
   return 0;
 }
 
-const USAGE = `practi — local registry for POP (Protocol of Practice), syncing to PractiHub
+const USAGE = `practi — local registry for POP (Protocol of Practice)
 
 usage:
   practi blob add <file-or-url> [--name <name>]
                                  (hashes the bytes, stores local blobs in the workspace)
-  practi clone <hash>               fetch a public POP and claim it (fork: local direct + remote claim)
-  practi comment list|tally|add|edit|delete|report
-                                 node comments on the remote (hub extension; source-scoped list,
-                                 --node for a shared node's full view; --json for agents)
-  practi config                     show data dir, remote, registry summary
+  practi config                     show data dir and registry summary
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
        [--message <text>] [--no-revision] [--keep]
-  practi edit <hash> <file.json> --remote
-                                 replace on the hub ONLY — your claim on <hash> (prefix OK, checked
-                                 against your remote claims) swaps to the new document; revision
-                                 from = old root; nothing written locally
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
-  practi login [--no-open] [--reauth]  OAuth login in the browser; --no-open prints the URL only;
-                                 --reauth = logout + fresh login in one step (fine when not logged in)
-  practi logout                     clear stored credentials (revokes on the server)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
-  practi ls --remote [--json]       list YOUR claims on the hub (direct only; -a is local-only)
-  practi me                         show the authenticated practihub user
   practi migrate [path] [--keep]      move the workspace to a new data directory
                                  (cut: the old directory is removed after per-file
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
                                  no arg = ~/.practi; a path is recorded in
                                  ~/.practi-home and becomes the default)
   practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar
-                                 notes.json, never uploaded — learning/reproduction
-                                 focus; remote authenticity lives in practi comment)
+                                 notes.json, never uploaded — learning/reproduction focus)
   practi new <file.json>            create a POP from a JSON document (local)
        | practi new --json '<text>'
        | practi new < file.json
-  practi new <file.json> --remote [--publish]
-                                 create on the hub ONLY — the authoring JSON goes to POST /api/v1/pop
-                                 (the hub parses + hashes; nothing written locally; it comes back on
-                                 the next practi pull). --publish also submits it for review
-  practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
-  practi push [hash]                push new local claims to the remote (git-style: only new ones)
-  practi remote set <url>           set the remote provider (e.g. https://practihub.com)
-  practi remote remove              clear the remote — falls back to the official hub
   practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
-       | practi remove <hash> --remote   withdraw the claim on the remote instead
   practi repair                     backfill missing claim timestamps from node file times
                                  (idempotent; stamped claims are never touched)
-  practi search [query...]          search pops — no flag = mixed (local workspace first, then
-       [--local | --remote]         the hub); --local only the workspace; --remote only the hub
-       [--scope public|me|all] [--limit N] [--json]   (scope applies to the hub half)
-  practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK); local first, full-hash
-                                 fallback to the hub — content is re-hashed before display, a
-                                 found-but-mismatched hash is an error, never shown
+  practi search [query...]          search the local workspace (title/content substring match;
+       [--limit N] [--json]         pure-hex queries also match hash prefixes; empty query
+                                 = browse direct roots)
+  practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
   practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
   practi skill update                refresh the installed use-practi skill (--dir to override)
   practi skill uninstall             remove the installed use-practi skill
@@ -96,9 +64,6 @@ usage:
                                   foreign skills enter POP by authoring, not import)
   practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
   practi spec                       print pop-spec.md (bundled with the SDK; no network)
-  practi publish [hash]             try to publish — PRIVATE → review, machine-passed → public (default: all
-                                 direct pops; hash prefix OK)
-  practi unpublish [hash]           withdraw a submission / take one back out of public
   practi update                     self-update via npm (checks the registry's latest)
   practi version | --version        show CLI + pop-spec versions
   practi web [--port 4317] [--no-open]  browse direct pops in a local web UI
@@ -107,8 +72,7 @@ options:
   --data-dir <path>              target data directory (same default as init)
 
 the data directory is a POP workspace: nodes are content-addressed (nodes/*.md),
-practi.json records the remote and registered direct roots; login credentials live
-in practi.auth.json (kept out of practi.json so the workspace stays commit-safe).
+practi.json records the registered direct roots; notes live in notes.json.
 `;
 
 const COMMON = {
@@ -116,8 +80,8 @@ const COMMON = {
   help: { type: 'boolean' as const, short: 'h' },
 };
 
-function str(v: string | undefined): string | undefined {
-  return v;
+function str(v: string | undefined): string {
+  return v as string;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -148,11 +112,6 @@ async function main(argv: string[]): Promise<number> {
       if (values.help) { console.log('usage: practi config'); return 0; }
       return runConfig({ dataDir: str(values['data-dir']) });
     }
-    case 'remote': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi remote set <url> | remove   (see the current remote with `practi config`)'); return 0; }
-      return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
-    }
     case 'repair': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi repair   (backfill missing claim timestamps; idempotent)'); return 0; }
@@ -170,11 +129,11 @@ async function main(argv: string[]): Promise<number> {
     case 'ls': {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { ...COMMON, all: { type: 'boolean' as const, short: 'a' }, json: { type: 'boolean' as const }, remote: { type: 'boolean' as const } },
+        options: { ...COMMON, all: { type: 'boolean' as const, short: 'a' }, json: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi ls [-a] [--json]   (local); practi ls --remote [--json]   (your claims on the hub)'); return 0; }
-      return runLs({ dataDir: str(values['data-dir']), all: values.all === true, json: values.json === true, remote: values.remote === true });
+      if (values.help) { console.log('usage: practi ls [-a] [--json]'); return 0; }
+      return runLs({ dataDir: str(values['data-dir']), all: values.all === true, json: values.json === true });
     }
     case 'note': {
       const { values, positionals } = parseArgs({
@@ -204,13 +163,11 @@ async function main(argv: string[]): Promise<number> {
           ...COMMON,
           json: { type: 'string' as const },
           file: { type: 'string' as const },
-          remote: { type: 'boolean' as const },
-          publish: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi new <file.json> | practi new --json \'<text>\' | practi new < file.json'); console.log('       [--remote (create on the hub only; nothing local)] [--publish (submit for review; requires --remote)]'); return 0; }
-      return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, remote: values.remote === true, publish: values.publish === true, positional: positionals });
+      if (values.help) { console.log('usage: practi new <file.json> | practi new --json \'<text>\' | practi new < file.json'); return 0; }
+      return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, positional: positionals });
     }
     case 'edit': {
       const { values, positionals } = parseArgs({
@@ -222,11 +179,10 @@ async function main(argv: string[]): Promise<number> {
           message: { type: 'string' as const },
           'no-revision': { type: 'boolean' as const },
           keep: { type: 'boolean' as const },
-          remote: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi edit <hash> <file.json> | --json \'<text>\' | < file.json [--message] [--no-revision] [--keep]'); console.log('       practi edit <hash> <file.json> --remote   (replace YOUR claim on the hub only — new doc POSTed, old claim withdrawn)'); return 0; }
+      if (values.help) { console.log('usage: practi edit <hash> <file.json> | --json \'<text>\' | < file.json [--message] [--no-revision] [--keep]'); return 0; }
       return runEdit({
         dataDir: str(values['data-dir']),
         json: values.json,
@@ -234,7 +190,6 @@ async function main(argv: string[]): Promise<number> {
         message: values.message,
         noRevision: values['no-revision'] === true,
         keep: values.keep === true,
-        remote: values.remote === true,
         positional: positionals,
       });
     }
@@ -244,7 +199,7 @@ async function main(argv: string[]): Promise<number> {
         options: { ...COMMON, json: { type: 'boolean' as const }, doc: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi show <hash> [--json] [--doc]   (local first; full hash falls back to the hub, hash verified)'); return 0; }
+      if (values.help) { console.log('usage: practi show <hash> [--json] [--doc]'); return 0; }
       if (positionals.length === 0) { console.error('usage: practi show <hash> [--json] [--doc]'); return 1; }
       return runShow({ dataDir: str(values['data-dir']), hash: positionals[0], json: values.json === true, doc: values.doc === true });
     }
@@ -263,98 +218,22 @@ async function main(argv: string[]): Promise<number> {
       const port = values.port ? Number(values.port) : 4317;
       return runWeb({ dataDir: str(values['data-dir']), port: Number.isInteger(port) && port > 0 ? port : 4317, open: values['no-open'] !== true });
     }
-    case 'login': {
-      const { values } = parseArgs({
-        args: rest,
-        options: { ...COMMON, 'no-open': { type: 'boolean' as const }, reauth: { type: 'boolean' as const } },
-        allowPositionals: true,
-      });
-      if (values.help) { console.log('usage: practi login [--no-open] [--reauth]   (--reauth: logout + fresh login in one step; fine when not logged in)'); return 0; }
-      return runLogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true, reauth: values.reauth === true });
-    }
-    case 'logout': {
-      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi logout'); return 0; }
-      return runLogout({ dataDir: str(values['data-dir']) });
-    }
-    case 'me': {
-      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi me'); return 0; }
-      return runMe({ dataDir: str(values['data-dir']) });
-    }
-    case 'push': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi push [hash]'); return 0; }
-      return runPush({ dataDir: str(values['data-dir']), positional: positionals });
-    }
-    case 'pull': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi pull [hash]'); return 0; }
-      return runPull({ dataDir: str(values['data-dir']), positional: positionals });
-    }
-    case 'clone': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi clone <hash>'); return 0; }
-      if (positionals.length === 0) { console.error('usage: practi clone <hash>'); return 1; }
-      return runClone({ dataDir: str(values['data-dir']), positional: positionals });
-    }
-    case 'comment': {
-      const { values, positionals } = parseArgs({
-        args: rest,
-        options: {
-          ...COMMON,
-          node: { type: 'string' as const },
-          cursor: { type: 'string' as const },
-          limit: { type: 'string' as const },
-          valence: { type: 'string' as const },
-          message: { type: 'string' as const, short: 'm' },
-          reason: { type: 'string' as const },
-          detail: { type: 'string' as const },
-          json: { type: 'boolean' as const },
-        },
-        allowPositionals: true,
-      });
-      if (values.help) {
-        console.log('usage: practi comment list|tally|add|edit|delete|report   (see `practi comment` help)');
-        return 0;
-      }
-      return runComment({
-        dataDir: str(values['data-dir']),
-        positional: positionals,
-        node: values.node,
-        cursor: values.cursor,
-        limit: values.limit,
-        valence: values.valence,
-        message: values.message,
-        reason: values.reason,
-        detail: values.detail,
-        json: values.json === true,
-      });
-    }
     case 'remove': {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: {
-          ...COMMON,
-          remote: { type: 'boolean' as const },
-        },
+        options: COMMON,
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi remove <hash>   (local directory; --remote withdraws the hub claim instead)');
+        console.log('usage: practi remove <hash>   (local directory; unreachable nodes are GCed)');
         return 0;
       }
       if (positionals.length === 0) {
-        if (values.remote === true) {
-          console.error('usage: practi remove <hash> --remote   (explicit hash required — no default)');
-        } else {
-          console.error('usage: practi remove <hash>   (local directory; --remote withdraws the hub claim instead)');
-        }
+        console.error('usage: practi remove <hash>   (local directory; unreachable nodes are GCed)');
         return 1;
       }
       return runRemove({
         dataDir: str(values['data-dir']),
-        remote: values.remote === true,
         positional: positionals,
       });
     }
@@ -363,35 +242,19 @@ async function main(argv: string[]): Promise<number> {
         args: rest,
         options: {
           ...COMMON,
-          local: { type: 'boolean' as const },
-          remote: { type: 'boolean' as const },
-          scope: { type: 'string' as const, default: 'public' },
           limit: { type: 'string' as const },
           json: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi search [query...] [--local | --remote] [--scope public|me|all] [--limit N] [--json]'); console.log('       (no flag = mixed: local workspace first, then the hub; --local/--remote are mutually exclusive)'); return 0; }
+      if (values.help) { console.log('usage: practi search [query...] [--limit N] [--json]'); console.log('       (searches the local workspace; empty query = browse direct roots)'); return 0; }
       const limit = values.limit ? Number(values.limit) : 20;
       return runSearch({
         dataDir: str(values['data-dir']),
         positional: positionals,
-        scope: values.scope ?? 'public',
         limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
         json: values.json === true,
-        local: values.local === true,
-        remote: values.remote === true,
       });
-    }
-    case 'publish': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi publish [hash]   (try to publish: PRIVATE → review; default: all direct pops; hash prefix OK)'); return 0; }
-      return runPublish({ dataDir: str(values['data-dir']), positional: positionals });
-    }
-    case 'unpublish': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi unpublish [hash]   (default: all direct pops)'); return 0; }
-      return runUnpublish({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'blob': {
       const sub = rest[0];

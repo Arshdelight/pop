@@ -9,8 +9,6 @@ import {
 } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace, subtreeFiles } from '../workspace.js';
-import { storeDocumentRemote } from '../client.js';
-import { runDelete, resolveClaimRef } from './lifecycle.js';
 import { shortHash } from '../render.js';
 
 export interface EditOpts {
@@ -20,7 +18,6 @@ export interface EditOpts {
   message?: string;
   noRevision?: boolean;
   keep?: boolean;
-  remote?: boolean;
   positional: string[];
 }
 
@@ -34,8 +31,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 /**
  * 从全部 direct 根做可达性分析（沿 children pins 走——内联与 ChildRef 同形存储，无需区分），
- * 返回工作区里不可达的节点哈希。即 hub reconcileIndirectClaims 的本地对应：
- * 引用计数（被几个 direct 根的后代集合包含）归 0 才清除。
+ * 返回工作区里不可达的节点哈希。引用计数（被几个 direct 根的后代集合包含）归 0 才清除。
  */
 export function collectUnreachable(ws: Workspace, directRoots: string[]): string[] {
   const seen = new Set<string>();
@@ -57,9 +53,9 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
  * practi edit <hash>：非交互编辑一个 direct 根——新文档（file/--json/stdin）→ 新哈希换注册。
  * 编辑即修订：根节点自动追加 revisions（from = 旧根哈希；spec §2.2 历史指针，允许悬空、永不校验）。
  * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
- * 纯本地操作：远端旧版仍在，结束时提示 push + remove --remote 同步。
+ * 纯本地操作。
  */
-export async function runEdit(opts: EditOpts): Promise<number> {
+export function runEdit(opts: EditOpts): number {
   const ref = opts.positional[0];
   let text: string | undefined;
   if (opts.json !== undefined) text = opts.json;
@@ -69,83 +65,11 @@ export async function runEdit(opts: EditOpts): Promise<number> {
 
   if (!ref || text === undefined || text.trim() === '') {
     console.error("usage: practi edit <hash> <file.json> | practi edit <hash> --json '<text>' | practi edit <hash> < file.json");
-    console.error('       [--message <text>] [--no-revision] [--keep] [--remote (replace the claim on the hub only)]');
+    console.error('       [--message <text>] [--no-revision] [--keep]');
     return 1;
   }
 
   const dataDir = opts.dataDir ?? defaultDataDir();
-  if (opts.remote === true) return remoteEdit(opts, dataDir, ref, text);
-  return localEdit(opts, dataDir, ref, text);
-}
-
-/** --remote：只有远端——把我对 hash A 的认领换成新文档（hash B）：A 经 /mine 解析
- *  （前缀 OK，兼当「是我的认领」预检）→ 新文档带 revision{from:A} POST 上去（hub 解析
- *  算哈希并认领）→ runDelete 撤掉 A（无人再认领时 hub 硬删旧内容）。本地零写入；
- *  撤 A 失败时 B 已在（两认领并存），明说 practi remove <A> --remote 自愈。 */
-async function remoteEdit(opts: EditOpts, dataDir: string, ref: string, text: string): Promise<number> {
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
-
-  let oldRoot: string;
-  try {
-    oldRoot = await resolveClaimRef(dataDir, state.remote.url, ref);
-  } catch (e) {
-    console.error(`error: ${(e as Error).message}`);
-    return 1;
-  }
-
-  let doc: unknown;
-  try {
-    doc = JSON.parse(text);
-  } catch (e) {
-    console.error(`error [E_JSON]: not valid JSON — ${(e as Error).message}`);
-    return 1;
-  }
-  if (!isRecord(doc)) {
-    console.error('error [E_SCHEMA]: the document must be a JSON object (one tree, root included)');
-    return 1;
-  }
-
-  if (opts.noRevision !== true) {
-    const revisions = Array.isArray(doc.revisions) ? (doc.revisions as unknown[]) : [];
-    const already = revisions.some((r) => isRecord(r) && r.from === oldRoot);
-    if (!already) {
-      revisions.push({
-        when: new Date().toISOString().slice(0, 10),
-        what: opts.message ?? 'edited via practi edit --remote',
-        from: oldRoot,
-      });
-      doc.revisions = revisions;
-    }
-  }
-
-  let newRoot: string;
-  try {
-    const stored = await storeDocumentRemote(dataDir, state.remote.url, doc);
-    newRoot = stored.rootHash;
-  } catch (e) {
-    console.error(`error: remote edit failed — ${(e as Error).message} (the old claim is untouched)`);
-    return 1;
-  }
-  if (newRoot === oldRoot) {
-    // 与本地路同规：内容哈希相同=无事可换，绝不能走 DELETE（否则空转一次编辑会把自己的认领撤掉）
-    console.log(`unchanged: ${oldRoot} (content hashes identically — claim kept)`);
-    return 0;
-  }
-  console.log(`edited:   ${oldRoot} -> ${newRoot}  (on the hub — it parsed and hashed the tree)`);
-
-  const code = await runDelete({ dataDir, positional: [oldRoot] });
-  if (code !== 0) {
-    console.error(`remote:   withdrawing the old claim failed — both versions are claimed on the hub now; run \`practi remove ${oldRoot} --remote\` to finish`);
-    return 1;
-  }
-  return 0;
-}
-
-function localEdit(opts: EditOpts, dataDir: string, ref: string, text: string): number {
   const state = loadState(dataDir);
   const ws = openWorkspace(dataDir);
   const oldRoot = resolveNodeRef(ws, ref);
@@ -215,6 +139,5 @@ function localEdit(opts: EditOpts, dataDir: string, ref: string, text: string): 
       console.log('hint:     blobs stay with their bytes — `practi gc` sweeps orphans when you want');
     }
   }
-  console.log(`remote:   the hub still holds the old version — sync with \`practi push\` then \`practi remove ${oldRoot} --remote\``);
   return 0;
 }

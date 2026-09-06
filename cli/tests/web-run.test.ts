@@ -50,10 +50,10 @@ describe('POST /api/run: action endpoint for DIY frontends', () => {
   it('rejects non-POST, foreign/missing Origin, wrong content-type, unknown cmd', async () => {
     expect((await fetch(`${base}/api/run`)).status).toBe(405); // GET, no body
 
-    const noOrigin = await run(base, { cmd: 'me' });
+    const noOrigin = await run(base, { cmd: 'new', args: {} });
     expect(noOrigin.status).toBe(403);
 
-    const foreign = await run(base, { cmd: 'me' }, 'http://evil.example');
+    const foreign = await run(base, { cmd: 'new', args: {} }, 'http://evil.example');
     expect(foreign.status).toBe(403);
 
     const badType = await fetch(`${base}/api/run`, {
@@ -101,13 +101,5 @@ describe('POST /api/run: action endpoint for DIY frontends', () => {
     expect(rootA).not.toBe(rootB);
     expect(a.json.out).not.toContain(rootB);
     expect(b.json.out).not.toContain(rootA);
-  });
-
-  it('me without credentials reports the CLI exit code, not an HTTP error', async () => {
-    const origin = originBase;
-    const r = await run(base, { cmd: 'me' }, origin);
-    expect(r.status).toBe(200);
-    expect(r.json.code).not.toBe(0);
-    expect(r.json.err).toMatch(/login/i);
   });
 });

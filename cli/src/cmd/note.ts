@@ -5,7 +5,7 @@ import { shortHash } from '../render.js';
 import { loadNotes, insertNote, updateNote, removeNote, subtreeHashes, type NoteEntry, type NoteMutation } from '../notes.js';
 
 /**
- * practi note — 本地学习笔记（sidecar notes.json，不进协议、不上 hub）。
+ * practi note — 本地学习笔记（sidecar notes.json，不进协议）。
  * 钉在任一节点的哈希上，侧重学习/复现经验；内容真实性的公共讨论走 practi comment（远端）。
  * 命令面孔对齐 comment：子命令式、-m 带内容、--json 给 agent。
  */

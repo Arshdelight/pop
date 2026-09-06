@@ -92,7 +92,7 @@ export function stateFile(dataDir: string): string {
   return path.join(dataDir, 'practi.json');
 }
 
-export function readState(dataDir: string): { schema: number; direct: string[]; remote?: { url: string }; claims?: Record<string, string> } {
+export function readState(dataDir: string): { schema: number; direct: string[]; claims?: Record<string, string> } {
   return JSON.parse(fs.readFileSync(stateFile(dataDir), 'utf8'));
 }
 

@@ -8,9 +8,6 @@ import { defaultDataDir, loadState } from './state.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
 import { loadNotes, subtreeHashes, insertNote, updateNote, removeNote, NOTES_FILE } from './notes.js';
 import { runNew } from './cmd/new.js';
-import { runPull } from './cmd/pull.js';
-import { runPush } from './cmd/push.js';
-import { runLogin, runLogout, runMe } from './cmd/login.js';
 
 export interface WebOpts {
   dataDir?: string;
@@ -51,7 +48,7 @@ export function runWeb(opts: WebOpts): number {
   const url = `http://127.0.0.1:${opts.port}/`;
 
   // live reload：SSE 客户端池 + 文件/数据监听。监听面 = 整个 data dir（nodes/、
-  // 覆盖目录 web/、practi.json 全覆盖：另一终端 practi new/pull 页面也会自动跟新）
+  // 覆盖目录 web/、practi.json 全覆盖：另一终端 practi new 页面也会自动跟新）
   // + 内置默认前端目录（CLI 开发期改默认文件也即时生效）
   const clients = new Set<http.ServerResponse>();
   watchLive([dataDir, DEFAULT_WEB_DIR], clients);
@@ -61,7 +58,7 @@ export function runWeb(opts: WebOpts): number {
 
   const server = http.createServer((req, res) => {
     try {
-      // ws 每请求重建：命令写入（本端点的 /api/run，或另一终端的 practi new/pull）
+      // ws 每请求重建：命令写入（本端点的 /api/run，或另一终端的 practi new）
       // 必须立即可见，不能拿启动时的快照过滤数据窗
       handle(req, res, dataDir, openWorkspace(dataDir), clients);
     } catch (e) {
@@ -194,24 +191,7 @@ const RUNNABLE: Record<string, RunSpec> = {
       return runNew({ dataDir: d, json, positional: [] });
     },
   },
-  pull: {
-    run: (a, d) => runPull({ dataDir: d, positional: hashArg(a) }),
-  },
-  push: {
-    run: (a, d) => runPush({ dataDir: d, positional: hashArg(a) }),
-  },
-  login: {
-    // OAuth 授权流：web 进程内起 loopback 回调 + 开系统浏览器，请求挂起至授权完成
-    run: (a, d) => runLogin({ dataDir: d, noOpen: a.noOpen === true }),
-  },
-  logout: { run: (_a, d) => runLogout({ dataDir: d }) },
-  me: { run: (_a, d) => runMe({ dataDir: d }) },
 };
-
-function hashArg(a: Record<string, unknown>): string[] {
-  const hash = asStr(a.hash);
-  return hash ? [hash] : [];
-}
 
 /** 命令输出捕获：命令函数走 console.log/error，调用期间临时替换收集，finally 恢复。
  *  进程级替换在并发下有竞态 → runQueue 互斥，同一时刻只跑一条命令（写操作本就不应并发） */
@@ -304,7 +284,7 @@ async function readBody(req: http.IncomingMessage, limit: number): Promise<strin
 }
 
 /** 节点指纹登记簿（哈希→树内 children 下标路径），/doc 数据窗附带：前端把 inputs.from
- *  反解成 #编号引用用。与 hub 的 node_index 物化列同一思路——内容寻址下哈希不在树里，
+ *  反解成 #编号引用用。与物化索引同一思路——内容寻址下哈希不在树里，
  *  引用靠旁路登记。根（空路径）不成节、无编号，不登记（from 指向根按未命中回落哈希）。 */
 function buildNodeIndex(tree: Record<string, unknown>): Record<string, number[]> {
   const index: Record<string, number[]> = {};
