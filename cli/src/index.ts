@@ -15,6 +15,7 @@ import { runBlobAdd } from './cmd/blob.js';
 import { runSearch } from './cmd/search.js';
 import { runNote } from './cmd/note.js';
 import { runRemove } from './cmd/remove.js';
+import { runClaim, runUnclaim } from './cmd/claim.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
 import { runSkill } from './cmd/skill.js';
@@ -31,6 +32,7 @@ const USAGE = `practi — local registry for POP (Protocol of Practice)
 usage:
   practi blob add <file-or-url> [--name <name>]
                                  (hashes the bytes, stores local blobs in the workspace)
+  practi claim <hash>              register an existing stored node as a direct pop (indirect → direct)
   practi config                     show data dir and registry summary
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
@@ -64,6 +66,8 @@ usage:
                                   foreign skills enter POP by authoring, not import)
   practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
   practi spec                       print pop-spec.md (bundled with the SDK; no network)
+  practi unclaim <hash>             take a referenced direct pop back to indirect (fails when
+                                 unreferenced — that would orphan it; delete with "remove")
   practi update                     self-update via npm (checks the registry's latest)
   practi version | --version        show CLI + pop-spec versions
   practi web [--port 4317] [--no-open]  browse direct pops in a local web UI
@@ -236,6 +240,18 @@ async function main(argv: string[]): Promise<number> {
         dataDir: str(values['data-dir']),
         positional: positionals,
       });
+    }
+    case 'claim': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi claim <hash>   (register an existing stored node as a direct pop)'); return 0; }
+      if (positionals.length === 0) { console.error('usage: practi claim <hash>'); return 1; }
+      return runClaim({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'unclaim': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi unclaim <hash>   (take a referenced direct pop back to indirect)'); return 0; }
+      if (positionals.length === 0) { console.error('usage: practi unclaim <hash>'); return 1; }
+      return runUnclaim({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'search': {
       const { values, positionals } = parseArgs({

@@ -10,11 +10,13 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 ## Quick start
 
-Paste this prompt to your AI agent — it points the agent at the agent-readable install guide ([install/practihub.md](https://practihub.com/install/practihub.md)), which installs the [use-practi skill](skills/use-practi/SKILL.md); the skill then walks the agent through everything else: [PractiHub](https://practihub.com) login, and every later record / search / publish operation.
-
-```text
-Read https://practihub.com/install/practihub.md and follow it to install and set up practi + PractiHub for me.
+```bash
+practi init          # initialize the workspace (~/.practi by default)
+practi new doc.json  # register your first POP
+practi web           # browse it in a local web UI
 ```
+
+Agent-first: point your AI agent at the [use-practi skill](skills/use-practi/SKILL.md) — `practi skill install` puts it where agents look (default: `~/.agents/skills`), and the skill walks the agent through every later record / search / review operation.
 
 ## What's in this repo
 
@@ -22,7 +24,7 @@ Read https://practihub.com/install/practihub.md and follow it to install and set
 pop-spec.md              the specification
 sdk/                     @arshdelight/pop-sdk — the official SDK + its conformance test suite
 cli/                     practi — the `practi` local registry CLI (built on the SDK)
-skills/                  installable agent skill (use-pop — `npx skills add Arshdelight/pop`)
+skills/                  installable agent skill (use-practi)
 examples/                seed documents
 ```
 
@@ -44,29 +46,27 @@ npm test -w @arshdelight/pop-sdk        # vitest (incl. Appendix A vector re-ver
 
 ## cli/ — practi (the `practi` command)
 
-A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the remote provider and the registered **direct** roots (indirect = every other node the direct POPs reference); credentials live separately in `pop.auth.json`, kept out of `pop.json` so the workspace stays commit-safe.
+A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the registered **direct** roots (indirect = every other node the direct POPs reference); learning notes live beside it in `notes.json` (local only).
 
 ```bash
 practi blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
-practi config                     show data dir, remote, registry summary
-practi clone <hash>               fetch a public pop and claim it (local direct + remote claim)
-practi delete <hash>              remove your direct claim on the remote
+practi claim <hash>               register an existing stored node as a direct pop (indirect → direct)
+practi config                     show data dir and registry summary
 practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi gc [--apply]               free orphan blobs — bytes no stored node references
+                                  (dry-run by default; --apply removes)
 practi init [path]                initialize a data directory (default: ~/.practi)
-practi login [--no-open]          OAuth login against the remote (opens the browser)
-practi logout                     clear stored credentials (revokes on the server)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
-practi me                         show the authenticated remote user
 practi migrate [path] [--keep]      move the workspace to a new data directory (cut: the old
-                                   directory is removed after per-file verification; --keep retains
-                                   it as .bak; no arg = ~/.practi; a path is recorded in ~/.practi-home)
+                                  directory is removed after per-file verification; --keep retains
+                                  it as .bak; no arg = ~/.practi; a path is recorded in ~/.practi-home)
+practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar notes.json)
 practi new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
-practi pull [hash]                sync YOUR claims from the remote (default: all of mine)
-practi push [hash]                push new local claims to the remote (only new ones; stored PRIVATE)
-practi remote set <url>           set the remote provider (e.g. https://practihub.com)
-practi remote show | remove       inspect / clear the remote
-practi search [query...]          search pops (remote by default; --local the workspace)
-                               [--local] [--scope public|me|all] [--limit N] [--json]
+practi remove <hash>              take a direct pop out of the local directory (registry op;
+                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
+practi repair                     backfill missing claim timestamps from node file times (idempotent)
+practi search [query...]          search the local workspace (name/description/content substring
+                                  + hash prefixes; empty = browse direct roots; --limit N; --json)
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK; --json steps carry content — the reproduction view)
 practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
 practi skill update                refresh the installed use-practi skill (--dir to target another dir)
@@ -74,11 +74,11 @@ practi skill uninstall             remove the installed use-practi skill
 practi skill import <dir>          replay a `practi skill export` directory back into a POP (sidecar required; foreign skills enter POP by authoring, not import)
 practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + attachment files + pop.doc.json sidecar)
 practi spec                       print the bundled pop-spec.md (no network fetch)
-practi submit [hash]              submit pops for public review (default: all direct)
-practi unpublish [hash]           withdraw a submission / unpublish
+practi unclaim <hash>             take a referenced direct pop back to indirect (fails when unreferenced —
+                                  that would orphan it; delete with "remove" instead)
 practi update                     self-update via npm (checks the registry's latest)
 practi version | --version        show CLI + pop-spec versions
-practi web [--port 4317]          browse direct POPs in a local web UI
+practi web [--port 4317] [--no-open]  browse direct POPs in a local web UI
 ```
 
 ```bash
@@ -88,16 +88,9 @@ npm link -w @arshdelight/practi   # installs the `practi` command globally
 
 Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally).
 
-## Hosted hubs
+## Ownership & retention (for hosted hubs)
 
-The protocol defines the document; a hub decides who owns it and how long it lives. §9.1 of the spec records the ownership & retention contract we recommend every hosted hub implement (Practihub follows it):
-
-- **One copy per hash** — content-addressed dedup; repeated uploads of the same root_hash are idempotent.
-- **Ownership is a claim, not a column** — a separate owner→hash table; owning a hash is owning the document; a document can be owned by many users.
-- **Direct vs indirect claims** — direct = your own upload (in your list, controls lifecycle); indirect = inline children your direct documents reference (derived, invisible).
-- **Inline children are first-class documents** — every child is stored under its own hash and claimed indirectly.
-- **ChildRef children reuse stored content** — a document may reference an existing child by hash (`{ hash }`) instead of inlining it; the hub resolves at store time (missing hash → `E_DANGLING`), never stores a second copy, and claims it indirectly. Interchangeable with inline on identity.
-- **No claim → hard delete** — deleting a direct claim reclaims its children's indirect claims; a document with no claims may be garbage-collected.
+The protocol defines the document; a hosted hub — if one ever exists — decides who owns it and how long it lives. §9.1 of the spec records the ownership & retention contract a hub should implement: one copy per hash (content-addressed dedup), ownership as a claim table rather than a column (direct = own upload, indirect = derived from what your direct documents reference), `{ hash }` ChildRefs resolved at store time (never a second copy), and no-claim → garbage collection.
 
 ## Evolution
 

@@ -6,15 +6,17 @@
 
 **兼容 skill 生态**：每份 POP 文档都读作一个 skill——action 是原子技能，practice 是组合技能（组合技能的技能）。skill 可**无损映射为**文档（`name`/`description`/正文 → `name`/`description`/`content`，文件 → `attachments`），换来可验证的身份、链接与组合能力。反方向是**投影**：文档的数据流接线、op 组合与修订历史在 skill 侧没有序列化形式——把文档读作 skill 得到的是它的一个视图，而非无损编码。该映射是身份定义、不是导入通道：工具只回放导出物，外来 skill 靠重新撰写进入 POP。
 
-**协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 1.0.2。spec 只管协议本身；其余一切都在本仓库。
+**协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 1.1.0。spec 只管协议本身；其余一切都在本仓库。
 
 ## 快速开始
 
-把这段提示词发给你的 AI agent——它会让 agent 读取 agent 可读的安装指引（[install/practihub.md](https://practihub.com/install/practihub.md)）并装好 [use-practi skill](skills/use-practi/SKILL.md)，其余一切由 skill 引导完成：[PractiHub](https://practihub.com) 登录，以及之后的每一次记录 / 检索 / 发布。
-
-```text
-读取 https://practihub.com/install/practihub.md，按其中的指引为我安装并配置好 practi + PractiHub。
+```bash
+practi init          # 初始化工作区（默认 ~/.practi）
+practi new doc.json  # 注册第一份 POP
+practi web           # 在本地 web UI 里浏览
 ```
+
+Agent-first：把 [use-practi skill](skills/use-practi/SKILL.md) 交给你的 AI agent——`practi skill install` 会把它装到 agent 能看到的地方（默认 `~/.agents/skills`），之后的每一次记录 / 检索 / 复盘都由 skill 引导完成。
 
 ## 仓库内容
 
@@ -22,7 +24,7 @@
 pop-spec.md              协议规范
 sdk/                     @arshdelight/pop-sdk——官方 SDK + 一致性测试套件
 cli/                     practi——`practi` 本地 registry CLI（基于 SDK）
-skills/                  可安装的 agent skill（use-pop——`npx skills add Arshdelight/pop`）
+skills/                  可安装的 agent skill（use-practi）
 examples/                种子文档
 ```
 
@@ -39,46 +41,43 @@ examples/                种子文档
 
 ```bash
 npm run build -w @arshdelight/pop-sdk   # dist/——以 @arshdelight/pop-sdk 可导入
-npm test -w @arshdelight/pop-sdk        # vitest（80 例，含 Appendix A 向量复验）
+npm test -w @arshdelight/pop-sdk        # vitest（97 例，含 Appendix A 向量复验）
 ```
 
 ## cli/ — practi（`practi` 命令）
 
-POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`practi.json` 记录 remote 服务方与注册的 **direct** 根（indirect = direct POP 引用到的其余全部节点）。
+POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`practi.json` 记录注册的 **direct** 根（indirect = direct POP 引用到的其余全部节点）；学习笔记在旁边的 `notes.json`（仅本地）。
 
 ```bash
 practi blob add <file-or-url>     暂存附件（对字节算哈希，本地 blob 入库）
-practi config                     查看数据目录、remote、registry 概要
-practi clone <hash>               从 hub 取公开 pop 并认领（本地 direct + remote 认领）
-practi delete <hash>              删除自己在 remote 上的 direct 声明（必须给 hash）
+practi claim <hash>               把工作区里已存的节点登记为 direct pop（indirect → direct）
+practi config                     查看数据目录与 registry 概要
 practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；自动留 revision + 回收不可达节点）
+practi gc [--apply]                释放孤儿 blob——没有节点引用的附件字节（默认 dry-run；--apply 才删）
 practi init [path]                初始化数据目录（默认： ~/.practi）
-practi login [--no-open]          对 remote 的 OAuth 登录（打开浏览器）
-practi logout                     清除凭据（并在服务端撤销）
 practi ls [-a] [--json]           列出 direct POP（-a 连 indirect 节点一起列）
-practi me                         查看已认证的 remote 用户
 practi migrate [path] [--keep]      把 workspace 剪切到新数据目录（逐文件校验后删除旧目录；
                                    --keep 保留为 .bak 备份；无参 = ~/.practi；带路径则记入
                                    ~/.practi-home 作为默认目录）
+practi note add|list|edit|delete  钉在节点哈希上的本地学习笔记（sidecar notes.json）
 practi new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
-practi pull [hash]                从 remote 同步自己的认领（默认：我的全部）
-practi push [hash]                把本地新增认领推送到 remote（只推新的；存储为 PRIVATE）
-practi remote set <url>           设置 remote 服务方（如 https://practihub.com）
-practi remote show | remove       查看 / 清除 remote
-practi search [query...]          搜索 pop（默认搜 remote；--local 搜本地工作区）
-                               [--local] [--scope public|me|all] [--limit N] [--json]
-practi show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可）
+practi remove <hash>               把一个 direct 根移出本地目录（注册层操作；回收从剩余 direct
+                                   出发不可达的节点——共享的 indirect 节点保得住）
+practi repair                     从节点文件 mtime 回补缺失的认领时刻（幂等）
+practi search [query...]          搜索本地工作区（name/description/content 子串 + 哈希前缀；
+                                   空查询 = 浏览 direct 根；--limit N；--json）
+practi show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可；--json 的 steps 带正文——一次读完的复现视图）
 practi skill install               安装包内自带的 use-practi skill（默认：~/.agents/skills）
 practi skill update                刷新已安装的 use-practi skill（--dir 指定其它 skills 目录）
 practi skill uninstall             卸载已安装的 use-practi skill
 practi skill import <dir>          把 `practi skill export` 导出的目录回放成 POP（须带 sidecar；外来 skill 靠撰写进入 POP，不做机械导入）
 practi skill export <ref> [--dir]  把 POP 投影成可安装的技能目录（SKILL.md + 附件文件 + pop.doc.json sidecar）
 practi spec                       打印包内 pop-spec.md（无网络依赖）
-practi submit [hash]              提交 pop 进入公开审核（默认：全部 direct）
-practi unpublish [hash]           撤回审核 / 把已发布的撤出公开分发
+practi unclaim <hash>              把仍被引用的 direct pop 退回 indirect（未被引用时报错——
+                                   那会孤儿化它；要删除请用 "remove"）
 practi update                     经 npm 自更新（检查 registry 最新版）
 practi version | --version        查看 CLI 与 pop-spec 协议版本
-practi web [--port 4317]          在本地 web UI 浏览 direct pop
+practi web [--port 4317] [--no-open]  在本地 web UI 浏览 direct pop
 ```
 
 ```bash
@@ -88,16 +87,9 @@ npm link -w @arshdelight/practi   # 全局安装 `practi` 命令
 
 两个包同仓为 npm workspace（根目录 `npm install` 即本地互链）。
 
-## 托管 hub
+## 所有权与留存（面向托管 hub）
 
-协议定义文档；hub 决定谁拥有它、存活多久。spec §9.1 记录了我们建议每个托管 hub 实现的所有权与留存契约（Practihub 遵循）：
-
-- **一个哈希一份**——内容寻址去重；同一 root_hash 重复上传幂等。
-- **所有权是声明，不是列**——独立的 owner→hash 表；拥有哈希即拥有文档；一份文档可被多个用户拥有。
-- **direct 与 indirect 声明**——direct = 自己上传的（进列表、控生命周期）；indirect = 自己 direct 文档引用的内联子节点（派生、不可见）。
-- **内联子节点是一等文档**——每个子节点以自己的哈希存储，并被间接声明。
-- **ChildRef 子节点复用已存内容**——文档可用 `{ hash }` 引用已存在的子节点而非内联；hub 在存储时解析（哈希缺失 → `E_DANGLING`），绝不存第二份，并间接声明之。与内联在身份上可互换。
-- **零声明 → 硬删除**——删除 direct 声明会回收其子节点的 indirect 声明；无任何声明的文档可被回收。
+协议只定义文档；若未来存在托管 hub，由它决定谁拥有文档、存活多久。spec §9.1 记录了 hub 应实现的所有权与留存契约：一个哈希一份（内容寻址去重）、所有权是声明表而非列（direct = 自己上传，indirect = 自己 direct 文档引用的派生节点）、`{ hash }` ChildRef 在存储时解析（绝不存第二份）、零声明 → 可回收。
 
 ## 演进
 

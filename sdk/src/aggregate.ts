@@ -12,6 +12,15 @@ export interface StepItem {
   content?: string;
   /** set directory entries only: the child practice's description */
   description?: string;
+  /** The referenced node file is absent from this workspace — the entry is a placeholder (read tolerance; creation refuses dangling pins) */
+  missing?: boolean;
+}
+
+/** A child pin whose node file is absent from this workspace, with its referencing parent */
+export interface MissingRef {
+  hash: string;
+  parentHash: string;
+  parentName: string;
 }
 
 /** Aggregate-view attachment entry: pointer + originating action (by hash) */
@@ -66,6 +75,8 @@ export interface StandardView {
   outputs: FlowDeclarationView[];
   /** The root node's own revisions (timeline; not aggregated from the subtree) */
   revisions?: Revision[];
+  /** Child pins whose node files are absent (read tolerance: the view still renders; creation-time import remains strict) */
+  missing?: MissingRef[];
 }
 
 interface Acc {
@@ -74,6 +85,7 @@ interface Acc {
   flow: FlowEdge[];
   inputs: FlowDeclarationView[];
   outputs: FlowDeclarationView[];
+  missing: MissingRef[];
 }
 
 /** Attachment dedup key: hash fixes the content, name fixes the use (same blob under a different name = different use, kept) */
@@ -120,6 +132,7 @@ export function aggregateView(rootHash: string, nodes: Map<string, PNode>, opts?
   };
   if (root.revisions !== undefined && root.revisions.length > 0) view.revisions = root.revisions;
   if (root.type === 'practice') view.op = root.op;
+  if (acc.missing.length > 0) view.missing = acc.missing;
   return view;
 }
 
@@ -142,14 +155,19 @@ function buildAcc(node: PNode, nodes: Map<string, PNode>, depth: number, full = 
       flow,
       inputs: (node.inputs ?? []).map(({ name, spec }) => ({ name, ...(spec !== undefined ? { spec } : {}), refHash: nodeHash })),
       outputs: (node.outputs ?? []).map(({ name, spec }) => ({ name, ...(spec !== undefined ? { spec } : {}), refHash: nodeHash })),
+      missing: [],
     };
   }
 
-  const acc: Acc = { steps: [], attachments: [], flow: [], inputs: [], outputs: [] };
+  const acc: Acc = { steps: [], attachments: [], flow: [], inputs: [], outputs: [], missing: [] };
   for (const ref of node.children) {
     const child = nodes.get(ref.hash);
     if (!child) {
-      throw new PracticeError('E_DANGLING', `references a nonexistent child "${ref.hash}"`);
+      // 读取宽容（spec §2.3 写入严格）：引用的节点文件缺失 → 占位条目 + missing 登记，
+      // 视图照常产出（渲染层给出丢失卡片）；创建/编辑通道仍在入口拒绝悬空 pin
+      acc.missing.push({ hash: ref.hash, parentHash: nodeHash, parentName: node.name });
+      acc.steps.push({ refHash: ref.hash, name: `<missing ${ref.hash}>`, depth: depth + 1, missing: true });
+      continue;
     }
     if (node.op === 'set') {
       // Set: directory view — one direct child = one entry, no recursive aggregation

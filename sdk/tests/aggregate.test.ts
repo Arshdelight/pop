@@ -174,10 +174,24 @@ describe('aggregateView', () => {
     expect(v.steps.map(s => s.refHash)).toEqual([rinse, rinse]);
   });
 
-  it('dangling reference raises E_DANGLING', () => {
+  it('dangling reference → missing placeholder (read tolerance), view still produced', () => {
     const nodes = new Map<string, PNode>();
     const bad = put(nodes, practice('Bad', 'seq', [GHOST]));
-    expect(() => aggregateView(bad, nodes)).toThrowError(/nonexistent/);
+    const v = aggregateView(bad, nodes);
+    expect(v.missing).toEqual([{ hash: GHOST, parentHash: bad, parentName: 'Bad' }]);
+    expect(v.steps).toHaveLength(1);
+    expect(v.steps[0].missing).toBe(true);
+    expect(v.steps[0].refHash).toBe(GHOST);
+  });
+
+  it('set op: missing child yields a missing directory entry, present siblings untouched', () => {
+    const nodes = new Map<string, PNode>();
+    const here = put(nodes, practice('Here', 'seq', [put(nodes, action('A'))]));
+    const dirNode = put(nodes, practice('Dir', 'set', [here, GHOST]));
+    const v = aggregateView(dirNode, nodes);
+    expect(v.steps.map(s => s.missing)).toEqual([undefined, true]);
+    expect(v.steps[0].name).toBe('Here');
+    expect(v.missing).toHaveLength(1);
   });
 
   it('nonexistent node raises E_NOT_FOUND', () => {

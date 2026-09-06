@@ -37,6 +37,9 @@ practi search [query...]          search the local workspace (name/description/c
                                + hash prefixes; empty = browse direct roots; --limit N; --json)
 practi remove <hash>               take a direct pop out of the local directory (registry op;
                                GCs nodes unreachable from the rest — shared indirect nodes survive)
+practi claim <hash>                register an existing stored node as a direct pop (indirect → direct)
+practi unclaim <hash>              take a referenced direct pop back to indirect (fails when unreferenced —
+                               that would orphan it; delete with "remove" instead)
 practi blob add <file-or-url>     stage an attachment; emits the attachment entry
                                (hashes the bytes, stores local blobs in the workspace)
 practi note add <node> -m "<text>"  pin a local learning note to any node hash (sidecar

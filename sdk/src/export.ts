@@ -1,4 +1,3 @@
-import { PracticeError } from './errors.js';
 import type { PNode } from './model.js';
 
 /**
@@ -41,11 +40,9 @@ function exportNode(node: PNode, nodes: Map<string, PNode>): Record<string, unkn
     if (node.refines !== undefined) doc.refines = node.refines;
     doc.children = node.children.map((ref) => {
       const child = nodes.get(ref.hash);
-      if (!child) {
-        throw new PracticeError('E_DANGLING', `references a nonexistent child "${ref.hash}"`, {
-          hint: 'fix dangling references first (validate locates them)',
-        });
-      }
+      // 读取宽容：引用的节点缺失时按 pin 原样导出（{ hash } 是文档合法形态）——
+      // 它无法内联展开，但导出物忠实于存储真相；重新导入会撞 E_DANGLING（写入严格）
+      if (!child) return { hash: ref.hash };
       return exportNode(child, nodes);
     });
   }

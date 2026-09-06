@@ -99,13 +99,14 @@ describe('exportSubtree ↔ createFromDoc round-trip', () => {
     expect(round.root).toBe(dag.root); // identical identity through the round-trip
   });
 
-  it('dangling pin → E_DANGLING at export', () => {
+  it('dangling pin exports verbatim as { hash } (read tolerance; re-import hits E_DANGLING)', () => {
     const dir = tempDir();
     const ghost = `sha256:${'7'.repeat(64)}`;
     const p: PracticeNode = { type: 'practice', name: 'P', content: '', op: 'seq', children: [{ hash: ghost }] };
     const hash = saveNode(dir, p); // hashing never checks pin existence — validation does
     const ws = loadWorkspace(dir);
-    expect(() => exportSubtree(ws.nodes.get(hash)!, ws.nodes)).toThrowError(/E_DANGLING|nonexistent/);
+    const doc = exportSubtree(ws.nodes.get(hash)!, ws.nodes);
+    expect(doc.children).toEqual([{ hash: ghost }]);
   });
 
   it('action export: a leaf is a legal single-node document', () => {

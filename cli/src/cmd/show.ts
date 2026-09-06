@@ -58,9 +58,12 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
 
   // --json 传 full：机器视图带每步正文，AI 一次读全免逐哈希往返；人类文本仍走紧凑骨架
   const view = aggregateView(hash, nodes, opts.json ? { full: true } : undefined);
+  // 读取宽容、出口报错：视图照常产出（丢的子树有占位条目），但缺失必须被看见——
+  // 人类文本在尾部追加 E_MISSING 块，退出码 1；--json 由消费方读 view.missing 自行处置
+  const code = view.missing !== undefined ? 1 : 0;
   if (opts.json) {
     console.log(JSON.stringify(view, null, 2));
-    return 0;
+    return code;
   }
 
   console.log(viewHeader(view));
@@ -93,7 +96,14 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
     console.log('\nrevisions:');
     for (const r of view.revisions) console.log(`  ${r.when}  ${r.what}${r.from ? `  (from ${short(r.from)})` : ''}`);
   }
-  return 0;
+  if (view.missing !== undefined && view.missing.length > 0) {
+    console.error(`\nerror [E_MISSING]: ${view.missing.length} referenced node(s) absent from this workspace:`);
+    for (const m of view.missing) {
+      console.error(`  ${m.hash}  (referenced by "${m.parentName}" ${short(m.parentHash)})`);
+    }
+    console.error('  the view above shows placeholders where they belong — the node files are gone (or never synced here)');
+  }
+  return code;
 }
 
 function short(hash: string): string {

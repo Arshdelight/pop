@@ -37,16 +37,29 @@ function walk(p) {
 }
 
 
+// 引用丢失（读取宽容，spec §2.3）：/doc 导出时缺失子树按 { hash } pin 原样出现——
+// 有 hash 无 name。渲染成占位卡（media-missing 同观感），导航跳过不落入
+function isMissingPin(n) {
+  return !!n && typeof n === 'object' && !Array.isArray(n) && typeof n.hash === 'string' && n.name === undefined;
+}
+
 // 下一个节点：有孩子且非 choice → 首个孩子；否则向上找下一个兄弟。
-// choice 的其他选项是「未选的分支」，不算下一步——选过的分支走完直接翻过整个 choice
+// choice 的其他选项是「未选的分支」，不算下一步——选过的分支走完直接翻过整个 choice。
+// 落点若是缺失 pin 则继续向后找（占位卡不可进向导）
 function nextOf(p) {
   var node = walk(p);
-  if (node.children && node.children.length && node.op !== 'choice') return p.concat([0]);
+  if (node.children && node.children.length && node.op !== 'choice') {
+    var first = p.concat([0]);
+    return isMissingPin(walk(first)) ? nextOf(first) : first;
+  }
   var q = p.slice();
   while (q.length) {
     var idx = q.pop();
     var parent = walk(q);
-    if (idx + 1 < parent.children.length && parent.op !== 'choice') return q.concat([idx + 1]);
+    if (idx + 1 < parent.children.length && parent.op !== 'choice') {
+      var cand = q.concat([idx + 1]);
+      return isMissingPin(walk(cand)) ? nextOf(cand) : cand;
+    }
   }
   return null; // 走完了
 }
@@ -228,6 +241,11 @@ function sideHtml() {
     (n.children || []).forEach(function (c, i) {
       var num = prefix + (i + 1);
       var cp = p.concat([i]);
+      if (isMissingPin(c)) {
+        html += '<span class="side-item side-missing" style="padding-left:' + (14 + depth * 14) + 'px">' +
+          '<span class="side-num">' + num + '</span>' + escapeHtml(POP_I18N.t('nodeMissing') + ' ' + shortHash(c.hash)) + '</span>';
+        return;
+      }
       html += '<a href="#" class="side-item" data-path="' + cp.join(',') + '" style="padding-left:' + (14 + depth * 14) + 'px">' +
         '<span class="side-num">' + num + '</span>' + escapeHtml(c.name) + noteBadge(cp.join(','), notesFor(hashAt(cp)).length) + '</a>';
       if (c.children && c.children.length) walkSide(c, num + '.', depth + 1, cp);
@@ -920,6 +938,16 @@ function outputsHtml(node) {
 
 // ── practice 的孩子呈现（按 op 分形态） ──
 
+/** 缺失子树的占位卡（media-missing 同视觉语言）：不可进向导，如实反映丢失 */
+function missingCardHtml(pin, num) {
+  return '<div class="node-missing">' +
+    (num ? '<span class="nm-num">' + num + '.</span>' : '') +
+    '<svg class="mm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+    '<span class="mm-title">' + POP_I18N.t('nodeMissing') + '</span>' +
+    '<span class="mm-hash">' + escapeHtml(shortHash(pin.hash)) + '</span>' +
+    '</div>';
+}
+
 function childrenHtml(node) {
   var kids = node.children || [];
   if (!kids.length || node.op === 'choice' || node.op === 'set') return '';
@@ -928,6 +956,7 @@ function childrenHtml(node) {
     ? '<div class="section-sm"><div class="label">' + escapeHtml(loopNote(node)) + '</div></div>'
     : '<div class="section-sm"><div class="label">' + POP_I18N.t(node.op === 'seq' ? 'secSteps' : 'secTasks', kids.length) + '</div></div>';
   var items = kids.map(function (k, i) {
+    if (isMissingPin(k)) return missingCardHtml(k, i + 1);
     var body = (i + 1) + '. ' + escapeHtml(k.name) +
       (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
     // 序号卡一律=预告+跳转入口（seq/par/loop 全可点直达）
@@ -941,6 +970,7 @@ function choiceHtml(node) {
   var kids = node.children || [];
   return '<div class="section-sm"><div class="label">' + POP_I18N.t('secOptions', kids.length) + '</div></div>' +
     kids.map(function (k, i) {
+      if (isMissingPin(k)) return missingCardHtml(k, i + 1);
       return '<button type="button" class="choice-card" data-idx="' + i + '">' +
         '<span class="choice-body">' + escapeHtml(k.name) +
         (k.description ? '<span class="child-desc">' + escapeHtml(k.description) + '</span>' : '') + '</span></button>';
@@ -952,6 +982,7 @@ function setHtml(node) {
   var kids = node.children || [];
   return '<div class="section-sm"><div class="label">' + POP_I18N.t('secItems', kids.length) + '</div></div>' +
     kids.map(function (k, i) {
+      if (isMissingPin(k)) return missingCardHtml(k, i + 1);
       var body = (i + 1) + '. ' + escapeHtml(k.name) +
         (k.description ? '<div class="child-desc">' + escapeHtml(k.description) + '</div>' : '');
       return '<button type="button" class="child-card" data-idx="' + i + '">' + body + '</button>';
