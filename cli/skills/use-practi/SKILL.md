@@ -112,6 +112,9 @@ practi new doc.json          # or: practi new --json '<text>'  /  practi new < d
 practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
 practi remove <hash>         # take a direct pop out of the local directory (registry op; GCs
                                # unreachable nodes — shared indirect nodes survive)
+practi claim <hash>          # register an existing stored node as a direct pop (indirect → direct)
+practi unclaim <hash>        # take a referenced direct pop back to indirect; fails when
+                               # unreferenced (that would orphan it — delete with remove instead)
 practi show <hash>           # aggregate view; --json machine view (steps carry content —
                                # the one-read reproduction view); --doc full document form
 practi ls [-a]               # direct roots; -a adds indirect nodes
@@ -128,6 +131,7 @@ practi migrate [path] [--keep] # cut: move the workspace (old dir removed after 
 - `practi new` validates through the SDK, persists the content-addressed tree, registers the root as direct, and prints the root hash with `status: valid, registered as direct`. On validation issues the tree is stored but **not** registered — read the printed `E_*` issues, fix the JSON, re-run.
 - `practi show` accepts a unique hash prefix (≥4 hex digits); `--doc` emits the expanded document — the starting point for forking or refining.
 - **Reading vs editing**: to follow or reproduce a practice, read the aggregate view (`show`, or `show --json` — steps come with their content, one read is enough); to edit, fork, or reason about the op structure (choice branches, loop bodies, set sections), read `--doc` — the aggregate flattens those by design.
+- **Missing nodes are reported, never hidden**: if a referenced node file is absent from the workspace, `show` still renders the view (placeholders where the missing subtree belongs), `--doc` exports the dangling pin verbatim, and the command exits 1 with an `E_MISSING` block naming each missing hash and its referencing parent. Creation/editing, by contrast, refuses dangling pins outright (`E_DANGLING`).
 
 ## Local notes
 
@@ -169,4 +173,5 @@ practi skill import <dir>                # replay a `practi skill export` direct
 - **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid` → `practi show <hash>` to review.
 - **Find prior art** — `practi search <query>` → `practi show <hash>`.
 - **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"` (notes stay local).
+- **Organize under a set** — a `set` op document is a directory: it pins episodes as `{ hash }` children (episodes live once, as indirect nodes). To move standalone POPs under a set, edit the set to reference them, then `practi unclaim` each — unclaim fails with `E_NOT_REFERENCED` if nothing references the node (that would orphan it; `practi remove` is the delete path). `practi claim <hash>` registers any stored node back as direct.
 - **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer referenced by any direct POP (`--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Editing is replacing — new content lives under a new root hash. Improving an indirect practice is a new document with `refines` set, via `practi new`.
