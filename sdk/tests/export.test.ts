@@ -118,3 +118,91 @@ describe('exportSubtree ↔ createFromDoc round-trip', () => {
     expect(doc).toEqual({ type: 'action', name: 'Leaf', content: 'x' });
   });
 });
+
+describe('from pins exported as @name sugar (round-trip follows edits)', () => {
+  async function twoStep(dir: string, producerContent: string): Promise<string> {
+    const created = await runCreate(dir, {
+      file: writeDoc(dir, {
+        name: 'P',
+        children: [
+          { name: 'Producer', content: producerContent, outputs: [{ name: 'artifact', spec: 'ok' }] },
+          { name: 'Consumer', content: 'use', inputs: [{ name: 'artifact', from: '@Producer' }] },
+        ],
+      }),
+      ...T,
+    });
+    return created.root;
+  }
+
+  it('in-subtree from exports as @name; unedited round-trip keeps the root hash identical', async () => {
+    const dir = await setup();
+    const root = await twoStep(dir, 'v1');
+    const ws = loadWorkspace(dir);
+    const doc = exportSubtree(ws.nodes.get(root)!, ws.nodes) as { children: { inputs: { from: string }[] }[] };
+    expect(doc.children[1].inputs[0].from).toBe('@Producer'); // the label, not the stale-prone hash pin
+    const target = tempDir();
+    const round = createFromDoc(
+      { root: target, config: { name: 't', schema: 1 }, nodes: new Map(), parseIssues: [], texts: new Map() },
+      doc,
+    );
+    expect(round.root).toBe(root); // the label resolves back to the same hash
+  });
+
+  it('editing the producer no longer strands from: the label re-resolves to the new hash', async () => {
+    const dir = await setup();
+    const root = await twoStep(dir, 'v1');
+    const ws = loadWorkspace(dir);
+    const doc = exportSubtree(ws.nodes.get(root)!, ws.nodes) as Record<string, unknown> & {
+      children: { name: string; content: string }[];
+    };
+    doc.children[0].content = 'v2'; // the producer's edit changes its hash — the old pin would dangle
+    const round = createFromDoc(ws, doc); // same workspace: the old producer node still exists
+    expect(round.root).not.toBe(root);
+    const ws2 = loadWorkspace(dir);
+    const producerV2 = [...ws2.nodes.values()].find(n => n.name === 'Producer' && n.content === 'v2')!;
+    const consumerFollows = [...ws2.nodes.values()].find(
+      n => n.type === 'action' && n.name === 'Consumer' && n.inputs?.[0]?.from === computeNodeHash(producerV2),
+    );
+    expect(consumerFollows).toBeDefined(); // from followed the edit instead of pinning the dead hash
+  });
+
+  it('out-of-subtree from keeps the verbatim hash pin', async () => {
+    const dir = await setup();
+    const ext = await runCreate(dir, {
+      file: writeDoc(dir, { name: 'External source', content: 'x', outputs: [{ name: 'thing' }] }),
+      ...T,
+    });
+    const created = await runCreate(dir, {
+      file: writeDoc(dir, {
+        name: 'P',
+        children: [{ name: 'Consumer', content: 'y', inputs: [{ name: 'thing', from: ext.root }] }],
+      }),
+      ...T,
+    });
+    const ws = loadWorkspace(dir);
+    const doc = exportSubtree(ws.nodes.get(created.root)!, ws.nodes) as { children: { inputs: { from: string }[] }[] };
+    expect(doc.children[0].inputs[0].from).toBe(ext.root); // no label available outside the subtree
+  });
+
+  it('an ambiguous name (same name, distinct content) keeps the hash pin', async () => {
+    const dir = await setup();
+    const first = await runCreate(dir, {
+      file: writeDoc(dir, { name: 'Step', content: 'a', outputs: [{ name: 'thing' }] }),
+      ...T,
+    });
+    const created = await runCreate(dir, {
+      file: writeDoc(dir, {
+        name: 'P',
+        children: [
+          { hash: first.root },
+          { name: 'Step', content: 'b' },
+          { name: 'Consumer', content: 'c', inputs: [{ name: 'thing', from: first.root }] },
+        ],
+      }),
+      ...T,
+    });
+    const ws = loadWorkspace(dir);
+    const doc = exportSubtree(ws.nodes.get(created.root)!, ws.nodes) as { children: { inputs: { from: string }[] }[] };
+    expect(doc.children[2].inputs[0].from).toBe(first.root); // NOT '@Step' — two distinct Steps live in this subtree
+  });
+});

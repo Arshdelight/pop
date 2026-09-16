@@ -97,3 +97,43 @@ describe('pop ls -a: indirect visibility (nodes kept alive by direct roots)', ()
     expect(text.stdout).toContain('referenced by: Compound');
   });
 });
+
+describe('pop edit: from-pinned nodes survive GC (E_FLOW_FROM regression)', () => {
+  it('hash-pinned from keeps the target alive through an edit; re-edit does not hit E_FLOW_FROM', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    // Producer is created standalone first, then pinned by P both as a child
+    // and as the hash source of Consumer's input — the stored form of from is
+    // the producer's hash
+    const producer = await pop(dir, ['new', writeDoc(dir, { name: 'Producer', content: 'v1', outputs: [{ name: 'artifact' }] })]);
+    const producerRoot = createdRoot(producer.stdout);
+    const created = await pop(dir, ['new', writeDoc(dir, {
+      name: 'P',
+      children: [
+        { hash: producerRoot },
+        { name: 'Consumer', content: 'use', inputs: [{ name: 'artifact', from: producerRoot }] },
+      ],
+    })]);
+    const oldRoot = createdRoot(created.stdout);
+
+    // Regression fix 1 — export rewrites the in-subtree pin as "@name" sugar
+    const show = await pop(dir, ['show', oldRoot, '--doc']);
+    const doc = JSON.parse(show.stdout);
+    expect(doc.children[1].inputs[0].from).toBe('@Producer');
+
+    // Regression fix 2 — a legacy export (hash pin) edited the producer's
+    // content: the old producer node must survive GC because from references it
+    doc.children[0].content = 'v2';
+    doc.children[1].inputs[0].from = producerRoot;
+    const r1 = await pop(dir, ['edit', oldRoot, writeDoc(dir, doc)]);
+    expect(r1.code).toBe(0);
+    const { newRoot } = editedRoots(r1.stdout);
+    expect(fs.existsSync(nodeFile(dir, producerRoot))).toBe(true); // alive via from, not collected
+
+    // And the follow-up edit of the same document no longer hits E_FLOW_FROM
+    doc.children[0].content = 'v3';
+    const r2 = await pop(dir, ['edit', newRoot, writeDoc(dir, doc)]);
+    expect(r2.code).toBe(0);
+    expect(r2.stderr).not.toContain('E_FLOW_FROM');
+  });
+});

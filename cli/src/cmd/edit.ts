@@ -30,7 +30,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * 从全部 direct 根做可达性分析（沿 children pins 走——内联与 ChildRef 同形存储，无需区分），
+ * 从全部 direct 根做可达性分析（沿 children pins 与 inputs.from 引用走——内联与
+ * ChildRef 同形存储，无需区分；from 指向的 workspace 节点是合法引用，删了会断链），
  * 返回工作区里不可达的节点哈希。引用计数（被几个 direct 根的后代集合包含）归 0 才清除。
  */
 export function collectUnreachable(ws: Workspace, directRoots: string[]): string[] {
@@ -44,6 +45,10 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
     seen.add(h);
     if (node.type === 'practice') {
       for (const c of node.children) stack.push(c.hash);
+    } else if (node.inputs !== undefined) {
+      for (const inp of node.inputs) {
+        if (inp.from !== undefined) stack.push(inp.from);
+      }
     }
   }
   return [...ws.nodes.keys()].filter((h) => !seen.has(h));
