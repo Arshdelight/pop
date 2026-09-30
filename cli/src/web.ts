@@ -212,8 +212,7 @@ const RUNNABLE: Record<string, RunSpec> = {
     run: (a, d) => {
       const json = asStr(a.json);
       if (!json || !json.trim()) throw new ApiError(400, 'new requires args.json (POP document text)');
-      return runNew({ dataDir: d, json, positional: [] });
-    },
+      return runNew({ dataDir: d, json, positional: [] });    },
   },
 };
 

@@ -11,6 +11,8 @@ import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace, subtreeFiles } from '../workspace.js';
 import { shortHash } from '../render.js';
 import { printQualityHints } from '../quality.js';
+import { nodeIndexFields } from '../retrieval.js';
+import { describeRefresh, refreshVectors } from '../embed/optional.js';
 
 export interface EditOpts {
   dataDir?: string;
@@ -61,7 +63,7 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
  * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
  * 纯本地操作。
  */
-export function runEdit(opts: EditOpts): number {
+export async function runEdit(opts: EditOpts): Promise<number> {
   const ref = opts.positional[0];
   let text: string | undefined;
   if (opts.json !== undefined) text = opts.json;
@@ -133,6 +135,8 @@ export function runEdit(opts: EditOpts): number {
   saveState(dataDir, state);
   console.log(`edited:   ${oldRoot} -> ${newRoot}  (${count} nodes)`);
   printQualityHints(loaded, newRoot);
+  // 向量保鲜放在 GC 之前？不 —— GC 会删掉不可达节点，索引要按**最终**工作区来算，
+  // 所以下面 gc 跑完再补（见函数尾部）。
 
   if (opts.keep === true) {
     console.log('gc:       skipped (--keep) — old nodes kept on disk');
@@ -146,5 +150,12 @@ export function runEdit(opts: EditOpts): number {
       console.log('hint:     blobs stay with their bytes — `practi gc` sweeps orphans when you want');
     }
   }
+  // 向量保鲜在 GC 之后：索引要按**最终**工作区算（被删掉的节点不该继续占行）
+  const after = loadWorkspace(dataDir);
+  const note = describeRefresh(await refreshVectors(dataDir, [...after.nodes.keys()].sort(), (h) => {
+    const e = nodeIndexFields(h, after.nodes.get(h)!);
+    return Object.values(e.fields).filter((v): v is string => typeof v === 'string').join('\n');
+  }));
+  if (note !== null) console.error(note);
   return 0;
 }

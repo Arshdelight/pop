@@ -6,6 +6,7 @@ import { runConfig } from './cmd/config.js';
 import { runRepair } from './cmd/repair.js';
 import { runMigrate } from './cmd/migrate.js';
 import { runLs } from './cmd/ls.js';
+import { runLint } from './cmd/lint.js';
 import { runNew } from './cmd/new.js';
 import { runEdit } from './cmd/edit.js';
 import { runGc } from './cmd/gc.js';
@@ -48,6 +49,9 @@ usage:
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
+  practi lint [--json] [--limit N]  audit recording quality across every direct pop: the
+                                 same W_* hints new prints once, on demand for the
+                                 whole workspace. Read-only, never blocking (always exits 0)
   practi migrate [path] [--keep]      move the workspace to a new data directory
                                  (cut: the old directory is removed after per-file
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
@@ -148,6 +152,27 @@ async function main(argv: string[]): Promise<number> {
       if (values.help) { console.log('usage: practi migrate [path] [--keep]   (cut: the old directory is removed after per-file verification; --keep retains it as <dir>.bak-<timestamp>; no arg = ~/.practi, a path is recorded in ~/.practi-home as the default)'); return 0; }
       return runMigrate({ dataDir: str(values['data-dir']), positional: positionals, keep: values.keep === true });
     }
+    case 'lint': {
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, json: { type: 'boolean' as const }, limit: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi lint [--json] [--limit N]');
+        console.log('       audit recording quality across every direct pop: the same W_* hints');
+        console.log('       `practi new` prints once, but for the whole workspace, on demand.');
+        console.log('       read-only and never blocking (exit code is always 0) — it is a to-do');
+        console.log('       list, not a gate. --limit caps how many nodes are listed (default 20).');
+        return 0;
+      }
+      const lintLimit = values.limit ? Number(values.limit) : 20;
+      return runLint({
+        dataDir: str(values['data-dir']),
+        json: values.json === true,
+        limit: Number.isInteger(lintLimit) && lintLimit > 0 ? Math.min(lintLimit, 200) : 20,
+      });
+    }
     case 'ls': {
       const { values, positionals } = parseArgs({
         args: rest,
@@ -191,7 +216,7 @@ async function main(argv: string[]): Promise<number> {
         allowPositionals: true,
       });
       if (values.help) { console.log('usage: practi new <file.json> | practi new --json \'<text>\' | practi new < file.json'); return 0; }
-      return runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, positional: positionals });
+      return await runNew({ dataDir: str(values['data-dir']), json: values.json, file: values.file, positional: positionals });
     }
     case 'edit': {
       const { values, positionals } = parseArgs({
@@ -207,7 +232,7 @@ async function main(argv: string[]): Promise<number> {
         allowPositionals: true,
       });
       if (values.help) { console.log('usage: practi edit <hash> <file.json> | --json \'<text>\' | < file.json [--message] [--no-revision] [--keep]'); return 0; }
-      return runEdit({
+      return await runEdit({
         dataDir: str(values['data-dir']),
         json: values.json,
         file: values.file,

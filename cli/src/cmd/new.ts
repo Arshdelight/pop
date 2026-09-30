@@ -1,8 +1,10 @@
 import fs from 'node:fs';
-import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/pop-sdk';
+import { createFromDoc, loadWorkspace, validateWorkspace, type Workspace } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace, subtreeFiles } from '../workspace.js';
 import { printQualityHints } from '../quality.js';
+import { nodeIndexFields } from '../retrieval.js';
+import { describeRefresh, refreshVectors } from '../embed/optional.js';
 
 export interface NewOpts {
   dataDir?: string;
@@ -20,7 +22,7 @@ function readStdin(): string {
  * (all machine/AI friendly — no editor loop). Validates through the SDK,
  * persists the content-addressed tree, and registers the root as direct.
  */
-export function runNew(opts: NewOpts): number {
+export async function runNew(opts: NewOpts): Promise<number> {
   let text: string | undefined;
   if (opts.json !== undefined) text = opts.json;
   else if (opts.file) text = fs.readFileSync(opts.file, 'utf8');
@@ -66,5 +68,15 @@ export function runNew(opts: NewOpts): number {
   console.log('status:   valid, registered as direct');
   // W_* 提示：登记已完成，提示只影响写作，不影响结果（E_ 在上面已经拦掉了）
   printQualityHints(loaded, root);
+  // 向量索引保鲜：只在**已经启用**（pull 过模型且 build 过）时顺手补几个新节点；
+  // 没启用就一次网络/原生调用都不发生（见 embed/optional.ts）
+  const note = describeRefresh(await refreshVectors(dataDir, [...loaded.nodes.keys()].sort(), (h) => indexTextOf(h, loaded)));
+  if (note !== null) console.error(note);
   return 0;
+}
+
+/** 与 search 同一口径的索引文本（全字段拼接） */
+function indexTextOf(hash: string, ws: Workspace): string {
+  const e = nodeIndexFields(hash, ws.nodes.get(hash)!);
+  return Object.values(e.fields).filter((v): v is string => typeof v === 'string').join('\n');
 }
