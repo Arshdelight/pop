@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { storeBlob } from '@arshdelight/pop-sdk';
 import { defaultDataDir } from '../state.js';
 import { isInitialized } from '../workspace.js';
+import { fetchUrl } from '../net.js';
 
 export interface BlobOpts {
   dataDir?: string;
@@ -60,17 +61,12 @@ function blobFromFile(target: string, name: string | undefined, dataDir: string)
 const MAX_URL_BYTES = 25 * 1024 * 1024;
 
 async function blobFromUrl(url: string, name: string | undefined, dataDir: string): Promise<number> {
-  const res = await fetch(url, { redirect: 'follow' });
+  // 走 net.ts 而不是全局 fetch：有系统代理的机器上 fetch 会直接 "fetch failed"
+  // （Node 的 undici 不读 Windows 注册表代理）——实测复现过的真实故障
+  const res = await fetchUrl(url, { maxBytes: MAX_URL_BYTES });
   if (!res.ok) throw new Error(`fetch ${url} → HTTP ${res.status}`);
-  const contentType = res.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
-  const declared = Number(res.headers.get('content-length') ?? 0);
-  if (Number.isFinite(declared) && declared > MAX_URL_BYTES) {
-    throw new Error(`file too large: ${declared} bytes (limit ${MAX_URL_BYTES})`);
-  }
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.length > MAX_URL_BYTES) {
-    throw new Error(`file too large: ${bytes.length} bytes (limit ${MAX_URL_BYTES})`);
-  }
+  const contentType = res.contentType;
+  const bytes = res.bytes;
   let base = '';
   try {
     base = path.posix.basename(new URL(url).pathname);
