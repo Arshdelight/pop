@@ -3,6 +3,7 @@ import { defaultDataDir, loadState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { shortHash } from '../render.js';
 import { loadNotes, insertNote, updateNote, removeNote, subtreeHashes, type NoteEntry, type NoteMutation } from '../notes.js';
+import { runNotePromote } from './promote.js';
 
 /**
  * practi note — 本地学习笔记（sidecar notes.json，不进协议）。
@@ -15,15 +16,20 @@ export interface NoteOpts {
   positional: string[]; // [子命令, hash 或 note id]
   message?: string;
   json: boolean;
+  /** promote：草稿输出路径（省略则打到 stdout） */
+  out?: string;
 }
 
-const USAGE = `usage: practi note add|list|edit|delete
+const USAGE = `usage: practi note add|list|edit|delete|promote
   practi note add <node> -m "<笔记内容>" [--json]
                   把学习/复现笔记钉在节点哈希上（前缀 OK；本地记录，不上传）
   practi note list [hash] [--json]
                   无参=全部笔记（按所属文档分组）；hash=只看该节点子树内的笔记
   practi note edit <note-id> -m "<新内容>" [--json]
-  practi note delete <note-id>`;
+  practi note delete <note-id>
+  practi note promote <note-id> [--out <file>]
+                  把笔记回流成**草稿文档**（所属 direct 根的 --doc，笔记原文插在
+                  对应节点里）；只产草稿、绝不自动 edit——是否并入由人确认`;
 
 export function runNote(opts: NoteOpts): number {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -37,10 +43,21 @@ export function runNote(opts: NoteOpts): number {
       return noteEdit(opts, dataDir);
     case 'delete':
       return noteDelete(opts, dataDir);
+    case 'promote':
+      return notePromote(opts, dataDir);
     default:
       console.error(USAGE);
       return 1;
   }
+}
+
+function notePromote(opts: NoteOpts, dataDir: string): number {
+  const id = opts.positional[1];
+  if (!id) {
+    console.error('usage: practi note promote <note-id> [--out <file>]');
+    return 1;
+  }
+  return runNotePromote({ dataDir, id, out: opts.out });
 }
 
 function noteAdd(opts: NoteOpts, dataDir: string): number {

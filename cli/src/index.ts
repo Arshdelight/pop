@@ -13,6 +13,8 @@ import { runShow } from './cmd/show.js';
 import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 import { runSearch } from './cmd/search.js';
+import { runSimilar } from './cmd/similar.js';
+import { runEmbed } from './cmd/embed.js';
 import { runNote } from './cmd/note.js';
 import { runRemove } from './cmd/remove.js';
 import { runClaim, runUnclaim } from './cmd/claim.js';
@@ -37,6 +39,11 @@ usage:
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
        [--message <text>] [--no-revision] [--keep]
+  practi embed status|pull|build|prune  optional offline vector model (bge-small-zh-v1.5,
+                                 ~24MB int8 ONNX). pull fetches it, build embeds every
+                                 stored node (incrementally), status reports coverage.
+                                 Nothing here is required: without a model practi is
+                                 lexical-only, and search --semantic says so
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
@@ -46,8 +53,10 @@ usage:
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
                                  no arg = ~/.practi; a path is recorded in
                                  ~/.practi-home and becomes the default)
-  practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar
-                                 notes.json, never uploaded — learning/reproduction focus)
+  practi note add|list|edit|delete|promote  local learning notes pinned to node hashes
+                                 (sidecar notes.json, never uploaded). promote turns a
+                                 note into a draft document of its owning direct root —
+                                 a draft only, never an automatic edit
   practi new <file.json>            create a POP from a JSON document (local)
        | practi new --json '<text>'
        | practi new < file.json
@@ -55,10 +64,19 @@ usage:
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
   practi repair                     backfill missing claim timestamps from node file times
                                  (idempotent; stamped claims are never touched)
-  practi search [query...]          search the local workspace (title/content substring match;
-       [--limit N] [--json]         pure-hex queries also match hash prefixes; empty query
-                                 = browse direct roots)
+  practi search [query...]          search the local workspace: every stored node is
+       [--limit N] [--json]         indexed (name / description / content / declared
+       [--notes] [--semantic]       inputs+outputs / loop prose), ranked title-first, each hit
+                                 showing why it was recalled. Multiple words are AND (each
+                                 must match, possibly in a different field); field:value
+                                 scopes one word. Pure-hex queries also match hash prefixes.
+                                 --notes also indexes local notes; --semantic fuses vector
+                                 recall (needs practi embed pull + embed build first, else
+                                 it says so and is ignored). Empty query = browse roots
   practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
+  practi similar <hash>             content neighbours of a node: same topic, other wording
+       [--limit N] [--json]         (literal character-bigram similarity — no semantics;
+                                 the subtree is what gets compared)
   practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
   practi skill update                refresh the installed use-practi skill (--dir to override)
   practi skill uninstall             remove the installed use-practi skill
@@ -146,11 +164,12 @@ async function main(argv: string[]): Promise<number> {
           ...COMMON,
           message: { type: 'string' as const, short: 'm' },
           json: { type: 'boolean' as const },
+          out: { type: 'string' as const },
         },
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi note add|list|edit|delete   (see `practi note` help)');
+        console.log('usage: practi note add|list|edit|delete|promote   (see `practi note` help)');
         return 0;
       }
       return runNote({
@@ -158,6 +177,7 @@ async function main(argv: string[]): Promise<number> {
         positional: positionals,
         message: values.message,
         json: values.json === true,
+        out: values.out,
       });
     }
     case 'new': {
@@ -253,7 +273,64 @@ async function main(argv: string[]): Promise<number> {
       if (positionals.length === 0) { console.error('usage: practi unclaim <hash>'); return 1; }
       return runUnclaim({ dataDir: str(values['data-dir']), positional: positionals });
     }
+    case 'embed': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, json: { type: 'boolean' as const }, notes: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi embed status|pull|build|prune [--json] [--notes]');
+        console.log('       optional offline vector model (bge-small-zh-v1.5, ~24MB int8 ONNX).');
+        console.log('       pull downloads it into <data-dir>/models/, build embeds every stored node');
+        console.log('       (incrementally — only new hashes are embedded), status reports coverage.');
+        console.log('       nothing here is required: without a model practi is lexical-only.');
+        return 0;
+      }
+      return await runEmbed({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        json: values.json === true,
+        notes: values.notes === true,
+      });
+    }
     case 'search': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          limit: { type: 'string' as const },
+          json: { type: 'boolean' as const },
+          notes: { type: 'boolean' as const },
+          semantic: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi search [query...] [--limit N] [--json] [--notes] [--semantic]');
+        console.log('       words are ANDed — every word must match somewhere, and the words may');
+        console.log('       match in different fields (name / description / content / declared');
+        console.log('       inputs+outputs / loop). Quote a phrase to search it whole.');
+        console.log('       field:value scopes one word — name: desc: content: flow: loop: op: hash:');
+        console.log('       pure-hex queries also match node hash prefixes;');
+        console.log('       if strict matching finds nothing, results fall back to partial match (labeled).');
+        console.log('       --notes also indexes your local notes (off by default); hits show "note".');
+        console.log('       --semantic fuses vector recall with the lexical ranking (needs');
+        console.log('       `practi embed pull` + `practi embed build`; otherwise it says so and is ignored).');
+        console.log('       empty query = browse direct roots');
+        return 0;
+      }
+      const limit = values.limit ? Number(values.limit) : 20;
+      return await runSearch({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
+        json: values.json === true,
+        notes: values.notes === true,
+        semantic: values.semantic === true,
+      });
+    }
+    case 'similar': {
       const { values, positionals } = parseArgs({
         args: rest,
         options: {
@@ -263,12 +340,23 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi search [query...] [--limit N] [--json]'); console.log('       (searches the local workspace; empty query = browse direct roots)'); return 0; }
-      const limit = values.limit ? Number(values.limit) : 20;
-      return runSearch({
+      if (values.help) {
+        console.log('usage: practi similar <hash> [--limit N] [--json]');
+        console.log('       content neighbours: the target subtree is treated as a query and every');
+        console.log('       stored node is scored against it (character-bigram + latin-word relevance,');
+        console.log('       literal — not semantics, so a paraphrase sharing no wording will not surface).');
+        console.log('       score 1.0 = identical content; each hit lists the shared terms that carried it.');
+        return 0;
+      }
+      if (positionals.length === 0) {
+        console.error('usage: practi similar <hash> [--limit N] [--json]');
+        return 1;
+      }
+      const simLimit = values.limit ? Number(values.limit) : 10;
+      return runSimilar({
         dataDir: str(values['data-dir']),
-        positional: positionals,
-        limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
+        ref: positionals[0],
+        limit: Number.isInteger(simLimit) && simLimit > 0 ? Math.min(simLimit, 50) : 10,
         json: values.json === true,
       });
     }

@@ -110,6 +110,24 @@ function matchNote(notes: NoteEntry[], id: string): NoteMutation {
   return { ok: false, reason: 'not_found', matches: 0 };
 }
 
+/** 按 id（唯一前缀）找一条笔记——promote 与 CRUD 共用同一套前缀解析 */
+export function findNote(dataDir: string, id: string): NoteMutation {
+  return matchNote(loadNotes(dataDir).notes, id);
+}
+
+/**
+ * 节点 → 该节点上的笔记全文（多条按存入顺序拼接）。
+ * 检索期派生：只用于索引文本，不写回任何地方。
+ */
+export function notesByNode(dataDir: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const n of loadNotes(dataDir).notes) {
+    const prev = out.get(n.hash);
+    out.set(n.hash, prev === undefined ? n.content : `${prev}\n${n.content}`);
+  }
+  return out;
+}
+
 export function updateNote(dataDir: string, id: string, content: string): NoteMutation {
   const file = loadNotes(dataDir);
   const m = matchNote(file.notes, id);
