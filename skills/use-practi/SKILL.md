@@ -138,6 +138,7 @@ practi search <q> [--notes] [--semantic]
                              # offline search over EVERY stored node — name / description /
                              # content / declared inputs+outputs / loop prose (+ notes)
 practi embed status|pull|build|prune  # optional vector model behind search --semantic
+practi lint [--json]        # audit W_* recording-quality hints across the whole workspace
 practi web                   # browse direct POPs in a local web UI
 practi gc [--apply]          # free orphan blobs — bytes no stored node references
                                # (dry-run by default; --apply removes)
@@ -179,6 +180,16 @@ practi search <q> --semantic   # fuse vector recall with the lexical ranking (RR
 - **It costs one build.** ~20s for 772 nodes; after that only new nodes are embedded, so day-to-day use is incremental.
 - **Swapping the model recomputes everything by itself**: vectors are cached per model fingerprint (`vectors/<fingerprint>.pvec`), so a different model is a different bucket — no migration, and stale vectors can never be mistaken for current ones. `practi embed prune` drops the old buckets.
 - Model bytes and vectors live in the data dir as sidecars; they are **derived**, never written into a node and never part of a hash. The protocol reserves semantic ranking for the hub (pop-spec §9.1), so this local layer is deliberately non-normative.
+- **The vector layer can never break a command.** `practi search` without `--semantic` does not touch it at all; `--semantic` degrades to lexical with the reason on stderr if the model, the index, or the optional `onnxruntime-node` runtime is missing or broken; `practi new`/`edit` keep an *already enabled* index fresh and stay silent otherwise. Only `practi embed pull|build` — explicit requests — fail loudly.
+- **You rarely need `embed build` by hand**: once the model is pulled and an index exists, `practi new`/`edit` top it up with just the new nodes (~25ms each) and say nothing on success. Run `build` when the workspace says it is too far behind; `embed prune` drops buckets left by an older model.
+
+## Recording quality audit
+
+```bash
+practi lint [--json] [--limit N]
+```
+
+`practi new` prints its `W_*` hints once, at creation. `practi lint` runs the same checks (same code, no second standard) across **every** direct pop, aggregates them by code, and ranks the worst nodes first — so the debt skipped at creation time stays visible instead of quietly accumulating. Read-only, and always exits 0: a to-do list, not a gate.
 
 ## Local notes
 
