@@ -169,6 +169,12 @@ class TunnelAgent extends https.Agent {
   }
 }
 
+/** 被 destroy 的流之后仍可能抛 'error'（ECONNRESET / aborted）：没有监听器时 Node 会
+ *  把它升级成**未捕获异常**——在测试里表现为整份文件失败，在长驻进程里直接崩。 */
+function ignoreErrors(stream: { on(event: 'error', cb: () => void): unknown }): void {
+  stream.on('error', () => { /* 流已经不要了，错误无处可说 */ });
+}
+
 /** CONNECT 隧道（导出供测试直接驱动握手与拒绝路径） */
 export function connectTunnel(proxy: URL, target: URL): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
@@ -187,6 +193,7 @@ export function connectTunnel(proxy: URL, target: URL): Promise<net.Socket> {
     });
     req.on('connect', (res, socket) => {
       if (res.statusCode !== 200) {
+        ignoreErrors(socket);
         socket.destroy();
         reject(new Error(`proxy CONNECT ${target.hostname}:${port} → HTTP ${res.statusCode}`));
         return;
@@ -199,6 +206,7 @@ export function connectTunnel(proxy: URL, target: URL): Promise<net.Socket> {
 }
 
 async function readBody(res: http.IncomingMessage, maxBytes: number, url: string): Promise<Buffer> {
+  ignoreErrors(res);
   const declared = Number(res.headers['content-length'] ?? 0);
   if (Number.isFinite(declared) && declared > maxBytes) {
     res.destroy();
@@ -256,7 +264,8 @@ async function proxiedOnce(target: URL, proxy: URL, maxBytes: number): Promise<{
     ? res.headers['content-type'].split(';')[0].trim().toLowerCase()
     : undefined;
   if (status >= 300 && status < 400) {
-    res.destroy();
+    ignoreErrors(res);
+    res.destroy(); // 重定向响应体不要了：销毁前挂兜底，免得之后抛未捕获错误
     return { status, ...(location !== undefined ? { location } : {}), bytes: Buffer.alloc(0) };
   }
   const bytes = await readBody(res, maxBytes, target.href);
