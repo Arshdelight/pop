@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_QUALITY_THRESHOLDS,
   computeNodeHash,
+  proseLength,
   qualityWarnings,
   type ActionNode,
   type Attachment,
@@ -107,6 +108,64 @@ describe('W_NO_VERIFY', () => {
   });
 });
 
+describe('proseLength', () => {
+  it('keeps prose and drops fenced code blocks', () => {
+    const body = ['alpha beta', '```powershell', '$x = 1', '```', 'gamma'].join('\n');
+    expect(proseLength(body)).toBe('alpha beta\ngamma'.length);
+  });
+
+  it('treats a fence as switched off only by the next fence, language tag or not', () => {
+    const body = ['~~~js', 'const a = 1;', '~~~', 'tail'].join('\n');
+    expect(proseLength(body)).toBe('tail'.length);
+  });
+
+  it('counts indented and inline code as prose — only fenced blocks are excluded', () => {
+    expect(proseLength('    indented code')).toBe('indented code'.length);
+    expect(proseLength('use `practi show` here')).toBe('use `practi show` here'.length);
+  });
+});
+
+describe('W_CONTENT_LONG', () => {
+  it('fires on a node whose prose passes the limit', () => {
+    const hits = only([action('Kitchen sink', { content: 'x'.repeat(2001) })], 'W_CONTENT_LONG');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].name).toBe('Kitchen sink');
+    expect(hits[0].message).toContain('2001 chars of prose');
+  });
+
+  it('stays quiet at the limit — the calibrated boundary is 2000', () => {
+    expect(DEFAULT_QUALITY_THRESHOLDS.maxContentChars).toBe(2000);
+    expect(only([action('Just fits', { content: 'x'.repeat(2000) })], 'W_CONTENT_LONG')).toEqual([]);
+  });
+
+  it('excludes code blocks, so a long reference node made of commands is not punished', () => {
+    // 3000 字全是代码：total 早已超限，散文为 0 → 不报。贴完整命令是好习惯，不是啰嗦。
+    const codeHeavy = ['intro line', '```cpp', 'y'.repeat(3000), '```'].join('\n');
+    expect(only([action('Interop definition', { content: codeHeavy })], 'W_CONTENT_LONG')).toEqual([]);
+  });
+
+  it('still fires when the prose alone passes the limit, however much code sits alongside', () => {
+    const mixed = ['z'.repeat(2100), '```sh', 'echo hi', '```'].join('\n');
+    const hits = only([action('Half prose', { content: mixed })], 'W_CONTENT_LONG');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].message).toContain('2100 chars of prose');
+  });
+
+  it('measures prose with whitespace stripped', () => {
+    expect(only([action('Padded', { content: `  ${'x'.repeat(2001)}  \n\n   ` })], 'W_CONTENT_LONG')).toHaveLength(1);
+  });
+
+  it('honours a threshold override (thresholds are implementation policy)', () => {
+    expect(only([action('Medium', { content: 'x'.repeat(100) })], 'W_CONTENT_LONG', { maxContentChars: 50 })).toHaveLength(1);
+    expect(only([action('Medium', { content: 'x'.repeat(100) })], 'W_CONTENT_LONG', { maxContentChars: 500 })).toEqual([]);
+  });
+
+  it('is not a gate: the same node also draws ordinary node-level coding, never an error', () => {
+    const hits = only([action('Long and unverifiable', { content: 'x'.repeat(2001), outputs: [] })], 'W_NO_VERIFY');
+    expect(hits).toHaveLength(1);
+  });
+});
+
 describe('W_FLAT_TREE', () => {
   const flat = (n: number, extra: Partial<Spec> = {}): Spec =>
     practice('Flat root', Array.from({ length: n }, (_, i) => action(`Step ${i + 1}`, { content: `${'z'.repeat(50)} ${i}` })), extra);
@@ -132,6 +191,27 @@ describe('W_FLAT_TREE', () => {
 
   it('never fires on a set — a directory view is supposed to have many entries', () => {
     expect(only([flat(12, { op: 'set' })], 'W_FLAT_TREE')).toEqual([]);
+  });
+
+  it('never fires on a single source’s timestamped chapter list — a video walkthrough is flat by design', () => {
+    const chapters = Array.from({ length: 10 }, (_, i) =>
+      action(`${i + 1}. 建模操作（原视频 ${i}:00–${i}:59）`, { content: `${'z'.repeat(60)} ${i}` }));
+    expect(only([practice('P07（视频导看）', chapters, { description: 'd' })], 'W_FLAT_TREE')).toEqual([]);
+  });
+
+  it('accepts a plain hyphen between the timestamps too, not just the en dash', () => {
+    const chapters = Array.from({ length: 9 }, (_, i) =>
+      action(`Chapter ${i + 1} (video ${i}:00-${i}:59)`, { content: `${'z'.repeat(60)} ${i}` }));
+    expect(only([practice('Walkthrough', chapters, { description: 'd' })], 'W_FLAT_TREE')).toEqual([]);
+  });
+
+  it('still fires when only a few children carry timestamps — the exemption needs the list to be one', () => {
+    const mixed = [
+      ...Array.from({ length: 7 }, (_, i) => action(`Step ${i}`, { content: `${'z'.repeat(60)} ${i}` })),
+      action('Chapter (原视频 1:00–2:00)', { content: 'z'.repeat(60) }),
+      action('Another (原视频 2:00–3:00)', { content: 'z'.repeat(70) }),
+    ];
+    expect(only([practice('Mixed', mixed, { description: 'd' })], 'W_FLAT_TREE')).toHaveLength(1);
   });
 });
 

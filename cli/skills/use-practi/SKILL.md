@@ -90,7 +90,7 @@ Check every document against these before `practi new`:
 | Effect | the tree is **stored but NOT registered** — the pop does not exist in the directory, and the command exits 1 | the pop **is registered as direct** and the command exits 0 |
 | What to do | fix the JSON and re-run — this is a hard stop | keep the recording, then go back and fill in content when you can |
 
-So: **`W_*` are prompts, not errors — seeing one means "go back and add the missing content", never "this failed"**. Do not retry a `practi new` that only printed `W_*`: it already succeeded. The codes are `W_THIN_CONTENT` (near-empty action with no attachments), `W_NO_VERIFY` (an action with no `outputs`), `W_FLAT_TREE` (many steps, none grouped), `W_DEEP_TREE`, `W_DUP_NAME`, `W_VAGUE_NAME`, `W_DESC_MISSING` (a practice root with no `description` — the field search leans on most). The thresholds are the CLI's own calibration, not protocol (pop-spec §6); treat them as a nudge, not a rule.
+So: **`W_*` are prompts, not errors — seeing one means "go back and add the missing content", never "this failed"**. Do not retry a `practi new` that only printed `W_*`: it already succeeded. The codes are `W_THIN_CONTENT` (near-empty action with no attachments), `W_NO_VERIFY` (an action with no `outputs`), `W_CONTENT_LONG` (a node carrying so much prose — fenced code blocks excluded — that it is probably several steps sharing one node: **split it into child steps, do not trim it**), `W_FLAT_TREE` (many steps, none grouped), `W_DEEP_TREE`, `W_DUP_NAME`, `W_VAGUE_NAME`, `W_DESC_MISSING` (a practice root with no `description` — the field search leans on most). The thresholds are the CLI's own calibration, not protocol (pop-spec §6); treat them as a nudge, not a rule.
 
 ## Attachments
 
@@ -230,7 +230,7 @@ practi skill import <dir>                # replay a `practi skill export` direct
 | `E_MEDIA_REF` | inline media reference with no matching attachment |
 | `E_BLOB_MISSING` / `E_BLOB_CORRUPT` | blob absent / bytes disagree with the pointer |
 | `E_NOTE_DANGLING` | `note promote` on a note whose pinned version left the workspace |
-| `W_*` | advisory quality hints (`W_THIN_CONTENT`, `W_NO_VERIFY`, `W_FLAT_TREE`, `W_DEEP_TREE`, `W_DUP_NAME`, `W_VAGUE_NAME`, `W_DESC_MISSING`) — **the document is valid and registered** |
+| `W_*` | advisory quality hints (`W_THIN_CONTENT`, `W_NO_VERIFY`, `W_CONTENT_LONG`, `W_FLAT_TREE`, `W_DEEP_TREE`, `W_DUP_NAME`, `W_VAGUE_NAME`, `W_DESC_MISSING`) — **the document is valid and registered** |
 
 ## Workflow quick reference
 

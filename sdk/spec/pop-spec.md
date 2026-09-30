@@ -248,8 +248,9 @@ A hash-form `from` may name a node that contains an earlier version of the wirin
 | Code | Advisory trigger |
 |---|---|
 | `W_THIN_CONTENT` | an action's `content` is near-empty and it carries no attachments |
+| `W_CONTENT_LONG` | a node's `content` is long enough that it is probably several steps sharing one node — splitting is the fix, not trimming (a proxy for "this node carries too many steps"; code blocks are excluded from the count) |
 | `W_NO_VERIFY` | an action declares no `outputs` — no acceptance criteria |
-| `W_FLAT_TREE` | a practice lists many steps without grouping any of them |
+| `W_FLAT_TREE` | a practice lists many steps without grouping any of them (deferred when the children are a single source's timestamped chapter list — one practice per video is already the right shape) |
 | `W_DEEP_TREE` | a tree deep enough to be a reading burden |
 | `W_DUP_NAME` | one tree names two nodes identically (this is also what makes `@name` export fall back to hash pins, §1 rule 4) |
 | `W_VAGUE_NAME` | a `name` that carries no information (a placeholder or a bare number) |

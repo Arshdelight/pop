@@ -1,4 +1,4 @@
-import type { PNode } from './model.js';
+import type { PNode, PracticeNode } from './model.js';
 
 /**
  * 记录质量体检 —— **非阻断**提示（W_*）。
@@ -27,7 +27,9 @@ export interface QualityWarning {
 export interface QualityThresholds {
   /** action 的 content 去空白后短于此值，且没有 attachments → 过薄 */
   minContentChars: number;
-  /** practice 的子节点多于此值且全是 action → 该分组的没分组（`set` 目录视图不算） */
+  /** content 的**散文**字数超过此值 → 该拆的没拆（代码围栏里的内容不计入） */
+  maxContentChars: number;
+  /** practice 的子节点多于此值且全是 action → 该分组的没分组（`set` 与时间戳章节不算） */
   maxFlatChildren: number;
   /** 树深超过此值 → 阅读负担 */
   maxDepth: number;
@@ -41,9 +43,42 @@ export interface QualityThresholds {
  */
 export const DEFAULT_QUALITY_THRESHOLDS: QualityThresholds = {
   minContentChars: 40,
+  maxContentChars: 2000,
   maxFlatChildren: 8,
   maxDepth: 6,
 };
+
+/**
+ * 视频逐章导看的子节点名里带时间戳区间（`原视频 5:35–6:18`）——这类 practice 本来就
+ * 该是扁平的：一集视频一个 practice，章节就是它的子节点。再嵌一层「组」只会把
+ * 「第 7 集第 3 章」埋进无意义的中间节点，所以这是 W_FLAT_TREE 的**语义豁免**，
+ * 与已存在的 `op === 'set'`（目录视图）豁免同源：判据是「扁平是不是本来正确的形状」，
+ * 而不是数字大小。中英文破折号都认。
+ */
+const TIMESTAMP_CHAPTER_RE = /\d+:\d+\s*[–—-]\s*\d+:\d+/;
+
+/** 行首的代码围栏（可带语言标注）；行内的 `` `x` `` 不算——它本来就是散文的一部分 */
+const CODE_FENCE_RE = /^\s*(?:```|~~~)/;
+
+/**
+ * content 的散文字数：剥掉代码围栏内的内容后再去空白。
+ *
+ * 计入代码会让「贴了完整命令」这种好习惯反被惩罚——一条 2030 字的节点里可能有 1327 字
+ * 是结构体定义与函数签名，那是**参考材料**，不是啰嗦。长度提示要拦的是「一个节点里
+ * 粘了好几步」，而拆步与删代码是两回事。
+ */
+export function proseLength(content: string): number {
+  const kept: string[] = [];
+  let inFence = false;
+  for (const line of content.split('\n')) {
+    if (CODE_FENCE_RE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (!inFence) kept.push(line);
+  }
+  return kept.join('\n').trim().length;
+}
 
 /** 无信息量的名字：占位词（可带序号），或纯数字/标点 */
 const VAGUE_NAME_RE = /^(步骤|第\s*\d+\s*步|step|do|todo|处理|完成|其他|未命名|untitled|unnamed)\s*\d*$/i;
@@ -54,12 +89,22 @@ function isVagueName(name: string): boolean {
   return n === '' || VAGUE_NAME_RE.test(n) || PLACEHOLDER_ONLY_RE.test(n);
 }
 
+/** 「这是一集视频的章节表」：过半子节点名带时间戳区间，扁平就是它正确的形状。 */
+function isTimestampChapterList(n: PracticeNode, nodes: Map<string, PNode>): boolean {
+  let timed = 0;
+  for (const c of n.children) {
+    const child = nodes.get(c.hash);
+    if (child !== undefined && TIMESTAMP_CHAPTER_RE.test(child.name)) timed++;
+  }
+  return timed * 2 > n.children.length;
+}
+
 /**
  * 对若干棵子树做体检，返回全部 W_* 提示（可能为空）。纯函数、只读、确定性：
  * 同一输入两次调用结果完全一致（遍历序由 children 顺序固定，输出按 hash+code 排序）。
  *
  * 去重的粒度刻意分两种：
- *  - **节点级**提示（内容薄/无产出/名字含糊/扁平/缺描述）是节点自身的属性 →
+ *  - **节点级**提示（内容薄/内容长/无产出/名字含糊/扁平/缺描述）是节点自身的属性 →
  *    同一个节点被两棵树引用时只报一次；
  *  - **树级**提示（深度、同名）是「这棵树」的属性 → 每棵树各报各的，不去重。
  * 每次调用的根都是一份将要创建的文档，把两者混在一起会漏报。
@@ -126,13 +171,23 @@ export function qualityWarnings(
       const n = nodes.get(h);
       if (n === undefined) continue;
       if (n.type === 'action') {
+        // 过薄与过长同族：都量 content，只是方向相反；都按散文字数（剥掉代码围栏）算
         const len = n.content.trim().length;
+        const prose = proseLength(n.content);
         if (len < t.minContentChars && (n.attachments ?? []).length === 0) {
           pushNode({
             code: 'W_THIN_CONTENT',
             hash: h,
             name: n.name,
             message: `content is ${len} char${len === 1 ? '' : 's'} (limit ${t.minContentChars}) and there are no attachments — nobody else can reproduce this from what is written`,
+          });
+        }
+        if (prose > t.maxContentChars) {
+          pushNode({
+            code: 'W_CONTENT_LONG',
+            hash: h,
+            name: n.name,
+            message: `${prose} chars of prose (limit ${t.maxContentChars}; code blocks excluded) — a step this long is usually several steps sharing one node; split it into child steps rather than trimming it`,
           });
         }
         if ((n.outputs ?? []).length === 0) {
@@ -146,7 +201,8 @@ export function qualityWarnings(
       } else {
         // set 是目录视图：一集一个条目本来就该多子节点，不是「该分组的没分组」
         if (n.op !== 'set' && n.children.length > t.maxFlatChildren
-          && n.children.every(c => nodes.get(c.hash)?.type === 'action')) {
+          && n.children.every(c => nodes.get(c.hash)?.type === 'action')
+          && !isTimestampChapterList(n, nodes)) {
           pushNode({
             code: 'W_FLAT_TREE',
             hash: h,
