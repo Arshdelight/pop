@@ -14,6 +14,7 @@ export * from './skill.js';
 export * from './aggregate.js';
 export * from './comments.js';
 export * from './validate.js';
+export * from './quality.js';
 export * from './errors.js';
 export * from './version.js';
 export * from './spec.js';

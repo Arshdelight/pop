@@ -243,6 +243,20 @@ Resource guards are implementation policy, as blob size is (§5): an implementat
 
 A hash-form `from` may name a node that contains an earlier version of the wiring node — existence-checked only; only label resolution detects dataflow cycles (§1 rule 4).
 
+**Advisory quality warnings (`W_*`, non-normative).** Alongside validation an implementation *may* report authoring-quality hints. They are always prefixed `W_` and always **non-blocking**: a document that draws `W_*` warnings is parsed, hashed, stored and registered exactly like one that does not, and `E_*` remain the only codes that refuse a document. A document cannot be invalid *because* of a `W_*`. The vocabulary below is a convention implementations may adopt, so that agents and humans reading different tools see the same signals — never a conformance requirement:
+
+| Code | Advisory trigger |
+|---|---|
+| `W_THIN_CONTENT` | an action's `content` is near-empty and it carries no attachments |
+| `W_NO_VERIFY` | an action declares no `outputs` — no acceptance criteria |
+| `W_FLAT_TREE` | a practice lists many steps without grouping any of them |
+| `W_DEEP_TREE` | a tree deep enough to be a reading burden |
+| `W_DUP_NAME` | one tree names two nodes identically (this is also what makes `@name` export fall back to hash pins, §1 rule 4) |
+| `W_VAGUE_NAME` | a `name` that carries no information (a placeholder or a bare number) |
+| `W_DESC_MISSING` | a practice root with no `description` — the field discovery leans on most (§7) |
+
+The thresholds behind these codes are implementation policy, exactly as resource guards are: **the codes are the shared vocabulary, the numbers are local** (an implementation is expected to calibrate them against real corpora, and to report nothing it cannot justify as an outlier). A `W_*` never participates in a hash (§3.2), never enters a stored node, and never changes an exit code.
+
 ## 7. Aggregation (standard view)
 
 When a practice is read, steps / attachments / flow / **declared inputs & outputs** are **derived** bottom-up from the subtree, never stored. This is the reading protocol — the same tree yields equivalent views in any implementation:

@@ -10,6 +10,7 @@ import {
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace, subtreeFiles } from '../workspace.js';
 import { shortHash } from '../render.js';
+import { printQualityHints } from '../quality.js';
 
 export interface EditOpts {
   dataDir?: string;
@@ -131,6 +132,7 @@ export function runEdit(opts: EditOpts): number {
   claimDirect(state, newRoot);
   saveState(dataDir, state);
   console.log(`edited:   ${oldRoot} -> ${newRoot}  (${count} nodes)`);
+  printQualityHints(loaded, newRoot);
 
   if (opts.keep === true) {
     console.log('gc:       skipped (--keep) — old nodes kept on disk');

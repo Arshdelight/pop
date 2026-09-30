@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createFromDoc, loadWorkspace, validateWorkspace } from '@arshdelight/pop-sdk';
 import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace, subtreeFiles } from '../workspace.js';
+import { printQualityHints } from '../quality.js';
 
 export interface NewOpts {
   dataDir?: string;
@@ -63,5 +64,7 @@ export function runNew(opts: NewOpts): number {
     return 1; // 存了但没注册成=没办成正事，与 edit 同类失败对齐
   }
   console.log('status:   valid, registered as direct');
+  // W_* 提示：登记已完成，提示只影响写作，不影响结果（E_ 在上面已经拦掉了）
+  printQualityHints(loaded, root);
   return 0;
 }
