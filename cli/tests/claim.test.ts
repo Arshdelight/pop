@@ -63,6 +63,28 @@ describe('practi claim / unclaim', () => {
     expect(un.stderr).toMatch(/practi remove/);
     expect(readState(dir).direct).toEqual([root]); // 注册表未动
   });
+
+  // 可达性只有一套口径（children pins + inputs.from）：unclaim 的闸门必须与 GC 一致，
+  // 否则只被 from 引用的节点会被误拒，而那句「the next GC deletes it」也与事实相反。
+  it('unclaim accepts a node referenced only through an inputs.from pin', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    const b = createdRoot((await pop(dir, ['new', '--json', JSON.stringify({ name: 'Bee root', content: 'bee body' })])).stdout);
+    await pop(dir, ['new', '--json', JSON.stringify({
+      name: 'Ay root',
+      content: 'ay body',
+      children: [{ name: 'Consume feed', content: 'consume it', inputs: [{ name: 'feed', from: b }] }],
+    })]);
+
+    const un = await pop(dir, ['unclaim', b]);
+    expect(un.code).toBe(0);
+    expect(un.stdout).toMatch(/now indirect/);
+    // 引用者名单也认 from：直接持有该 pin 的是那一步（不是它所在的根）
+    expect(un.stdout).toMatch(/referenced by:.*Consume feed/);
+    expect(readState(dir).direct).not.toContain(b);
+    // GC 口径认这条引用 → 节点必须还在（旧实现会拒，说它会被删）
+    expect(fs.existsSync(nodeFile(dir, b))).toBe(true);
+  });
 });
 
 // 读取宽容（spec §2.3 写入严格）：子树引用的节点文件缺失 → 视图照常产出（占位条目），
