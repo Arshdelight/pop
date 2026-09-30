@@ -5,7 +5,8 @@ import { computeOwnership } from '../ownership.js';
 import { notesByNode } from '../notes.js';
 import { loadOnnxEmbedder } from '../embed/model.js';
 import { rankByVector, readVectorIndex } from '../embed/cache.js';
-import { semanticReadiness } from './embed.js';
+import { attemptSemantic } from '../embed/optional.js';
+import { semanticReadiness } from '../embed/ready.js';
 import {
   fuseRankings,
   nodeIndexFields,
@@ -210,6 +211,8 @@ async function collectLocal(
  *
  * 返回缺口而不是抛错：语义是可选层，缺模型时词法结果照常给出，只是附一句
  * 「--semantic 被忽略了，因为……」，绝不悄悄少召回（少召回而无声是这类功能最坏的失败模式）。
+ * 模型在、但运行时跑不起来（onyxruntime-node 没装、原生二进制不兼容、ONNX 会话建不起来）
+ * 也走同一条降级路——可选功能的故障不该让命令失败。
  */
 async function semanticRanking(
   dataDir: string,
@@ -220,21 +223,29 @@ async function semanticRanking(
   if (!readiness.ready) return { ready: false, reason: readiness.reason };
   const index = readVectorIndex(dataDir, readiness.fingerprint);
   if (index === null) return { ready: false, reason: 'vector index missing (run `practi embed build`)' };
-  const embedder = await loadOnnxEmbedder(dataDir);
-  try {
-    const [qv] = await embedder.embed([embedder.queryPrefix + positional.join(' ').trim()]);
-    const ranked = rankByVector(index, qv);
-    const known = new Set(docs.map(d => d.hash));
-    const order: string[] = [];
-    const scores: number[] = [];
-    for (const r of ranked) {
-      if (!known.has(r.hash)) continue; // 索引里有、工作区已删：不进榜
-      order.push(r.hash);
-      scores.push(r.score);
-      if (order.length >= 200) break; // 只让前 200 参与融合，避免长尾把 RRF 摊平
-    }
-    return { ready: true, order, scores, covered: order.length };
-  } finally {
-    await embedder.dispose();
+
+  const known = new Set(docs.map(d => d.hash));
+  // 覆盖率看索引里有多少节点还在工作区（不是「这次排了多少名」）
+  const covered = index.hashes.reduce((n, h) => n + (known.has(h) ? 1 : 0), 0);
+
+  const attempt = await attemptSemantic(
+    () => loadOnnxEmbedder(dataDir),
+    async (embedder) => {
+      const [qv] = await embedder.embed([embedder.queryPrefix + positional.join(' ').trim()]);
+      const ranked = rankByVector(index, qv);
+      const order: string[] = [];
+      const scores: number[] = [];
+      for (const r of ranked) {
+        if (!known.has(r.hash)) continue; // 索引里有、工作区已删：不进榜
+        order.push(r.hash);
+        scores.push(r.score);
+        if (order.length >= 200) break; // 只让前 200 参与融合，避免长尾把 RRF 摊平
+      }
+      return { order, scores };
+    },
+  );
+  if (!attempt.ok) {
+    return { ready: false, reason: `vector recall unavailable (${attempt.reason})` };
   }
+  return { ready: true, ...attempt.value, covered };
 }

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createdRoot, init, pop, tempDataDir, writeDoc } from './helpers.js';
 
@@ -91,5 +93,65 @@ describe('practi search --semantic without a model', () => {
     const r = await pop(dir, ['search', 'zzz-no-such-thing']);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('--semantic');
+  });
+});
+
+/**
+ * 用户问过一句「向量模型没启用的话应该不会报错吧」——查下来 `--semantic` 那条路上
+ * 确实没有兜底。这一组把「向量层出任何问题都只降级、不失败」钉在 CLI 层。
+ */
+describe('the vector layer can never break a command', () => {
+  /** 模型文件在位但内容是坏的（真实场景：下载被截断、磁盘坏块、手工放错文件） */
+  function brokenModel(dir: string): void {
+    const modelDir = path.join(dir, 'models', 'bge-small-zh-v1.5');
+    fs.mkdirSync(modelDir, { recursive: true });
+    fs.writeFileSync(path.join(modelDir, 'vocab.txt'), 'not the real vocab');
+    fs.writeFileSync(path.join(modelDir, 'model_quantized.onnx'), 'not the real model');
+  }
+
+  it('plain search never touches the vector layer at all', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    brokenModel(dir); // 模型坏着也不该有任何影响
+    await pop(dir, ['new', writeDoc(dir, { name: 'Kimchi stew', content: 'ferment cabbage' })]);
+
+    const r = await pop(dir, ['search', 'kimchi']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('Kimchi stew');
+    expect(r.stderr).toBe(''); // 连一句提示都不该有：没要求语义就别提它
+  });
+
+  it('new never fails on a broken model, and says nothing about vectors', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    brokenModel(dir);
+    const r = await pop(dir, ['new', writeDoc(dir, { name: 'Anything', content: 'a body long enough to pass' })]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('registered as direct');
+    expect(r.stderr).not.toContain('vectors:');
+  });
+
+  it('--semantic with a broken model degrades with the reason, and still answers', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    brokenModel(dir);
+    await pop(dir, ['new', writeDoc(dir, { name: 'Kimchi stew', content: 'ferment cabbage' })]);
+
+    const r = await pop(dir, ['search', 'kimchi', '--semantic']);
+    expect(r.code).toBe(0); // 关键：不是 exit 1
+    expect(r.stdout).toContain('Kimchi stew'); // 词法结果照常
+    expect(r.stderr).toContain('--semantic ignored');
+    expect(r.stderr).toMatch(/corrupt|not ready/);
+  });
+
+  it('embed build on a broken model fails loudly — that is an explicit request', async () => {
+    const dir = tempDataDir();
+    await init(dir);
+    brokenModel(dir);
+    await pop(dir, ['new', writeDoc(dir, { name: 'Anything', content: 'a body long enough to pass' })]);
+    const r = await pop(dir, ['embed', 'build']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/not ready|corrupt/);
+    expect(r.stderr).toContain('embed pull');
   });
 });

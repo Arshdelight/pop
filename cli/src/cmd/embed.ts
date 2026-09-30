@@ -162,13 +162,3 @@ function embedPrune(dataDir: string, opts: EmbedOpts): number {
   return 0;
 }
 
-/** 供 search 复用：模型与索引都就绪时返回读取器，否则返回缺什么 */
-export function semanticReadiness(dataDir: string, spec: ModelSpec = DEFAULT_MODEL): { ready: true; fingerprint: string } | { ready: false; reason: string } {
-  const st = modelStatus(dataDir, spec);
-  if (!st.present) return { ready: false, reason: `model ${spec.id} not ready (run \`practi embed pull\`)` };
-  const fingerprint = modelFingerprint(spec);
-  if (!fs.existsSync(modelDir(dataDir, spec))) return { ready: false, reason: 'model directory missing' };
-  const index = readVectorIndex(dataDir, fingerprint);
-  if (index === null) return { ready: false, reason: 'no vector index (run `practi embed build`)' };
-  return { ready: true, fingerprint };
-}
