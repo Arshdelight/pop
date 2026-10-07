@@ -79,6 +79,7 @@ Check every document against these before `practi new`:
 - **Detailed** — someone who wasn't here can reproduce it: exact commands, file changes, config values, concrete specs. Record what was actually done — dead ends included — not the idealized version.
 - **Sanitized** — remove values specific to the author that a reproducer won't reuse: own repos, accounts, usernames, addresses, phones, credentials, personal hostnames/IPs — even embedded in commands, and even inside attachment bytes (screenshots, logs). Replace with descriptive placeholders (`<your-github-username>/repo`). Keep third-party package names, public endpoints, standard tools, and command structure.
 - **Curated** — a child step is something a reproducer physically does. Research and deciding are not steps; their conclusions go in `content`. Test: *would a reproducer physically do this, or only need its conclusion?*
+- **Bounded** — one document is one thing a reproducer pulls up and follows end-to-end for a single trigger. Sessions are time units; practices are structural ones — "record a session" means extracting the *practices* the session produced (zero, one, or several documents). Split when the parts would be invoked by different triggers (a client asking for analytics ≠ you deciding access policy) or share few or no steps; if what remains after a split has 1–2 steps and no judgment content, it was an action — don't manufacture a document around it.
 
 ### E_ blocks, W_ only prompts
 
@@ -234,7 +235,7 @@ practi skill import <dir>                # replay a `practi skill export` direct
 
 ## Workflow quick reference
 
-- **Record a session** — extract what was done from the conversation → shape one JSON tree (quality rules above) → `practi new doc.json` → confirm `status: valid, registered as direct` → replace any `W_*` prompts you can → `practi show <hash>` to review.
+- **Record a session** — extract the *practices* the conversation produced → shape one JSON tree per practice (quality rules above; see **Bounded** for document boundaries) → `practi new doc.json` → confirm `status: valid, registered as direct` → replace any `W_*` prompts you can → `practi show <hash>` to review.
 - **Find prior art** — `practi search <query>` (add `--notes`; use `field:` when you know which field it was in) → `practi show <hash>`. When you cannot recall any wording, start from a node you *do* have and run `practi similar <hash>`.
 - **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"` (notes stay local). Later, `practi note promote <note-id>` turns that note back into a draft of the practice it belongs to, so the lesson does not rot in the sidecar.
 - **Organize under a set** — a `set` op document is a directory: it pins episodes as `{ hash }` children (episodes live once, as indirect nodes). To move standalone POPs under a set, edit the set to reference them, then `practi unclaim` each — unclaim fails with `E_NOT_REFERENCED` if nothing references the node (that would orphan it; `practi remove` is the delete path). `practi claim <hash>` registers any stored node back as direct.
