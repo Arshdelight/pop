@@ -1,6 +1,6 @@
 # practi
 
-The `practi` command (formerly `pop` / `@arshdelight/pop-cli`): a local registry for POP (Protocol of Practice) documents — a personal, content-addressed collection of practice documents, built on [@arshdelight/pop-sdk](https://www.npmjs.com/package/@arshdelight/pop-sdk). Fully offline: everything lives in your data directory, nothing leaves the machine.
+The `practi` command (formerly `pop` / `@arshdelight/pop-cli`): a local registry for POP (Protocol of Practice) documents — a personal, content-addressed collection of practice documents, built on [@arshdelight/pop-sdk](https://www.npmjs.com/package/@arshdelight/pop-sdk). Your data lives in your data directory and never leaves the machine; the only network calls are the ones you ask for — self-update (`practi update`), fetching the offline vector model (`practi embed pull`), and staging a URL attachment (`practi blob add <url>`).
 
 ## Install
 
@@ -33,19 +33,47 @@ practi skill import <dir> | export <ref> [--dir]
                                replay a skill-export directory back into a POP / project one out
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK)
 practi web [--port 4317] [--no-open]  browse direct POPs in a local web UI
-practi search [query...]          search the local workspace (name/description/content substring
-                               + hash prefixes; empty = browse direct roots; --limit N; --json)
+practi search [query...]          search every stored node — direct, indirect and orphans alike:
+                               field-weighted BM25, title-first ranking, multi-word AND that may
+                               match across fields, `field:` scoping (name: desc: content: flow:
+                               loop: op: hash:), and a labeled relax tier for a partial majority
+                               of terms. --limit N; --json; --notes also indexes local notes
+                               (off by default); --semantic fuses vector recall with the lexical
+                               ranking (needs embed pull + build). Empty = browse direct roots
+practi similar <hash> [--limit N] [--json]
+                               content neighbours: the target subtree becomes the query, every
+                               stored node is scored against it, and each hit lists the shared
+                               terms that carried it. Literal (character-bigram + latin-word
+                               relevance), not semantics — a paraphrase will not surface
+practi lint [--json] [--limit N]  audit recording quality across every direct pop: the same W_*
+                               hints `practi new` prints once, on demand. Read-only and never
+                               blocking (exit code is always 0) — a to-do list, not a gate
+practi embed status               report model readiness and index coverage (--json)
+practi embed pull                 fetch the offline vector model into <data-dir>/models/
+practi embed build [--notes]      build/refresh the vector index, incrementally — only hashes not
+                               already cached; --notes embeds local notes too
+practi embed prune                drop vector buckets left by an older model fingerprint
+                               (the whole layer is optional: no model means lexical-only, and
+                               `search --semantic` says what is missing rather than recalling less)
 practi remove <hash>               take a direct pop out of the local directory (registry op;
                                GCs nodes unreachable from the rest — shared indirect nodes survive)
 practi claim <hash>                register an existing stored node as a direct pop (indirect → direct)
 practi unclaim <hash>              take a referenced direct pop back to indirect (fails when unreferenced —
                                that would orphan it; delete with "remove" instead)
-practi blob add <file-or-url>     stage an attachment; emits the attachment entry
-                               (hashes the bytes, stores local blobs in the workspace)
+practi blob add <file-or-url> [--name <name>]
+                               stage an attachment; emits the attachment entry (hashes the bytes,
+                               stores local blobs in the workspace). A URL source is fetched
+                               through the system proxy and its bytes are stored too — the
+                               pointer itself stays hash-only
 practi note add <node> -m "<text>"  pin a local learning note to any node hash (sidecar
                                notes.json; hash prefix OK)
 practi note list [hash] [--json]  list notes — all (grouped by document) or a subtree
 practi note edit|delete <note-id>  edit (-m "<text>") or remove a note (id prefix OK)
+practi note promote <note-id> [--out <file>]
+                               turn a note back into a **draft** document of its owning direct
+                               root, with the note spliced in at the node it was pinned to — it
+                               drafts and stops, never edits for you (an edit is a new hash:
+                               that call is yours)
 ```
 
 The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the registered **direct** roots, each with a claim timestamp (time lives on the claim event, never inside content-addressed nodes — the git refs/reflog split; indirect = every other node the direct POPs reference).
@@ -56,9 +84,17 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 ### Search
 
-- `practi search <query...>` searches the local workspace: case-insensitive substring match over name/description/content of every stored node (including indirect); pure-hex queries (≥4 chars) also match hash prefixes.
+- `practi search <query...>` searches **every stored node** — direct, indirect, nodes referenced only through `inputs.from`, and orphans alike. The index text covers name / description / content / declared inputs+outputs / loop prose / op, ranked by field-weighted BM25 with title-first ordering; hits report which field matched. Pure-hex queries (≥4 chars) also match hash prefixes. Derived at search time only: never written back into a node, never part of a hash.
+- **Words are ANDed** — every word must match somewhere, and words may match in *different* fields. Quote a phrase to search it whole. `field:value` scopes one word: `name: desc: content: flow: loop: op: hash:`.
+- **Partial match is labeled** — when strict matching finds nothing, results relax to a strict majority of terms and say so. Treat a relaxed row as a lead, not an answer.
 - Empty query = browse: lists direct roots with their node counts.
-- `--json` emits `{query, results, total}`; `--limit N` caps the output (default 20, max 50).
+- `--json` emits `{query, mode, results, total}`; `--limit N` caps the output (default 20, max 50). `--notes` additionally indexes your local notes (off by default, so existing hit sets are unchanged); `--semantic` fuses vector recall with the lexical ranking via RRF — it needs `embed pull` + `embed build`, and otherwise reports what is missing and is ignored.
+
+### Recording quality (`W_*` hints)
+
+`practi new` prints `W_*` hints **once, at creation**. `practi lint` runs the same checks — the same code, no second standard — across every direct pop, aggregates them by code, and ranks the worst nodes first, so the debt you skipped at creation time stays visible instead of quietly accumulating. It is read-only and always exits 0: a to-do list, not a gate.
+
+`W_*` are never errors: a document that draws them is stored and registered exactly like one that does not (`E_*` remain the only codes that refuse a document). The vocabulary is the shared part, the thresholds are this implementation's own calibration (pop-spec §6) — and `practi lint --json` emits the full set with `code`/`hash`/`name`/`message` for scripting.
 
 ### Web
 

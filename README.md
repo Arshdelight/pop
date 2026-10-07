@@ -4,7 +4,7 @@
 
 A protocol that defines practice knowledge — "how to do a thing" — as open data: publishable, linkable, verifiable, composable.
 
-**Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding.
+**Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding. The mapping defines identity, it is not an import channel: tools replay exports only — foreign skills enter POP by authoring.
 
 **The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.1.0. The spec covers only the protocol; everything else lives here.
 
@@ -49,25 +49,57 @@ npm test -w @arshdelight/pop-sdk        # vitest (incl. Appendix A vector re-ver
 A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the registered **direct** roots (indirect = every other node the direct POPs reference); learning notes live beside it in `notes.json` (local only).
 
 ```bash
-practi blob add <file-or-url>     stage an attachment (hashes the bytes, stores local blobs)
+practi blob add <file-or-url> [--name <name>]
+                                  stage an attachment: hashes the bytes and stores local blobs.
+                                  A URL source is fetched through the system proxy and its bytes
+                                  are stored too — the pointer itself stays hash-only
 practi claim <hash>               register an existing stored node as a direct pop (indirect → direct)
 practi config                     show data dir and registry summary
 practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi embed status                report model readiness and index coverage (--json)
+practi embed pull                  fetch the offline vector model into <data-dir>/models/
+practi embed build [--notes]       build/refresh the vector index, incrementally — only hashes
+                                  not already cached; --notes embeds your local notes too
+practi embed prune                 drop vector buckets left behind by an older model fingerprint
+                                  The whole layer is optional: no model means practi is
+                                  lexical-only, and `search --semantic` says what is missing
+                                  instead of quietly recalling less
 practi gc [--apply]               free orphan blobs — bytes no stored node references
                                   (dry-run by default; --apply removes)
 practi init [path]                initialize a data directory (default: ~/.practi)
+practi lint [--json] [--limit N]  audit recording quality across every direct pop: the same W_*
+                                  hints `practi new` prints once, on demand. Read-only and never
+                                  blocking (exit code is always 0) — a to-do list, not a gate
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
 practi migrate [path] [--keep]      move the workspace to a new data directory (cut: the old
                                   directory is removed after per-file verification; --keep retains
                                   it as .bak; no arg = ~/.practi; a path is recorded in ~/.practi-home)
 practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar notes.json)
+practi note promote <note-id> [--out <file>]
+                                  turn a note back into a draft document of its owning direct
+                                  root, with the note spliced in at the node it was pinned to — it
+                                  drafts and stops, never edits for you (under content addressing an
+                                  edit is a new hash, and that is your call)
 practi new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
 practi remove <hash>              take a direct pop out of the local directory (registry op;
                                   GCs nodes unreachable from the rest — shared indirect nodes survive)
 practi repair                     backfill missing claim timestamps from node file times (idempotent)
-practi search [query...]          search the local workspace (name/description/content substring
-                                  + hash prefixes; empty = browse direct roots; --limit N; --json)
+practi search [query...]          search every stored node — direct, indirect and orphans alike:
+                                  field-weighted BM25 with title-first ranking, `field:` scoping
+                                  (name: desc: content: flow: loop: op: hash:), and multi-word AND
+                                  that may match across fields. Hits name the field that matched,
+                                  and a relax tier covers a strict majority of terms when strict
+                                  matching finds nothing (labeled as relaxed). --limit N; --json;
+                                  --notes also indexes your local notes (off by default);
+                                  --semantic fuses vector recall with the lexical ranking (needs
+                                  embed pull + build; otherwise it says so and is ignored).
+                                  Empty query = browse direct roots
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK; --json steps carry content — the reproduction view)
+practi similar <hash> [--limit N] [--json]
+                                  content neighbours: the target subtree becomes the query and every
+                                  stored node is scored against it, each hit listing the shared terms
+                                  that carried it. Literal (character-bigram + latin-word relevance),
+                                  not semantics — a paraphrase sharing no wording will not surface
 practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
 practi skill update                refresh the installed use-practi skill (--dir to target another dir)
 practi skill uninstall             remove the installed use-practi skill
