@@ -36,6 +36,8 @@ export function runConfig(opts: ConfigOpts): number {
   const indirect = ws ? ws.nodes.size - direct : 0;
   console.log(`practi:    ${CLI_VERSION}   pop-spec: ${POP_SPEC_VERSION}`);
   console.log(`data dir:   ${dataDir}  (via ${via})`);
+  console.log(`remote:     ${state.remote?.url ?? '(default https://practihub.com)'}`);
+  console.log(`instance:   ${state.instance ? `${state.instance.owner}/${state.instance.name}@${state.instance.branch}` : '(none bound)'}`);
   console.log(`direct:     ${direct}`);
   console.log(`indirect:   ${indirect}`);
   if (ws && ws.parseIssues.length > 0) {

@@ -33,7 +33,7 @@ practi init          # initialize the workspace
 practi config        # data dir and registry summary
 ```
 
-Everything is local and offline: no account, no network. (Upgrades from the pre-rename `pop` CLI keep working: the old data directory is found automatically.)
+The local workflow is fully offline. Optionally, the workspace can sync with practihub (the reference hub) — see **Hub workflow** below. (Upgrades from the pre-rename `pop` CLI keep working: the old data directory is found automatically.)
 
 ## Writing a document
 
@@ -152,6 +152,34 @@ practi migrate [path] [--keep] # cut: move the workspace (old dir removed after 
 - `practi show` accepts a unique hash prefix (≥4 hex digits); `--doc` emits the expanded document — the starting point for forking or refining.
 - **Reading vs editing**: to follow or reproduce a practice, read the aggregate view (`show`, or `show --json` — steps come with their content, one read is enough); to edit, fork, or reason about the op structure (choice branches, loop bodies, set sections), read `--doc` — the aggregate flattens those by design.
 - **Missing nodes are reported, never hidden**: if a referenced node file is absent from the workspace, `show` still renders the view (placeholders where the missing subtree belongs), `--doc` exports the dangling pin verbatim, and the command exits 1 with an `E_MISSING` block naming each missing hash and its referencing parent. Creation/editing, by contrast, refuses dangling pins outright (`E_DANGLING`).
+
+## Hub workflow (optional, practihub)
+
+The workspace can back onto a practice **instance** on practihub — a single-owner, GitHub-like home for one POP's revision chain, with branches. The binding lives in `practi.json` (`remote` + `instance: {owner, name, branch}`), like git's origin + HEAD.
+
+```bash
+practi remote set https://practihub.com   # point at the hub (default; remove falls back to it)
+practi login                              # OAuth sign-in (browser consent); --no-open prints the URL
+practi me                                 # show the signed-in account
+practi instance create <name> [--public] [--desc <text>]   # create + bind (branch main)
+practi instance bind <owner>/<name>       # bind an existing instance instead
+practi instance show                      # binding summary: branch, visibility, branches
+
+practi push [hash] [--branch <b>]         # store direct pops on the hub (incremental) and bind
+                                           # the root as the branch head — fast-forward enforced
+                                           # server-side (E_NOT_FAST_FORWARD = merge/rebase first)
+practi log [--branch <b>] [--json]        # revision history of the current branch (tip first)
+practi branch [name] [--from <hash>]      # list branches (* = default) / create one / -d <name> deletes
+practi switch <branch>                    # switch the bound branch (local pointer; `practi pull` brings content)
+practi merge <branch>                     # merge into the current branch: fast-forward when possible,
+                                           # otherwise a squash merge revision is constructed locally
+practi pull [hash]                        # sync the hub claim table into the workspace (multi-device)
+practi logout                             # revoke + drop stored credentials
+```
+
+- **Root hash is the commit.** Pushing stores content-addressed documents; binding a branch head is a pointer move. A fast-forward means the new head's `revisions.from` chain reaches the current head; a diverged `merge` builds a new revision whose content is the branch tip's tree with a `revisions` entry pointing at the target head (legal §2.2 history semantics) — the merge always completes.
+- **The hub never changes the content.** `POST /api/v1/pop` re-derives the root hash server-side with the same SDK; documents default to PRIVATE on the hub. Publishing (review + public visibility) is a hub-web workflow, not a CLI one.
+- Without a bound instance, `push` stores claims only; `pull` works off your claim table either way.
 
 ## Finding things again
 

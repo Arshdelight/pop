@@ -8,8 +8,18 @@ export const STATE_FILE = 'practi.json';
 const LEGACY_STATE_FILE = 'pop.json';
 export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
+/** 默认 remote：开箱即连官方 hub；自建/本地 hub 用 `practi remote set <url>` 覆盖 */
+export const DEFAULT_REMOTE_URL = 'https://practihub.com';
+
 export interface State {
   schema: 1;
+  /** Remote hub origin（如 https://practihub.com）。缺省=官方 hub（DEFAULT_REMOTE_URL）；
+   *  `practi remote set|remove` 维护。0.12 曾随 hub 下线移除、hub 恢复后原样回归。 */
+  remote?: { url: string };
+  /** 工作区绑定的实践实例（git 的 origin+HEAD 同构）：owner/name 定位 /u/{owner}/{name}，
+   *  branch=当前支名。`practi instance bind|create` 与 `practi switch` 写入；
+   *  push/merge/log 缺省读它。 */
+  instance?: { owner: string; name: string; branch: string };
   /** Root hashes the user created/imported themselves (own uploads, §9.1 "direct") */
   direct: string[];
   /** 认领时刻（collapsed reflog）：hash → ISO 时间。节点是内容寻址的、内容不携带时间，
@@ -129,6 +139,21 @@ export function loadState(dataDir: string): State {
         if (HASH_RE.test(k) && typeof v === 'string') valid[k] = v;
       }
       state.claims = valid;
+    }
+    // remote/instance：读旧写新（旧文件无此键=缺省官方 hub / 未绑定）。字段逐一校验，
+    // 井绳不进 state——坏值按缺省处理，下次写盘自然洗净
+    const remote = asRecord(rec.remote);
+    if (remote && typeof remote.url === 'string' && /^https?:\/\//i.test(remote.url)) {
+      state.remote = { url: remote.url };
+    }
+    const instance = asRecord(rec.instance);
+    if (
+      instance &&
+      typeof instance.owner === 'string' && instance.owner !== '' &&
+      typeof instance.name === 'string' && instance.name !== '' &&
+      typeof instance.branch === 'string' && instance.branch !== ''
+    ) {
+      state.instance = { owner: instance.owner, name: instance.name, branch: instance.branch };
     }
     return state;
   } catch (e) {

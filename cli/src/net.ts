@@ -144,6 +144,14 @@ export interface FetchUrlOptions {
   maxBytes?: number;
   maxRedirects?: number;
   proxy?: ResolveProxyOptions;
+  /** HTTP 方法（缺省 GET；缺省时行为与旧版完全一致） */
+  method?: string;
+  /** 附加请求头（authorization / content-type 等） */
+  headers?: Record<string, string>;
+  /** 请求体（JSON / form 字符串或字节）；仅对带体的方法有意义 */
+  body?: string | Uint8Array;
+  /** 整体超时 ms（缺省不限；超时销毁请求并抛错） */
+  timeoutMs?: number;
 }
 
 /**
@@ -225,9 +233,23 @@ async function readBody(res: http.IncomingMessage, maxBytes: number, url: string
   return Buffer.concat(chunks);
 }
 
+/** 请求级超时：setTimeout 到点销毁连接（代理与直连两条路径共用） */
+function armTimeout(req: http.ClientRequest, timeoutMs: number | undefined): void {
+  if (timeoutMs === undefined) return;
+  req.setTimeout(timeoutMs, () => req.destroy(new Error(`request timed out after ${timeoutMs}ms`)));
+}
+
 /** 单跳请求（已确定走代理） */
-async function proxiedOnce(target: URL, proxy: URL, maxBytes: number): Promise<{ status: number; location?: string; contentType?: string; bytes: Buffer }> {
-  const headers: Record<string, string> = { host: target.host, 'user-agent': UA, accept: '*/*' };
+async function proxiedOnce(
+  target: URL,
+  proxy: URL,
+  maxBytes: number,
+  method: string,
+  headers: Record<string, string>,
+  body: string | Uint8Array | undefined,
+  timeoutMs: number | undefined,
+): Promise<{ status: number; location?: string; contentType?: string; bytes: Buffer }> {
+  const reqHeaders: Record<string, string> = { host: target.host, 'user-agent': UA, accept: '*/*', ...headers };
   let res: http.IncomingMessage;
 
   if (target.protocol === 'https:') {
@@ -237,11 +259,13 @@ async function proxiedOnce(target: URL, proxy: URL, maxBytes: number): Promise<{
         host: target.hostname,
         port: target.port !== '' ? Number(target.port) : 443,
         path: `${target.pathname}${target.search}`,
-        method: 'GET',
-        headers,
+        method,
+        headers: reqHeaders,
         agent: new TunnelAgent(socket, target.hostname),
       }, resolve);
+      armTimeout(req, timeoutMs);
       req.on('error', reject);
+      if (body !== undefined) req.write(body);
       req.end();
     });
   } else {
@@ -250,10 +274,12 @@ async function proxiedOnce(target: URL, proxy: URL, maxBytes: number): Promise<{
         host: proxy.hostname,
         port: proxy.port !== '' ? Number(proxy.port) : 80,
         path: target.href, // http 走代理用绝对 URI
-        method: 'GET',
-        headers,
+        method,
+        headers: reqHeaders,
       }, resolve);
+      armTimeout(req, timeoutMs);
       req.on('error', (e) => reject(new Error(`proxy ${proxy.host} unreachable: ${e.message}`)));
+      if (body !== undefined) req.write(body);
       req.end();
     });
   }
@@ -276,16 +302,24 @@ const DEFAULT_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
  * 取一个 http(s) URL 的字节。有代理就自己走（CONNECT / 绝对 URI + 手动跟随重定向），
- * 没有代理就用全局 fetch（行为与改动前完全一致）。
+ * 没有代理就用全局 fetch（行为与改动前完全一致）。method/headers/body/timeoutMs
+ * 支持非 GET 请求（hub 客户端与 OAuth 端点用）；缺省全部为 GET 且行为不变。
  */
 export async function fetchUrl(url: string, opts: FetchUrlOptions = {}): Promise<FetchUrlResult> {
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
   const maxRedirects = opts.maxRedirects ?? 5;
+  const method = opts.method ?? 'GET';
   const target = new URL(url);
   const proxy = resolveProxyFor(target, opts.proxy);
 
   if (proxy === null) {
-    const res = await fetch(url, { redirect: 'follow' });
+    const res = await fetch(url, {
+      method,
+      ...(opts.headers !== undefined ? { headers: opts.headers } : {}),
+      ...(opts.body !== undefined ? { body: opts.body as BodyInit } : {}),
+      redirect: 'follow',
+      ...(opts.timeoutMs !== undefined ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+    });
     const contentType = res.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
     const declared = Number(res.headers.get('content-length') ?? 0);
     if (Number.isFinite(declared) && declared > maxBytes) {
@@ -304,7 +338,7 @@ export async function fetchUrl(url: string, opts: FetchUrlOptions = {}): Promise
 
   let current = target;
   for (let hop = 0; hop <= maxRedirects; hop++) {
-    const r = await proxiedOnce(current, proxy, maxBytes);
+    const r = await proxiedOnce(current, proxy, maxBytes, method, opts.headers ?? {}, opts.body, opts.timeoutMs);
     if (r.status >= 300 && r.status < 400 && r.location !== undefined) {
       current = new URL(r.location, current);
       continue;

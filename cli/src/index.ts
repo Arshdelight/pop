@@ -22,6 +22,15 @@ import { runClaim, runUnclaim } from './cmd/claim.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
 import { runSkill } from './cmd/skill.js';
+import { runLogin, runLogout, runMe } from './cmd/login.js';
+import { runRemote } from './cmd/remote.js';
+import { runPush } from './cmd/push.js';
+import { runPull } from './cmd/pull.js';
+import { runInstance } from './cmd/instance.js';
+import { runBranch } from './cmd/branch.js';
+import { runSwitch } from './cmd/switch.js';
+import { runMerge } from './cmd/merge.js';
+import { runLog } from './cmd/log.js';
 import { CLI_VERSION, POP_SPEC_VERSION } from './version.js';
 
 function printVersion(): number {
@@ -30,11 +39,16 @@ function printVersion(): number {
   return 0;
 }
 
-const USAGE = `practi — local registry for POP (Protocol of Practice)
+const USAGE = `practi — local registry for POP (Protocol of Practice), with a practihub bridge
 
 usage:
   practi blob add <file-or-url> [--name <name>]
                                  (hashes the bytes, stores local blobs in the workspace)
+  practi branch [name] [--from <hash>] | -d <name>
+                                 instance branches (needs 'practi instance bind'):
+                                 no arg lists branches (* = default), a name creates one
+                                 from the current branch head (or --from, a registered
+                                 revision), -d deletes the pointer (default branch is kept)
   practi claim <hash>              register an existing stored node as a direct pop (indirect → direct)
   practi config                     show data dir and registry summary
   practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
@@ -48,10 +62,22 @@ usage:
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
   practi init [path]                initialize a data directory (default: ~/.practi)
+  practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
+                                 bind this workspace to a practice instance on the hub
+                                 (git's origin); push/merge/log default to the binding
+  practi log [--branch <b>] [--limit N] [--json]
+                                 revision history of the bound instance branch (tip first)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
   practi lint [--json] [--limit N]  audit recording quality across every direct pop: the
                                  same W_* hints new prints once, on demand for the
                                  whole workspace. Read-only, never blocking (always exits 0)
+  practi login [--no-open] [--reauth]   OAuth sign-in to the hub (browser consent; --no-open
+                                 prints the URL for headless use, --reauth re-credentials)
+  practi logout                     revoke and drop stored credentials
+  practi me                         show the signed-in account, role and scopes
+  practi merge <branch>             merge a branch into the current one: fast-forward when
+                                 possible, otherwise a squash merge revision is constructed
+                                 locally (legal revisions.from semantics) — always succeeds
   practi migrate [path] [--keep]      move the workspace to a new data directory
                                  (cut: the old directory is removed after per-file
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
@@ -64,6 +90,12 @@ usage:
   practi new <file.json>            create a POP from a JSON document (local)
        | practi new --json '<text>'
        | practi new < file.json
+  practi pull [hash]                sync the hub's claim table into the local workspace
+                                 (multi-device bridge; content is hash-verified on arrival)
+  practi push [hash] [--branch <b>] store local direct pops on the hub (incremental) and,
+                                 when an instance is bound, bind the root as the branch
+                                 head (fast-forward enforced server-side)
+  practi remote set <url> | remove  point practi at a hub (default: https://practihub.com)
   practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
   practi repair                     backfill missing claim timestamps from node file times
@@ -88,6 +120,8 @@ usage:
                                   foreign skills enter POP by authoring, not import)
   practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + sidecar)
   practi spec                       print pop-spec.md (bundled with the SDK; no network)
+  practi switch <branch>            switch the bound instance's current branch (local pointer;
+                                 bring the content into the workspace with 'practi pull')
   practi unclaim <hash>             take a referenced direct pop back to indirect (fails when
                                  unreferenced — that would orphan it; delete with "remove")
   practi update                     self-update via npm (checks the registry's latest)
@@ -98,7 +132,8 @@ options:
   --data-dir <path>              target data directory (same default as init)
 
 the data directory is a POP workspace: nodes are content-addressed (nodes/*.md),
-practi.json records the registered direct roots; notes live in notes.json.
+practi.json records the registered direct roots plus the remote/instance binding;
+notes live in notes.json. Hub commands need 'practi login' + 'practi remote set'.
 `;
 
 const COMMON = {
@@ -425,6 +460,96 @@ async function main(argv: string[]): Promise<number> {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi update   (self-update via npm; checks the registry\'s latest)'); return 0; }
       return await runUpdate({ dataDir: str(values['data-dir']) });
+    }
+    case 'login': {
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, 'no-open': { type: 'boolean' as const }, reauth: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi login [--no-open] [--reauth]   (OAuth sign-in to the hub)'); return 0; }
+      return runLogin({ dataDir: str(values['data-dir']), noOpen: values['no-open'] === true, reauth: values.reauth === true });
+    }
+    case 'logout': {
+      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi logout   (revoke and drop stored credentials)'); return 0; }
+      return runLogout({ dataDir: str(values['data-dir']) });
+    }
+    case 'me': {
+      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi me   (show the signed-in account)'); return 0; }
+      return runMe({ dataDir: str(values['data-dir']) });
+    }
+    case 'remote': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi remote set <url> | remove   (default: https://practihub.com)'); return 0; }
+      return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'push': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, branch: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi push [hash] [--branch <b>]   (store direct pops on the hub; bind the branch head when an instance is bound)');
+        return 0;
+      }
+      return await runPush({ dataDir: str(values['data-dir']), positional: positionals, branch: values.branch });
+    }
+    case 'pull': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi pull [hash]   (sync the hub claim table into the workspace)'); return 0; }
+      return await runPull({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'instance': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, public: { type: 'boolean' as const }, desc: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show');
+        return 0;
+      }
+      return await runInstance({ dataDir: str(values['data-dir']), positional: positionals, publicVisibility: values.public === true, desc: values.desc });
+    }
+    case 'branch': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, from: { type: 'string' as const }, delete: { type: 'string' as const, short: 'd' } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi branch [name] [--from <hash>] | -d <name>   (list / create / delete instance branches)');
+        return 0;
+      }
+      return await runBranch({ dataDir: str(values['data-dir']), positional: positionals, from: values.from, deleteBranch: values.delete });
+    }
+    case 'switch': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi switch <branch>   (switch the bound instance\'s current branch)'); return 0; }
+      return await runSwitch({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'merge': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi merge <branch>   (fast-forward, else squash-merge into the current branch)'); return 0; }
+      return await runMerge({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'log': {
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, branch: { type: 'string' as const }, limit: { type: 'string' as const }, json: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi log [--branch <b>] [--limit N] [--json]   (revision history, tip first)'); return 0; }
+      const logLimit = values.limit ? Number(values.limit) : undefined;
+      return await runLog({
+        dataDir: str(values['data-dir']),
+        branch: values.branch,
+        limit: logLimit !== undefined && Number.isInteger(logLimit) && logLimit > 0 ? logLimit : undefined,
+        json: values.json === true,
+      });
     }
     case 'help':
     case '--help':

@@ -1,6 +1,6 @@
 # practi
 
-The `practi` command (formerly `pop` / `@arshdelight/pop-cli`): a local registry for POP (Protocol of Practice) documents — a personal, content-addressed collection of practice documents, built on [@arshdelight/pop-sdk](https://www.npmjs.com/package/@arshdelight/pop-sdk). Your data lives in your data directory and never leaves the machine; the only network calls are the ones you ask for — self-update (`practi update`), fetching the offline vector model (`practi embed pull`), and staging a URL attachment (`practi blob add <url>`).
+The `practi` command (formerly `pop` / `@arshdelight/pop-cli`): a local registry for POP (Protocol of Practice) documents — a personal, content-addressed collection of practice documents, built on [@arshdelight/pop-sdk](https://www.npmjs.com/package/@arshdelight/pop-sdk). Your data lives in your data directory and never leaves the machine; the only network calls are the ones you ask for — self-update (`practi update`), fetching the offline vector model (`practi embed pull`), staging a URL attachment (`practi blob add <url>`), and optionally syncing with [practihub](https://practihub.com) (see **Hub**, below).
 
 ## Install
 
@@ -116,6 +116,31 @@ Editing is replacing: content addressing means an edit produces a **new root has
 
 - `practi note` keeps **local learning notes** in `notes.json` next to `practi.json` — a sidecar, like `claims`. Each note is pinned to a node hash: content addressing gives the pin exact semantics (the note is about *that version* of the node, and can never drift with edits). Notes never enter the POP protocol body.
 - Two write doors, one file: the CLI (`practi note add <node-hash> -m "step 3 needs admin rights on Windows"` — the gate agents go through) and `practi web`'s **notes sidebar** on the detail page (toggle in the header; lists the current node's notes with inline add/edit/delete; empty file just means an empty panel). The wizard view also renders a node's notes inline on its card, and amber dots in the outline mark nodes that carry notes.
+
+### Hub (practihub, optional)
+
+The workspace can back onto a practice **instance** on practihub — a single-owner, GitHub-like home for one POP's revision chain, with branches. The binding lives in `practi.json` (`remote` + `instance: {owner, name, branch}`), like git's origin + HEAD. Everything below needs `practi login` (OAuth 2.1 + PKCE, browser consent; credentials in `practi.auth.json`, auto-refreshed with rotation).
+
+```
+practi remote set <url> | remove   point at a hub (default: https://practihub.com)
+practi login [--no-open] [--reauth]  OAuth sign-in / re-credentials; logout revokes + drops
+practi me                          show the signed-in account
+practi instance create <name> [--public] [--desc <text>]   create + bind (branch main)
+practi instance bind <owner>/<name> | show                 bind an existing instance / summary
+practi push [hash] [--branch <b>]  store direct pops on the hub (incremental, content-addressed
+                               idempotent) and bind the root as the branch head — fast-forward
+                               enforced server-side (E_NOT_FAST_FORWARD = merge or rebase first)
+practi log [--branch <b>] [--limit N] [--json]   revision history of the current branch (tip first)
+practi branch [name] [--from <hash>] | -d <name>   list (* = default) / create / delete a branch
+practi switch <branch>             switch the bound branch (local pointer; pull brings content)
+practi merge <branch>              merge into the current branch: fast-forward when possible,
+                               otherwise a squash merge revision is constructed locally (a new
+                               root whose revisions entry points at the target head) — the
+                               merge always completes; `practi pull` syncs it back
+practi pull [hash]                 sync the hub claim table into the workspace (multi-device)
+```
+
+Content addressing is untouched: the hub re-derives the root hash server-side with the same SDK, stored documents default to PRIVATE, and publishing (review + public visibility) is a hub-web workflow. Without a bound instance, `push` stores claims only.
 
 ## License
 
