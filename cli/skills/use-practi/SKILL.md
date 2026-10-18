@@ -165,9 +165,9 @@ practi instance create <name> [--public] [--desc <text>]   # create + bind (bran
 practi instance bind <owner>/<name>       # bind an existing instance instead
 practi instance show                      # binding summary: branch, visibility, branches
 
-practi push [hash] [--branch <b>]         # store direct pops on the hub (incremental) and bind
-                                           # the root as the branch head — fast-forward enforced
-                                           # server-side (E_NOT_FAST_FORWARD = merge/rebase first)
+practi push [hash] [--branch <b>]         # one call stores the doc AND binds it as the branch
+                                           # head — fast-forward enforced server-side
+                                           # (E_NOT_FAST_FORWARD = merge/rebase first)
 practi log [--branch <b>] [--json]        # revision history of the current branch (tip first)
 practi branch [name] [--from <hash>]      # list branches (* = default) / create one / -d <name> deletes
 practi switch <branch>                    # switch the bound branch (local pointer; `practi pull` brings content)

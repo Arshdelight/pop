@@ -127,10 +127,9 @@ practi login [--no-open] [--reauth]  OAuth sign-in / re-credentials; logout revo
 practi me                          show the signed-in account
 practi instance create <name> [--public] [--desc <text>]   create + bind (branch main)
 practi instance bind <owner>/<name> | show                 bind an existing instance / summary
-practi push [hash] [--branch <b>]  store direct pops on the hub (incremental, content-addressed
-                               idempotent) and bind the root as the branch head — fast-forward
-                               enforced server-side (E_NOT_FAST_FORWARD = merge or rebase first).
-                               Requires a bound instance
+practi push [hash] [--branch <b>]  one call: store the document AND bind it as the branch head —
+                               fast-forward enforced server-side (E_NOT_FAST_FORWARD = merge or
+                               rebase first). Requires a bound instance
 practi log [--branch <b>] [--limit N] [--json]   revision history of the current branch (tip first)
 practi branch [name] [--from <hash>] | -d <name>   list (* = default) / create / delete a branch
 practi switch <branch>             switch the bound branch (local pointer; pull brings content)

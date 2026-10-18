@@ -15,13 +15,17 @@ const DOC = { name: 'Hub bridge doc', content: 'Content that travels to the hub.
 const ME = { username: 'tester' };
 
 interface MockState {
-  /** PUT branches/:b/head 对该 hash 返回 422（模拟分叉），其余放行 */
+  /** PUT branches/:b/head 与 POST revisions 对该 hash 返回 422（模拟分叉），其余放行 */
   rejectBindFor: string | null;
   /** mock 里 feat 支的头（测试可改写，squash 场景指到本地工作区的真文档） */
   featHead: string;
   /** mine 端点追加返回的认领（pull 测试用；push 的 diff 基准随之变化） */
   mineExtra: string | null;
+  /** revisions 端点对该 hash 回 already_head=true（up-to-date 用例） */
+  upToDateFor: string | null;
   storeCalls: number;
+  seqCounter: number;
+  seenHashes: Set<string>;
   bindCalls: { branch: string; root_hash: string }[];
   createdBranches: { name: string; from_hash?: string }[];
   deletedBranches: string[];
@@ -47,7 +51,7 @@ async function readBody(req: http.IncomingMessage): Promise<string> {
 
 beforeAll(async () => {
   const port = await freePort();
-  mock = { rejectBindFor: null, featHead: 'sha256:' + 'f'.repeat(64), mineExtra: null, storeCalls: 0, bindCalls: [], createdBranches: [], deletedBranches: [] };
+  mock = { rejectBindFor: null, featHead: 'sha256:' + 'f'.repeat(64), mineExtra: null, upToDateFor: null, storeCalls: 0, seqCounter: 0, seenHashes: new Set(), bindCalls: [], createdBranches: [], deletedBranches: [] };
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
     const p = url.pathname;
@@ -69,13 +73,6 @@ beforeAll(async () => {
       respond(res, 200, { results: mock.mineExtra ? [{ root_hash: mock.mineExtra, status: 'PRIVATE' }] : [], total: mock.mineExtra ? 1 : 0 });
       return;
     }
-    if (p === '/api/v1/pop' && req.method === 'POST') {
-      mock.storeCalls++;
-      const doc = JSON.parse(await readBody(req)) as { name?: string };
-      const root = parseDocument(doc).rootHash;
-      respond(res, 201, { root_hash: root, status: 'PRIVATE', idempotent: false });
-      return;
-    }
     const docMatch = /^\/api\/v1\/pop\/([^/]+)$/.exec(p);
     if (docMatch && req.method === 'GET') {
       // pull：文档体必须让客户端验算出同一 root——直接回 DOC 的真身（ref 是 URL 编码的）
@@ -88,9 +85,9 @@ beforeAll(async () => {
       }
       return;
     }
-    const instMatch = /^\/api\/v1\/instances\/([^/]+)\/([^/]+)(\/branches(\/([^/]+))?(\/head)?)?$/.exec(p);
+    const instMatch = /^\/api\/v1\/instances\/([^/]+)\/([^/]+)(\/branches(\/([^/]+))?(\/(head|revisions))?)?$/.exec(p);
     if (instMatch) {
-      // 分组：1=owner 2=name 3=branches 段 4=（含斜杠的支名） 5=支名 6=/head——解构跳过 4
+      // 分组：1=owner 2=name 3=branches 段 4=（含斜杠的支名） 5=支名 6=/head|/revisions——解构跳过 4
       const [, owner, name, branchSeg, , branchName, headSeg] = instMatch;
       if (owner !== ME.username) {
         respond(res, 404, { error: 'E_INSTANCE_NOT_FOUND' });
@@ -139,6 +136,30 @@ beforeAll(async () => {
           return;
         }
         respond(res, 200, { ok: true, head_hash: body.root_hash, branch: decodeURIComponent(branchName) });
+        return;
+      }
+      if (branchName && branchSeg === `/branches/${branchName}/revisions` && req.method === 'POST') {
+        // 存+绑合一端点：解析→FF 判定（rejectBindFor 模拟分叉）→记账→回执
+        const body = JSON.parse(await readBody(req)) as { document: unknown };
+        const root = parseDocument(body.document).rootHash;
+        mock.storeCalls++;
+        if (mock.rejectBindFor !== null && root === mock.rejectBindFor) {
+          respond(res, 422, { error: 'not fast forward', code: 'E_NOT_FAST_FORWARD' });
+          return;
+        }
+        mock.bindCalls.push({ branch: decodeURIComponent(branchName), root_hash: root });
+        const idempotent = mock.seenHashes.has(root);
+        mock.seenHashes.add(root);
+        mock.seqCounter += 1;
+        const already = mock.upToDateFor !== null && root === mock.upToDateFor;
+        respond(res, already || idempotent ? 200 : 201, {
+          root_hash: root,
+          status: 'PRIVATE',
+          idempotent,
+          branch: decodeURIComponent(branchName),
+          seq: mock.seqCounter,
+          already_head: already,
+        });
         return;
       }
     }
@@ -239,7 +260,7 @@ describe('practi hub bridge: branch / switch', () => {
 });
 
 describe('practi hub bridge: push', () => {
-  it('push 存文档并绑分支头（单 direct 免参猜头）', async () => {
+  it('push=存+绑单一调用（单 direct 免参猜头）', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['instance', 'bind', 'tester/my-practice']);
     const root = createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
@@ -247,7 +268,7 @@ describe('practi hub bridge: push', () => {
     const out = await pop(dir, ['push']);
     expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
     expect(out.stdout).toMatch(new RegExp(`pushed:  ${root}`));
-    expect(out.stdout).toMatch(new RegExp(`bound:   tester/my-practice@main → ${root}`));
+    expect(out.stdout).toMatch(new RegExp(`bound:   tester/my-practice@main → ${root}  \\(v\\d+\\)`));
     expect(mock.bindCalls.at(-1)).toEqual({ branch: 'main', root_hash: root });
   });
 
@@ -260,11 +281,41 @@ describe('practi hub bridge: push', () => {
     try {
       const out = await pop(dir, ['push', root, '--branch', 'feat']);
       expect(out.code).toBe(1);
-      expect(out.stdout).toMatch(/pushed:/);
-      expect(out.stderr).toMatch(/bind failed.*merge or rebase first/);
-      expect(mock.bindCalls.at(-1)).toEqual({ branch: 'feat', root_hash: root });
+      expect(out.stdout).not.toMatch(/pushed:/);
+      expect(out.stderr).toMatch(/push failed.*merge or rebase first/);
+      // 合一端点：绑定记账只在成功路径（422 时 mock 不记 bindCalls——服务端语义=不留绑定）
+      expect(mock.bindCalls.at(-1)).not.toEqual({ branch: 'feat', root_hash: root });
     } finally {
       mock.rejectBindFor = null;
+    }
+  });
+
+  it('多 direct 免参=拒绝并要求显式 hash（一次 push=一个支头）', async () => {
+    const dir = await hubWorkspace();
+    await pop(dir, ['instance', 'bind', 'tester/my-practice']);
+    createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
+    createdRoot((await pop(dir, ['new', '--json', JSON.stringify({ name: 'Second', content: 'another doc' })])).stdout);
+    const before = mock.storeCalls;
+
+    const out = await pop(dir, ['push']);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/pass <hash>/);
+    expect(mock.storeCalls).toBe(before); // 不许在无法绑定时偷偷落库
+  });
+
+  it('重推当前支头=up to date 幂等', async () => {
+    const dir = await hubWorkspace();
+    await pop(dir, ['instance', 'bind', 'tester/my-practice']);
+    const root = createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
+
+    mock.upToDateFor = root;
+    try {
+      const out = await pop(dir, ['push', root]);
+      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+      expect(out.stdout).toMatch(new RegExp(`up to date — ${root.slice(7, 19)} is already the head of main`));
+      expect(out.stdout).not.toMatch(/pushed:/);
+    } finally {
+      mock.upToDateFor = null;
     }
   });
 

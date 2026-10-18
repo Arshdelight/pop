@@ -92,10 +92,9 @@ usage:
        | practi new < file.json
   practi pull [hash]                sync the hub's claim table into the local workspace
                                  (multi-device bridge; content is hash-verified on arrival)
-  practi push [hash] [--branch <b>] store local direct pops on the hub and bind the root as
-                                 the branch head (incremental; fast-forward enforced
-                                 server-side). Requires a bound instance — POP lives on
-                                 the hub only as practice instances
+  practi push [hash] [--branch <b>] one call: store the document and bind it as the branch
+                                 head (fast-forward enforced server-side). Requires a bound
+                                 instance — POP lives on the hub only as practice instances
   practi remote set <url> | remove  point practi at a hub (default: https://practihub.com)
   practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)

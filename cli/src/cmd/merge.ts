@@ -117,10 +117,11 @@ export async function runMerge(opts: MergeOpts): Promise<number> {
     ...(Array.isArray(doc.revisions) ? doc.revisions : []),
     { when: new Date().toISOString().slice(0, 10), what: `merge branch ${fromBranch}`, from: intoTip },
   ];
-  const stored = await authedFetch(dataDir, state.remote!.url, '/api/v1/pop', {
+  // 合一端点：存合并修订 + 绑当前支头（from=intoTip，服务端 FF 必过）
+  const stored = await authedFetch(dataDir, state.remote!.url, `${base}/branches/${encodeURIComponent(intoBranch)}/revisions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(doc),
+    body: JSON.stringify({ document: doc }),
   });
   const storedBody = await stored.json();
   if (!stored.ok || typeof storedBody.root_hash !== 'string') {
@@ -129,10 +130,6 @@ export async function runMerge(opts: MergeOpts): Promise<number> {
     return 1;
   }
   const mergeRoot = storedBody.root_hash;
-  if (!(await bind(mergeRoot))) {
-    console.error(`error: merge revision ${shortHash(mergeRoot)} still failed to bind — the target branch moved, retry`);
-    return 1;
-  }
   console.log(`merged (squash): ${fromBranch} → ${intoBranch} as ${shortHash(mergeRoot)}`);
   console.log(`note: the merge revision lives on the hub — \`practi pull ${shortHash(mergeRoot)}\` to sync it locally`);
   return 0;
