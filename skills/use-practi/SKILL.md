@@ -179,7 +179,7 @@ practi logout                             # revoke + drop stored credentials
 
 - **Root hash is the commit.** Pushing stores content-addressed documents; binding a branch head is a pointer move. A fast-forward means the new head's `revisions.from` chain reaches the current head; a diverged `merge` builds a new revision whose content is the branch tip's tree with a `revisions` entry pointing at the target head (legal §2.2 history semantics) — the merge always completes.
 - **The hub never changes the content.** `POST /api/v1/pop` re-derives the root hash server-side with the same SDK; documents default to PRIVATE on the hub. Publishing (review + public visibility) is a hub-web workflow, not a CLI one.
-- Without a bound instance, `push` stores claims only; `pull` works off your claim table either way.
+- Without a bound instance `push` refuses — POP lives on the hub only as practice instances (the document store is object storage addressed by hash, not an inbox). `pull` works off your claim table either way.
 
 ## Finding things again
 

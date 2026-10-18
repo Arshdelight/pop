@@ -92,9 +92,10 @@ usage:
        | practi new < file.json
   practi pull [hash]                sync the hub's claim table into the local workspace
                                  (multi-device bridge; content is hash-verified on arrival)
-  practi push [hash] [--branch <b>] store local direct pops on the hub (incremental) and,
-                                 when an instance is bound, bind the root as the branch
-                                 head (fast-forward enforced server-side)
+  practi push [hash] [--branch <b>] store local direct pops on the hub and bind the root as
+                                 the branch head (incremental; fast-forward enforced
+                                 server-side). Requires a bound instance — POP lives on
+                                 the hub only as practice instances
   practi remote set <url> | remove  point practi at a hub (default: https://practihub.com)
   practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
@@ -492,7 +493,7 @@ async function main(argv: string[]): Promise<number> {
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi push [hash] [--branch <b>]   (store direct pops on the hub; bind the branch head when an instance is bound)');
+        console.log('usage: practi push [hash] [--branch <b>]   (store + bind branch head; requires a bound instance — POP lives on the hub as practice instances)');
         return 0;
       }
       return await runPush({ dataDir: str(values['data-dir']), positional: positionals, branch: values.branch });

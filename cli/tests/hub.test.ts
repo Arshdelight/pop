@@ -268,16 +268,15 @@ describe('practi hub bridge: push', () => {
     }
   });
 
-  it('未绑实例=纯认领推送（提示不猜头）', async () => {
+  it('未绑实例=拒绝推送（pop 在 hub 只以实践实例存放，不做任何存储调用）', async () => {
     const dir = await hubWorkspace();
     createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
     const before = mock.storeCalls;
-    const bindsBefore = mock.bindCalls.length;
     const out = await pop(dir, ['push']);
-    expect(out.code).toBe(0);
-    expect(out.stdout).toMatch(/stored as direct claims only/);
-    expect(mock.storeCalls).toBe(before + 1);
-    expect(mock.bindCalls).toHaveLength(bindsBefore);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/no instance bound/);
+    expect(out.stderr).toMatch(/instance create/);
+    expect(mock.storeCalls).toBe(before); // 一篇都不许落
   });
 });
 

@@ -34,14 +34,21 @@ export function stripAttachmentUrls<T>(node: T): T {
  *   hub 没有就存、有则 idempotent）。
  * - 分支绑定：工作区已绑实例（state.instance）时，把推送的根绑为该支新头——
  *   绑定目标是显式 hash（单一 direct 时免参）；fast-forward 校验在服务端
- *   （E_NOT_FAST_FORWARD = 分支头不是新头的直接修订，先 merge/变基）。未绑实例=
- *   纯认领推送（旧行为）。
+ *   （E_NOT_FAST_FORWARD = 分支头不是新头的直接修订，先 merge/变基）。
+ *   **未绑实例=拒绝推送**（2026-10-18 用户拍板）：pop 在 hub 上只以实践实例的形式
+ *   存放——pop_documents/认领表只是对象存储（哈希存内容的途径），不是入库正门；
+ *   先 `practi instance create|bind` 再 push。
  */
 export async function runPush(opts: PushOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
   if (!state.remote) {
     console.error('error: no remote configured — run `practi remote set <url>` first');
+    return 1;
+  }
+  if (!state.instance) {
+    console.error('error: no instance bound — POP lives on the hub only as practice instances');
+    console.error('       run `practi instance create <name>` or `practi instance bind <owner>/<name>` first');
     return 1;
   }
   const ws = openWorkspace(dataDir);
@@ -113,16 +120,6 @@ export async function runPush(opts: PushOpts): Promise<number> {
   }
 
   // 分支绑定（存完后做）：目标 hash=显式给定的那个；多个 direct 时无法猜头，提示显式传
-  if (!state.instance) {
-    if (opts.branch !== undefined) {
-      console.error('error: --branch needs a bound instance — `practi instance bind <owner>/<name>` first');
-      return 1;
-    }
-    if (failed === 0) {
-      console.log('note: no instance bound — stored as direct claims only (use `practi instance bind <owner>/<name>`)');
-    }
-    return failed ? 1 : 0;
-  }
   const bound = { ...state.instance, ...(opts.branch !== undefined ? { branch: opts.branch } : {}) };
   const tipHash = opts.positional[0]
     ? resolvedTargets[0]
