@@ -16,6 +16,7 @@ var notesOpen = false;  // 右栏开合：默认折叠；首载若本文档有�
 var notesTouched = false; // 用户本页手动开合过——之后自动规则不再介入
 var draftByHash = {};   // 未落库的新建草稿（文档哈希 → 文本）：跨重渲染/导航存活，失焦有内容才落库
 var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动作或重渲染即清）
+var renderedOnce = false; // 首载不滚标志：页面刚打开不代用户跳位（对齐 hub PopViews 首挂载跳过）
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -102,10 +103,13 @@ function render() {
   updateTabs();
   markSide();
   renderNoteSide(); // 右栏跟人走：每次导航换节点都重渲染（草稿保真在 renderNoteSide 内部处理）
-  // 向导视图回顶（瞬移，既有行为）；JSON 视图平滑滚到当前高亮块首行。
+  // 首载不滚：页面刚打开不代用户跳位（浏览器可能正恢复滚动位置）；之后每次导航才
+  // 向导视图回顶（瞬移，既有行为）/ JSON 视图平滑滚到当前高亮块首行。
   // 滚动容器是中间内容列自身（应用壳布局：整页不滚），原生 smooth 滚动天然可中断：
   // 快速连点不同节点时，新目标的滚动指令会取消进行中的动画，从当前位置转向新目标
-  if (view === 'wizard') {
+  if (!renderedOnce) {
+    renderedOnce = true;
+  } else if (view === 'wizard') {
     app.scrollTop = 0;
   } else {
     var hl = document.querySelector('.json-pre .ln.hl');
@@ -275,7 +279,10 @@ function markSide() {
 // 顶部区已撤：返回职责归 header 左上角 brand-link（回目录），定位职责归左侧大纲
 
 function nodeHtml(node) {
-  var html = '<h1 class="node-title">' + escapeHtml(node.name) + '</h1>';
+  // 标题层级对齐 hub：根 h1（22px）/ 子节点 h2（20px）——语义与视觉层级一致
+  var isRoot = path.length === 0;
+  var titleTag = isRoot ? 'h1' : 'h2';
+  var html = '<' + titleTag + ' class="node-title' + (isRoot ? '' : ' child') + '">' + escapeHtml(node.name) + '</' + titleTag + '>';
   if (node.description) html += '<p class="node-desc">' + escapeHtml(node.description) + '</p>';
 
   if (node.type === 'practice') {

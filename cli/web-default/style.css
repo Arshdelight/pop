@@ -73,6 +73,7 @@ a:hover { text-decoration: underline; }
 .detail { max-width: none; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 110px; }
 .detail > *:not(.nav) { max-width: 48rem; margin-inline: auto; }
 .node-title { font-size: 22px; font-weight: 700; color: var(--brand); margin: 8px 0 4px; }
+h2.node-title.child { font-size: 20px; }
 .node-desc { color: var(--brand-60); margin: 0 0 12px; }
 .op-note { font-size: 13px; color: var(--brand-40); font-style: italic; margin: 0 0 8px; }
 .prose { font-size: 16px; line-height: 1.75; color: var(--brand); }
@@ -216,13 +217,6 @@ body.detail-page > header { flex: none; }
 .side-num { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 11px; color: var(--brand-30); margin-right: 6px; }
 .side-item.on .side-num { color: var(--brand-50); }
 .side-root { font-weight: 600; color: var(--brand-60); margin-bottom: 4px; }
-/* 侧栏底部附加区：revisions/refines 汇总（段空不出现） */
-.side-sec { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
-.side-note { display: block; border-radius: 6px; padding: 4px 10px; font-size: 12px; line-height: 1.45; color: var(--brand-40); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba(0, 51, 102, .04); }
-.side-note.mono { display: inline; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 11px; padding: 0; }
-.side-note-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.side-note-row .side-note.plain { flex: 1; min-width: 0; }
 /* 档案底仓：钉在侧栏最底（flex 末位），大纲长过侧栏时随滚动自然跟在内容后 */
 .side-foot { margin-top: auto; padding-top: 4px; }
 @media (min-width: 1024px) {
@@ -243,9 +237,6 @@ a.side-note:hover { color: var(--brand); text-decoration: none; background: rgba
 /* 行级块：短行铺满可视宽、长行铺到内容末尾，高亮行首尾与缩进、逗号全部入色带 */
 .json-pre .ln { display: block; width: max-content; min-width: 100%; }
 .json-pre .ln.hl { background: rgba(0, 51, 102, .08); scroll-margin-top: 64px; }
-/* revisions 折叠：节点自己的变更史，默认收起，好奇点开 */
-/* revisions 折叠已删：revisions/refines 汇总挪到左侧大纲底部（.side-sec） */
-
 /* 学习笔记：只住右侧笔记栏（内容区不出现）；note-time 由右栏条目复用 */
 .note-time { display: block; font-size: 12px; color: var(--brand-40); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
 /* 侧栏大纲的笔记数徽标：实心、可点（跳到该节点并展开笔记栏），
