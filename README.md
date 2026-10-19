@@ -4,7 +4,7 @@
 
 A protocol that defines practice knowledge — "how to do a thing" — as open data: publishable, linkable, verifiable, composable.
 
-**Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring, op composition and revisions have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding. The mapping defines identity, it is not an import channel: tools replay exports only — foreign skills enter POP by authoring.
+**Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring and op composition have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding. The mapping defines identity, it is not an import channel: tools replay exports only — foreign skills enter POP by authoring.
 
 **The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.1.0. The spec covers only the protocol; everything else lives here.
 
@@ -55,7 +55,10 @@ practi blob add <file-or-url> [--name <name>]
                                   are stored too — the pointer itself stays hash-only
 practi claim <hash>               register an existing stored node as a direct pop (indirect → direct)
 practi config                     show data dir and registry summary
-practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi edit <hash> <file.json>    replace a direct POP (new hash; swap recorded in the local commit
+                                log commits.json; GC of unreachable nodes)
+practi fix <file> | <hash> | --all  migrate POP 1.x documents to 2.0: strip the removed history
+                                fields (revisions/refines), re-validate, report the new hash
 practi embed status                report model readiness and index coverage (--json)
 practi embed pull                  fetch the offline vector model into <data-dir>/models/
 practi embed build [--notes]       build/refresh the vector index, incrementally — only hashes
@@ -130,6 +133,7 @@ Semver from 1.0.0: evolution adds optional fields where possible (existing ident
 
 ## History
 
+- **2.0.0** (2026-10-19) — **breaking**: the `revisions` field (all nodes) and the `refines` field (practices) are removed from the document model. A document is now a pure content snapshot; history lives in the repository layer (§9.1): an instance's commit chain `{ seq, root_hash, parent_hash?, message?, created_at }`, and refinement (`refines`) becomes instance metadata — the fork edge points at the root hash a practice improves. Documents carrying the removed fields are rejected per §8 (`E_SCHEMA`) — strip them with `practi fix`. Documents that never carried the fields hash identically under v1 and v2; stripping them from a document that had them yields a new hash (the old hash remains a valid address of the old content). Test vectors (Appendix A) are unchanged — none of them exercised the removed fields.
 - **1.1.0** (2026-09-03) — §5.1: inline media references resolve exclusively against the node's attachment list; `![caption](https://…)` external URL targets are no longer valid grammar (`E_MEDIA_REF`). External bytes are mutable and unauditable — a reviewed link does not stay reviewed. Ordinary markdown links in `content` and an attachment pointer's optional `url` fetch hint (§5) are unchanged. Documents that never used external media references are unaffected; their hashes are unchanged.
 - **1.0.2** (2026-08-27) — §9 no longer names a concrete auth mechanism: authentication and its scopes are hub policy, full stop. §6 clarifies that resource guards (nesting depth, payload size) are implementation policy — refuse with `E_SCHEMA`, never silently drop content. No format change; hashes are unaffected.
 - **1.0.1** (2026-08-25) — validation clarification (§5.1): inline code spans are code, never scanned for media syntax (fenced blocks already were). No format change; hashes are unaffected.

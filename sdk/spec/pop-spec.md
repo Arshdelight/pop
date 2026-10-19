@@ -1,12 +1,12 @@
 # POP — Protocol of Practice
 
-> This document normatively defines POP, **version 1.1.0**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
+> This document normatively defines POP, **version 2.0.0**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
 
 ## 1. Writing POP
 
 A practice is a tree. Leaves are **actions** — atomic steps. Interior nodes are **practices** — compositions.
 
-**Every document reads as a skill**: an action is an atomic skill; a practice is a compositional skill (a skill that composes skills). POP is a content-addressed superset of the skill ecosystem — any skill maps losslessly **into** a document (name → `name`, description → `description`, body → `content`, files → `attachments`); the reverse direction is a **projection**: flow wiring, op composition and revisions have no skill-side serialization, so a document read as a skill is a view of it, not a lossless encoding.
+**Every document reads as a skill**: an action is an atomic skill; a practice is a compositional skill (a skill that composes skills). POP is a content-addressed superset of the skill ecosystem — any skill maps losslessly **into** a document (name → `name`, description → `description`, body → `content`, files → `attachments`); the reverse direction is a **projection**: flow wiring and op composition have no skill-side serialization, so a document read as a skill is a view of it, not a lossless encoding.
 
 ```
 Practice := Action | Op(Practice...)
@@ -40,7 +40,7 @@ Rules:
 2. **Defaults**: `op` → `"seq"`; `content` → `""`. Optional fields are never materialized, and **empty ≡ absent**: an optional field set to an empty array, or to an empty/whitespace-only string, is treated exactly like the absent field — for the hash (§3.2) and for the canonical form (§9). This applies to fields that are **legal for the node type**; the derived-view fields (`attachments`/`inputs`/`outputs`) on a practice are rejected regardless of value (§2.3)
 3. **children inline recursively** — a child is a full same-shaped object; one JSON = one tree. A child may also be a **ChildRef** (`{ hash }`, §2.3) — a reference to an already-stored POP, resolved by the importing implementation into a full subtree at store time (§9). Inline and ChildRef are interchangeable: both contribute the child's own hash to the parent (§3.2), so the two forms produce the same root hash. The same child hash may appear more than once (**twins** are legal — content sharing has no identity cost)
 4. **`from`** carries the producing node's hash — any node of this document, or any node of the importing node library (§4). Document form also accepts `"@<name>"` — authoring sugar: the importer resolves the label against this document's **inline** nodes of that name and stores the hash instead (resolution failures are `E_SCHEMA`, §6; twins share a hash and resolve unambiguously). The stored form always carries hashes
-5. **`revisions` / `refines` travel with the document**; pointers to nodes outside the document are preserved verbatim (dangling tolerated). **Full round-trip fidelity** is a hard requirement: any subtree exported as a document and re-imported elsewhere keeps every field, with hash byte-identical
+5. **The document carries no history.** A document is a pure content snapshot: revision history and refinement lineage are repository-layer records (§9.1), never document fields. **Full round-trip fidelity** is a hard requirement: any subtree exported as a document and re-imported elsewhere keeps every field, with hash byte-identical
 
 Principles, binding for every implementation:
 
@@ -65,7 +65,6 @@ Principles, binding for every implementation:
 | `attachments` | `Attachment[]` | no | Blob pointers (§5); empty array ≡ absent |
 | `inputs` | `FlowItem[]` | no | Consumed flows — **need vs wiring**: `name`+`spec` declare the need (any producer satisfying them qualifies); `from` optionally wires *this* composition to one specific producer (`"@name"` sugar, §1 rule 4) |
 | `outputs` | `FlowItem[]` | no | Produced flows — **the step's acceptance criteria**: a step is successful when its declared outputs are produced (`from` not allowed) |
-| `revisions` | `Revision[]` | no | Revision history |
 
 ### 2.2 Compound types
 
@@ -75,9 +74,6 @@ FlowItem   = { name: string; spec?: string; from?: string }    // from: inputs o
                                                                // it must name an existing node, else E_FLOW_FROM (§6).
                                                                // ABSENT means the need is unwired: the item is prepared
                                                                // externally, or supplied by any producer meeting name+spec.
-Revision   = { when: string; what: string; from?: string; trigger?: string }
-              // from = pre-revision content hash (history chain); trigger = node hash that caused
-              // the revision. Both are history pointers, not containment edges: may dangle, never validated.
 LoopConfig = { mode: "count"; count: integer ≥1 } | { mode: "until"; until: string }
               // until is a natural-language predicate, never evaluated
 Attachment = { name: string; hash: string; mime?: string; size?: integer ≥0; url?: http(s) URL }   // §5: url is an external fetch path, does not participate in the hash
@@ -87,11 +83,10 @@ Attachment = { name: string; hash: string; mime?: string; size?: integer ≥0; u
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `type` / `name` / `description` / `content` / `license` / `metadata` / `revisions` | as action | | |
+| `type` / `name` / `description` / `content` / `license` / `metadata` | as action | | |
 | `op` | `Op` | yes (defaults to `"seq"` in document form) | Composition operator |
 | `children` | `ChildRef[]` | yes, ≥1 | Containment pins |
 | `loop` | `LoopConfig` | no | Only with op=loop |
-| `refines` | string | no | The action this practice refines, by hash — the refinement graph's **successor edge**: an improved version points at the hash it improves. Optional, may dangle; hubs index these edges (§9.1) |
 
 ```ts
 ChildRef = { hash: string }   // the referenced POP's root hash — legal as a children entry in
@@ -137,7 +132,6 @@ payload:
     description? — if present and non-empty
     license?     — if present and non-empty
     metadata?    — if present and non-empty (values participate as-is)
-    revisions?   — included if present and non-empty (whole, incl. from/trigger)
     action:
       attachments?                   — if present and non-empty; each pointer contributes name/hash/mime/size only — url (§5) is stripped and does not participate
       inputs? / outputs?             — if present and non-empty
@@ -145,7 +139,7 @@ payload:
       op
       children: [ childHash, … ]    // ★ Merkle: each child contributes its OWN node hash —
                                      //   inline and ChildRef forms are interchangeable (§1 rule 3)
-      loop? / refines?               — if present (refines: non-empty, §1 rule 2)
+      loop?                          — if present (only with op=loop)
   }
 ```
 
@@ -226,7 +220,7 @@ Then pour along the wall.
 
 | Code | Trigger |
 |---|---|
-| `E_SCHEMA` | Type/constraint violation (derived fields on a practice; op/children/loop/refines on an action; malformed license/metadata; invalid attachment hash/size; duplicate attachment names in a node; a ChildRef carrying any field beyond `hash`; a from-label naming no inline node of the document, several distinct nodes, or closing a dataflow loop, §1 rule 4; an **unknown field anywhere** — §8: unrecognized fields are rejected, never dropped) |
+| `E_SCHEMA` | Type/constraint violation (derived fields on a practice; op/children/loop on an action; malformed license/metadata; invalid attachment hash/size; duplicate attachment names in a node; a ChildRef carrying any field beyond `hash`; a from-label naming no inline node of the document, several distinct nodes, or closing a dataflow loop, §1 rule 4; an **unknown field anywhere** — §8: unrecognized fields are rejected, never dropped; v1 history fields `revisions` / `refines` are unknown since 2.0.0 — strip them before importing, e.g. with `practi fix`) |
 | `E_DANGLING` | a children pin or ChildRef names a hash absent from the node library / not stored on the hub (§9) |
 | `E_FLOW_FROM` | inputs.from carries a hash that names no node in scope (the only flow field validated for dangling) |
 | `E_OP` / `E_LOOP` | `E_OP`: an op value outside {seq, par, choice, loop, set}. `E_LOOP`: a loop config that is malformed, or carried on a non-loop op |
@@ -235,7 +229,7 @@ Then pour along the wall.
 | `E_BLOB_MISSING` / `E_BLOB_CORRUPT` | Blob absent / content or size disagrees with the pointer |
 | `E_MEDIA_REF` | Inline media reference names a target that is not exactly an entry of the node's attachment list (http(s) URL targets included — external references are not valid grammar, v1.1.0) |
 
-Never validated (dangling tolerated — history pointers): `refines`, `revisions.from`, `revisions.trigger`.
+History and lineage pointers (commit parents, refinement edges) live in repository layers (§9.1) — outside the document, hence outside this validation surface.
 
 Codes beyond this table (e.g. `E_AMBIGUOUS`, `E_NOT_FOUND` for hash-prefix addressing) are implementation-local: the node library's storage and addressing are implementation-defined (§4).
 
@@ -264,7 +258,7 @@ When a practice is read, steps / attachments / flow / **declared inputs & output
 
 - Dedup keys: attachments `hash+name` (same blob under different names = different uses, kept); declared flows `name+spec+declaring node`
 - **Declared flows are first-class view entries**: each action's `inputs` (needs) and `outputs` (productions, the acceptance criteria) ride along with the declaring node's hash — unwired inputs appear too, even though they generate no flow edge
-- **Stale-pin annotation (non-normative)**: views and validators *should* annotate a `from` (or child pin) whose target has known refinements — a stored practice whose `refines` names that hash (§9.1). Informational, never a validation error: informing, not forcing (pins keep addressing old content — git semantics)
+- **Stale-pin annotation (non-normative)**: views and validators *should* annotate a `from` (or child pin) whose target has known refinements — refinement edges are repository-layer records (§9.1), so this annotation is available only where a hub has indexed them. Informational, never a validation error: informing, not forcing (pins keep addressing old content — git semantics)
 - op semantics: `seq` concatenates in order; `par` marks steps parallelizable; `choice` marks alternatives; `loop` marks repetition (count ×N, until "repeat until: \<predicate\>"); `set` is a directory view — one entry per direct child, **no recursive aggregation** (aggregating unrelated practices is noise)
 - Depth is normalized to the read root: the same subtree read at any granularity yields strictly equivalent views
 
@@ -308,7 +302,8 @@ Content addressing fixes *what* a document is; a hub additionally decides *who o
   - `indirect` — a document the owner's `direct` documents reference (an inline child, §4.2). Derived automatically, invisible to the user.
   A user's claim on a hash is at most one; `direct` dominates `indirect`.
 - **Children are first-class documents, inline or referenced.** Every child — an inline subtree or a `{ hash }` ChildRef (§2.3) — is stored under its own hash and claimed `indirect` by the uploader. A ChildRef resolves against already-stored content (missing → `E_DANGLING`) and never stores a second copy (content-addressed dedup). A child subtree may reference nodes outside itself (`inputs.from`, §1 rule 4): treat such references as dangling rather than rejecting the child — its identity is its hash, not flow-closure.
-- **Refinement indexing.** A stored practice's `refines` edge (improved version → improved-upon hash, §2.3) is indexable: the hub keeps the reverse index (hash → its refinements), so anyone referencing a hash can discover that improvements of it exist. Publishing a refinement is optional — `refines` is a history pointer, never enforced; several refinements of one hash form a candidate list, and ranking belongs to the trust layer, not the protocol. Annotation is advisory and never blocks validation.
+- **Commit history.** An instance's evolution is a repository-layer chain of commits — `{ seq, root_hash, parent_hash?, message?, created_at }`, one row per stored version; `parent_hash` names the head the commit grew from (absent on the first commit). Pushing a document appends one commit and moves the branch pointer; the document itself carries none of this — it is a pure snapshot (§1 rule 5). Branches are pointers into the chain: a fast-forward re-binds the pointer, a diverged merge appends a squash commit. Because the chain is instance-owned, deleting a document never breaks history.
+- **Refinement indexing.** A practice instance may declare a `refines` edge — the root hash of the practice it improves (the fork relation of the practice world). The edge is **instance metadata, not a document field**: it lives beside the instance's history, may dangle, and is never validated by the document grammar. The hub keeps the reverse index (hash → the instances refining it), so anyone referencing a hash can discover that improvements of it exist. Publishing a refinement is optional — the edge is a lineage pointer, never enforced; several refinements of one hash form a candidate list, and ranking belongs to the trust layer, not the protocol. Annotation is advisory and never blocks validation.
 - **Lifecycle.** Removing a `direct` claim (author delete; "edit" = delete the old hash's claim + upload the new hash) reclaims the owner's `indirect` claims on the deleted document's children. A document with **no remaining claims may be hard-deleted** — its identity is gone, and a future upload of the same content starts a fresh document. **Referencing is claiming**: as long as any live document references a hash, that hash carries an indirect claim and survives — the claim table is the reference count that guarantees deletion never orphans another user's references; hard delete requires zero claims, direct and indirect alike.
 - **Visibility.** Non-public documents are readable by their claimers; publication status is a hub application-layer policy, not part of the protocol (§3.3).
 - **Blob retention.** Blob bytes are not transported (§9); they live client-side or at external urls. A hub that chooses to host blobs may let them outlive the documents that reference them; garbage collection is hub policy (§5) — such a hub should not delete a blob while any live document carries a pointer to it.
