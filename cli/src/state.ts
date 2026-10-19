@@ -8,13 +8,14 @@ export const STATE_FILE = 'practi.json';
 const LEGACY_STATE_FILE = 'pop.json';
 export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
-/** 默认 remote：开箱即连官方 hub；自建/本地 hub 用 `practi remote set <url>` 覆盖 */
+/** 官方 hub 地址。仅作文档示例（`practi remote set` 的 usage 举例）——
+ *  CLI 不设隐式默认：未配置 remote 时 hub 命令明确报错并指路 `practi remote set`。 */
 export const DEFAULT_REMOTE_URL = 'https://practihub.com';
 
 export interface State {
   schema: 1;
-  /** Remote hub origin（如 https://practihub.com）。缺省=官方 hub（DEFAULT_REMOTE_URL）；
-   *  `practi remote set|remove` 维护。0.12 曾随 hub 下线移除、hub 恢复后原样回归。 */
+  /** Remote hub origin（如 https://practihub.com）。无隐式默认——未配置时 hub 命令
+   *  报 "no remote configured" 并指路 `practi remote set`。`practi remote set|remove` 维护。 */
   remote?: { url: string };
   /** 工作区绑定的实践实例（git 的 origin+HEAD 同构）：owner/name 定位 /u/{owner}/{name}，
    *  branch=当前支名。`practi instance bind|create` 与 `practi switch` 写入；

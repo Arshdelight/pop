@@ -7,8 +7,7 @@ import { runNotePromote } from './promote.js';
 
 /**
  * practi note — 本地学习笔记（sidecar notes.json，不进协议）。
- * 钉在任一节点的哈希上，侧重学习/复现经验；内容真实性的公共讨论走 practi comment（远端）。
- * 命令面孔对齐 comment：子命令式、-m 带内容、--json 给 agent。
+ * 钉在任一节点的哈希上，侧重学习/复现经验；子命令式、-m 带内容、--json 给 agent。
  */
 
 export interface NoteOpts {
@@ -21,15 +20,18 @@ export interface NoteOpts {
 }
 
 const USAGE = `usage: practi note add|list|edit|delete|promote
-  practi note add <node> -m "<笔记内容>" [--json]
-                  把学习/复现笔记钉在节点哈希上（前缀 OK；本地记录，不上传）
+  practi note add <node> -m "<text>" [--json]
+                  pin a learning/reproduction note to a node hash (prefix OK; local only,
+                  never uploaded)
   practi note list [hash] [--json]
-                  无参=全部笔记（按所属文档分组）；hash=只看该节点子树内的笔记
-  practi note edit <note-id> -m "<新内容>" [--json]
+                  no arg = all notes (grouped by owning document); hash = only notes within
+                  that node's subtree
+  practi note edit <note-id> -m "<new text>" [--json]
   practi note delete <note-id>
   practi note promote <note-id> [--out <file>]
-                  把笔记回流成**草稿文档**（所属 direct 根的 --doc，笔记原文插在
-                  对应节点里）；只产草稿、绝不自动 edit——是否并入由人确认`;
+                  turn a note back into a draft document (the owning direct root's --doc,
+                  the note spliced in at its node); drafts only, never an automatic edit —
+                  merging it in is your call`;
 
 export function runNote(opts: NoteOpts): number {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -63,7 +65,7 @@ function notePromote(opts: NoteOpts, dataDir: string): number {
 function noteAdd(opts: NoteOpts, dataDir: string): number {
   const target = opts.positional[1];
   if (!target || !opts.message || !opts.message.trim()) {
-    console.error('usage: practi note add <node> -m "<笔记内容>"');
+    console.error('usage: practi note add <node> -m "<text>"');
     return 1;
   }
   // 存在性校验兼前缀解析：笔记必须钉在工作区已有的节点上（挡手滑哈希）
@@ -166,7 +168,7 @@ function reportMutation(id: string, m: NoteMutation): number {
 function noteEdit(opts: NoteOpts, dataDir: string): number {
   const id = opts.positional[1];
   if (!id || !opts.message || !opts.message.trim()) {
-    console.error('usage: practi note edit <note-id> -m "<新内容>"');
+    console.error('usage: practi note edit <note-id> -m "<new text>"');
     return 1;
   }
   const m = updateNote(dataDir, id, opts.message);

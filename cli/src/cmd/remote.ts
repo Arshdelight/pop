@@ -1,4 +1,4 @@
-import { defaultDataDir, DEFAULT_REMOTE_URL, loadState, saveState } from '../state.js';
+import { defaultDataDir, loadState, saveState } from '../state.js';
 import { loadCredentials, deleteCredentials } from '../credentials.js';
 import { cliResource, revokeToken } from '../oauth.js';
 
@@ -40,15 +40,8 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
     case 'remove': {
       delete state.remote;
       saveState(dataDir, state);
-      console.log(`remote removed — falls back to the official hub (${DEFAULT_REMOTE_URL})`);
-      // 与 set 同规：换回官方 hub 时，自建 hub 签发的凭据已无用——revoke（best-effort）并清除
-      const creds = loadCredentials(dataDir);
-      if (creds && creds.resource && creds.resource !== cliResource(DEFAULT_REMOTE_URL)) {
-        const oldOrigin = creds.resource.replace(/\/cli$/, '');
-        if (oldOrigin) await revokeToken(oldOrigin, creds.client_id, creds.refresh_token, 'refresh_token');
-        deleteCredentials(dataDir);
-        console.log(`note: cleared credentials issued by ${oldOrigin} — run \`practi login\` against ${DEFAULT_REMOTE_URL}`);
-      }
+      console.log('remote removed — hub commands need `practi remote set <url>` first');
+      // 凭据保留在盘上：重设同一 hub 会话不丢；`remote set` 到不同 hub 时会 revoke 并清除
       return 0;
     }
     default:

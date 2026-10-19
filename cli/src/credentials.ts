@@ -41,11 +41,6 @@ function findAuthFile(dataDir: string): string | null {
   return null;
 }
 
-/** 实际存放凭证的文件（practi.auth.json，或改名前的 pop.auth.json）——显示用 */
-export function existingAuthFile(dataDir: string): string | null {
-  return findAuthFile(dataDir);
-}
-
 export function loadCredentials(dataDir: string): Credentials | null {
   const p = findAuthFile(dataDir);
   if (p === null) return null;

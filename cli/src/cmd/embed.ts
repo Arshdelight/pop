@@ -28,13 +28,15 @@ export interface EmbedOpts {
 }
 
 const USAGE = `usage: practi embed status|pull|build|prune [--json]
-  practi embed status           模型是否就绪、向量索引覆盖了多少节点
-  practi embed pull             下载离线向量模型到 <data-dir>/models/（约 24MB，走系统代理）
-  practi embed build [--notes]  建立/增量更新向量索引（只嵌缓存里没有的节点）
-  practi embed prune            删掉旧模型指纹留下的向量桶
+  practi embed status           model readiness and how many nodes the vector index covers
+  practi embed pull             download the offline vector model into <data-dir>/models/
+                                (~24MB, via the system proxy)
+  practi embed build [--notes]  build / incrementally refresh the vector index (only nodes
+                                not cached yet)
+  practi embed prune            drop vector buckets left behind by an older model fingerprint
 
-语义召回是**可选层**：没有模型时 practi 照常工作（纯词法），search --semantic 会
-明确告诉你缺什么，而不是悄悄少召回。`;
+Semantic recall is an optional layer: without a model practi works as usual (lexical only),
+and search --semantic says what is missing instead of quietly recalling less.`;
 
 export async function runEmbed(opts: EmbedOpts): Promise<number> {
   const sub = opts.positional[0];

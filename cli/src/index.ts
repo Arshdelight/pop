@@ -73,9 +73,9 @@ usage:
                                  stored node references (dry-run by default; --apply removes)
   practi fetch <hash>               pull a single POP from the hub into your local registry
                                  (direct; full sha256 hash — no prefix guessing). Public
-                                 content is fetchable by anyone; private only by instance
-                                 owners. No instance involved — the object goes straight
-                                 into your pop library
+                                 content is fetchable by any signed-in account; private
+                                 only by instance owners. No instance involved — the
+                                 object goes straight into your pop library
   practi fix <file.json> | <hash> | --all
                                  migrate POP 1.x documents to 2.0: strip the removed history
                                  fields (revisions/refines), re-validate, report the new hash.
@@ -119,7 +119,8 @@ usage:
                                  --message or the local commit log supplies the commit
                                  message). Requires a bound instance — POP lives on the
                                  hub only as practice instances
-  practi remote set <url> | remove  point practi at a hub (default: https://practihub.com)
+  practi remote set <url> | remove  point practi at a hub (no implicit default; hub commands
+                                 need a remote)
   practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
   practi repair                     backfill missing claim timestamps from node file times
@@ -466,11 +467,17 @@ async function main(argv: string[]): Promise<number> {
       });
       const known = ['install', 'update', 'uninstall', 'import', 'export'] as const;
       const action = known.find((k) => k === sub);
-      if (values.help || action === undefined) {
+      if (values.help) {
         console.log('usage: practi skill install|update|uninstall [--dir <skills-dir>]   (default dir: ~/.agents/skills)');
         console.log('       practi skill import <skill-dir> [--data-dir <dir>]          replay a `practi skill export` directory (sidecar required)');
         console.log('       practi skill export <ref> [--dir <out-dir>] [--data-dir <dir>]  POP → skill directory');
-        return sub !== undefined && !values.help ? 1 : 0;
+        return 0;
+      }
+      if (action === undefined) {
+        console.error('usage: practi skill install|update|uninstall [--dir <skills-dir>]   (default dir: ~/.agents/skills)');
+        console.error('       practi skill import <skill-dir> [--data-dir <dir>]          replay a `practi skill export` directory (sidecar required)');
+        console.error('       practi skill export <ref> [--dir <out-dir>] [--data-dir <dir>]  POP → skill directory');
+        return 1;
       }
       return runSkill({ action, dir: values.dir, dataDir: str(values['data-dir']), positional: positionals[0] });
     }

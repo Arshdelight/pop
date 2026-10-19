@@ -123,7 +123,7 @@ export async function runMerge(opts: MergeOpts): Promise<number> {
   const ws = openWorkspace(dataDir);
   const tipNode = ws.nodes.get(fromTip);
   if (!tipNode) {
-    console.error(`error: branch tip ${shortHash(fromTip)} is not in the local workspace — \`practi pull ${shortHash(fromTip)}\` first`);
+    console.error(`error: branch tip ${shortHash(fromTip)} is not in the local workspace — \`practi fetch ${shortHash(fromTip)}\` first`);
     return 1;
   }
   const doc = stripAttachmentUrls(exportSubtree(tipNode, ws.nodes));
@@ -140,6 +140,6 @@ export async function runMerge(opts: MergeOpts): Promise<number> {
   }
   const mergeRoot = storedBody.root_hash;
   console.log(`merged (squash): ${fromBranch} → ${intoBranch} as ${shortHash(mergeRoot)}`);
-  console.log(`note: the merge commit lives on the hub — \`practi pull ${shortHash(mergeRoot)}\` to sync it locally`);
+  console.log(`note: the merge commit lives on the hub — \`practi fetch ${shortHash(mergeRoot)}\` to sync it locally`);
   return 0;
 }

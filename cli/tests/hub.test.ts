@@ -355,7 +355,7 @@ describe('practi hub bridge: merge', () => {
     expect(mock.storeCalls).toBe(storesBefore); // FF 零新提交
   });
 
-  it('分叉合并：parent 链不可达 → squash（POST 文档+message，内容哈希不变）并提示 pull 同步', async () => {
+  it('分叉合并：parent 链不可达 → squash（POST 文档+message，内容哈希不变）并提示 fetch 同步', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['instance', 'bind', 'tester/my-practice']);
     const root = createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
@@ -366,7 +366,7 @@ describe('practi hub bridge: merge', () => {
       const out = await pop(dir, ['merge', 'feat']);
       expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
       expect(out.stdout).toMatch(new RegExp(`merged \\(squash\\): feat → main as ${root.slice(7, 19)}`));
-      expect(out.stdout).toMatch(new RegExp(`practi pull ${root.slice(7, 19)}`));
+      expect(out.stdout).toMatch(new RegExp(`practi fetch ${root.slice(7, 19)}`));
       // POP 2.0：squash 不再改写文档内容——同一棵树，提交说明走 message
       expect(mock.lastMessage).toBe("merge branch 'feat'");
       const lastBind = mock.bindCalls.at(-1);
