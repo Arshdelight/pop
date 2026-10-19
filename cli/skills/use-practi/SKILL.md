@@ -49,7 +49,7 @@ The local workflow is fully offline. Optionally, the workspace can sync with pra
 | `attachments` | action | blob pointers (below) |
 | `license` / `metadata` | both | reuse terms / vendor bag (`x-<vendor>-<name>` keys) |
 
-Documents carry **no history fields**: a document is a pure content snapshot. Revisions live in the repository layer (a hub instance's commit chain), and "this practice improves that one" is instance metadata (`refines`, §9.1) — never document fields. Documents carrying the POP 1.x `revisions`/`refines` fields are rejected (`E_SCHEMA`); migrate them with `practi fix`.
+Documents carry **no history fields**: a document is a pure content snapshot. Revisions live in the repository layer (a hub instance's commit chain), and "this practice improves that one" is instance metadata (`refines`, §9.1) — never document fields. Documents carrying the POP 1.x `revisions`/`refines` fields are rejected (`E_SCHEMA`); migrate them with `practi fix <file>|<hash>|--all` (`--dry-run` previews, the new hash is reported per document).
 
 ```json
 {
@@ -136,7 +136,7 @@ practi show <hash>           # aggregate view; --json machine view (steps carry 
                                # the one-read reproduction view); --doc full document form
 practi similar <hash>        # content neighbours: "what else is about this?" — literal
                                # (character-bigram) similarity, not semantics
-practi ls [-a]               # direct roots; -a adds indirect nodes
+practi ls [-a] [--json]     # direct roots; -a adds indirect nodes; --json machine view
 practi search <q> [--notes] [--semantic]
                              # offline search over EVERY stored node — name / description /
                              # content / declared inputs+outputs / loop prose (+ notes)
@@ -183,11 +183,11 @@ practi pull                               # sync the bound instance's remote rev
                                            # (git pull inside the repository: fetch missing chain revisions,
                                            # fast-forward the head when your local direct is an ancestor)
 practi fetch <hash>                       # pull a single POP from the hub into your local registry (direct;
-                                           # full sha256 hash — public content fetchable by anyone)
+                                           # full sha256 hash — public content fetchable by any signed-in account)
 practi logout                             # revoke + drop stored credentials
 ```
 
-- **The commit is repository state, the document is a snapshot.** The instance keeps a commit chain (`seq`, `root_hash`, `parent_hash`, `message`) — history lives there, never in the document. Pushing appends one commit (parent = current head) and moves the branch pointer. A fast-forward means the merged tip's parent chain reaches the current head (a pointer move); a diverged `merge` appends a squash commit whose tree is the branch tip's, with parent = current head — the merge always completes.
+- **The commit is repository state, the document is a snapshot.** The instance keeps a commit chain (`seq`, `root_hash`, `parent_hash?`, `message?`, `created_at`) — history lives there, never in the document. Pushing appends one commit (parent = current head) and moves the branch pointer. A fast-forward means the merged tip's parent chain reaches the current head (a pointer move); a diverged `merge` appends a squash commit whose tree is the branch tip's, with parent = current head — the merge always completes.
 - **The hub never changes the content.** Pushes are re-hashed server-side with the same SDK; visibility follows the instance (a PUBLIC instance's chain is readable by anyone, PRIVATE only by its owner). Making an instance public is a hub-web workflow, not a CLI one.
 - POP lives on the hub only as practice instances (the document store is object storage addressed by hash, not an inbox): without a bound instance `push` and `pull` refuse — start with `clone` or `instance bind`/`create`. There is no claim table: what you pulled from an instance is its chain, and a lone hash travels via `fetch`.
 
@@ -277,4 +277,4 @@ practi skill import <dir>                # replay a `practi skill export` direct
 - **Find prior art** — `practi search <query>` (add `--notes`; use `field:` when you know which field it was in) → `practi show <hash>`. When you cannot recall any wording, start from a node you *do* have and run `practi similar <hash>`.
 - **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"` (notes stay local). Later, `practi note promote <note-id>` turns that note back into a draft of the practice it belongs to, so the lesson does not rot in the sidecar.
 - **Organize under a set** — a `set` op document is a directory: it pins episodes as `{ hash }` children (episodes live once, as indirect nodes). To move standalone POPs under a set, edit the set to reference them, then `practi unclaim` each — unclaim fails with `E_NOT_REFERENCED` if nothing references the node (that would orphan it; `practi remove` is the delete path). `practi claim <hash>` registers any stored node back as direct.
-- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, records the swap in the local commit log (`commits.json`: `from` = old root, the message rides along and is pushed as the commit note), and garbage-collects nodes no longer reachable from any direct POP (reachability follows children pins and `inputs.from` references alike; `--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Editing is replacing — new content lives under a new root hash. Improving someone else's practice is a new instance on the hub with `refines` set to the original's root hash (§9.1).
+- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, records the swap in the local commit log (`commits.json`: `from` = old root, the message rides along and is pushed as the commit note), and garbage-collects nodes no longer reachable from any direct POP (reachability follows children pins and `inputs.from` references alike; `--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Editing is replacing — new content lives under a new root hash. Improving someone else's practice is a new instance on the hub declaring `refines` → the original's root hash (§9.1); declaring the edge is a hub-side action for now — the CLI carries no flag for it.
