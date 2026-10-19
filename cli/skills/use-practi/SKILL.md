@@ -47,9 +47,9 @@ The local workflow is fully offline. Optionally, the workspace can sync with pra
 | `inputs` | action | consumed flows: `name` + optional `spec`; optional `from` wires one producer |
 | `outputs` | action | produced flows — the step's acceptance criteria (`from` not allowed) |
 | `attachments` | action | blob pointers (below) |
-| `revisions` | both | history records `{when, what}` — travel with the document |
-| `refines` | practice | hash of the node this practice improves — the refinement edge |
 | `license` / `metadata` | both | reuse terms / vendor bag (`x-<vendor>-<name>` keys) |
+
+Documents carry **no history fields**: a document is a pure content snapshot. Revisions live in the repository layer (a hub instance's commit chain), and "this practice improves that one" is instance metadata (`refines`, §9.1) — never document fields. Documents carrying the POP 1.x `revisions`/`refines` fields are rejected (`E_SCHEMA`); migrate them with `practi fix`.
 
 ```json
 {
@@ -124,7 +124,9 @@ The command prints a ready-to-paste object. Put it on the **action's** `attachme
 
 ```bash
 practi new doc.json          # or: practi new --json '<text>'  /  practi new < doc.json (stdin)
-practi edit <hash> doc.json  # replace a direct POP (new hash; auto-revision + GC of unreachable nodes)
+practi edit <hash> doc.json  # replace a direct POP (new hash; the swap lands in the local commit
+                             # log commits.json — --message sets the commit note pushed later;
+                             # GC of unreachable nodes)
 practi remove <hash>         # take a direct pop out of the local directory (registry op; GCs
                                # unreachable nodes — shared indirect nodes survive)
 practi claim <hash>          # register an existing stored node as a direct pop (indirect → direct)
@@ -166,18 +168,20 @@ practi instance bind <owner>/<name>       # bind an existing instance instead
 practi instance show                      # binding summary: branch, visibility, branches
 
 practi push [hash] [--branch <b>]         # one call stores the doc AND binds it as the branch
-                                           # head — fast-forward enforced server-side
-                                           # (E_NOT_FAST_FORWARD = merge/rebase first)
-practi log [--branch <b>] [--json]        # revision history of the current branch (tip first)
+                                           # head; the commit is appended with parent = current
+                                           # head (--message / the local commit log supplies the note)
+practi log [--branch <b>] [--json]        # commit history of the current branch (tip first;
+                                           # unpushed local entries listed on top)
 practi branch [name] [--from <hash>]      # list branches (* = default) / create one / -d <name> deletes
 practi switch <branch>                    # switch the bound branch (local pointer; `practi pull` brings content)
-practi merge <branch>                     # merge into the current branch: fast-forward when possible,
-                                           # otherwise a squash merge revision is constructed locally
+practi merge <branch>                     # merge into the current branch: fast-forward when the tip's
+                                           # parent chain reaches the head, otherwise a squash merge
+                                           # commit is appended — always succeeds
 practi pull [hash]                        # sync the hub claim table into the workspace (multi-device)
 practi logout                             # revoke + drop stored credentials
 ```
 
-- **Root hash is the commit.** Pushing stores content-addressed documents; binding a branch head is a pointer move. A fast-forward means the new head's `revisions.from` chain reaches the current head; a diverged `merge` builds a new revision whose content is the branch tip's tree with a `revisions` entry pointing at the target head (legal §2.2 history semantics) — the merge always completes.
+- **The commit is repository state, the document is a snapshot.** The instance keeps a commit chain (`seq`, `root_hash`, `parent_hash`, `message`) — history lives there, never in the document. Pushing appends one commit (parent = current head) and moves the branch pointer. A fast-forward means the merged tip's parent chain reaches the current head (a pointer move); a diverged `merge` appends a squash commit whose tree is the branch tip's, with parent = current head — the merge always completes.
 - **The hub never changes the content.** `POST /api/v1/pop` re-derives the root hash server-side with the same SDK; documents default to PRIVATE on the hub. Publishing (review + public visibility) is a hub-web workflow, not a CLI one.
 - Without a bound instance `push` refuses — POP lives on the hub only as practice instances (the document store is object storage addressed by hash, not an inbox). `pull` works off your claim table either way.
 
@@ -267,4 +271,4 @@ practi skill import <dir>                # replay a `practi skill export` direct
 - **Find prior art** — `practi search <query>` (add `--notes`; use `field:` when you know which field it was in) → `practi show <hash>`. When you cannot recall any wording, start from a node you *do* have and run `practi similar <hash>`.
 - **Learn from a practice** — reproduce it, then pin what you learned to the step that taught it: `practi note add <node-hash> -m "…"` (notes stay local). Later, `practi note promote <note-id>` turns that note back into a draft of the practice it belongs to, so the lesson does not rot in the sidecar.
 - **Organize under a set** — a `set` op document is a directory: it pins episodes as `{ hash }` children (episodes live once, as indirect nodes). To move standalone POPs under a set, edit the set to reference them, then `practi unclaim` each — unclaim fails with `E_NOT_REFERENCED` if nothing references the node (that would orphan it; `practi remove` is the delete path). `practi claim <hash>` registers any stored node back as direct.
-- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, appends a revision (`from` = old root — a history pointer, may dangle by design), and garbage-collects nodes no longer reachable from any direct POP (reachability follows children pins and `inputs.from` references alike; `--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Editing is replacing — new content lives under a new root hash. Improving an indirect practice is a new document with `refines` set, via `practi new`.
+- **Edit one of your direct POPs** — `practi show <hash> --doc > doc.json` → edit the JSON → `practi edit <hash> doc.json --message "what changed"`. The edit validates and stores the new tree, swaps the direct root, records the swap in the local commit log (`commits.json`: `from` = old root, the message rides along and is pushed as the commit note), and garbage-collects nodes no longer reachable from any direct POP (reachability follows children pins and `inputs.from` references alike; `--keep` preserves them; blobs stay put — `practi gc` sweeps orphaned ones on demand). Editing is replacing — new content lives under a new root hash. Improving someone else's practice is a new instance on the hub with `refines` set to the original's root hash (§9.1).

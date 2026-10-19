@@ -4,16 +4,13 @@
   "description": "How to write a valid, high-quality practice document per pop-spec.md — the rules an agent follows when it records what it just did.",
   "license": "CC-BY-4.0",
   "metadata": {
-    "x-arsh-spec-version": "1.0.0",
+    "x-arsh-spec-version": "2.0.0",
     "x-arsh-role": "guide",
     "x-arsh-audience": ["agents", "humans"],
     "x-arsh-purpose": "seed corpus for Practihub"
   },
   "content": "POP is a document format, not a workflow engine: a practice is a JSON tree of actions and composed practices, and its identity is a Merkle root hash over the whole tree. Nothing here is executed — judgement stays in prose, with a person or an agent. When you write a practice, write what you actually did, in the order you did it, and let every rule below follow from one principle: identity is content, and a reference is content too.",
   "op": "seq",
-  "revisions": [
-    { "when": "2026-08-22", "what": "First release as the seed authoring guide." }
-  ],
   "children": [
     {
       "type": "practice",
@@ -114,15 +111,15 @@
     },
     {
       "type": "action",
-      "name": "Record history in revisions",
-      "description": "revisions travel with the document.",
-      "content": "A revision is a when/what record of the history; from and trigger are optional history pointers that may dangle and are never validated. A revision is content — adding one changes the hash, so revision history is part of identity."
+      "name": "Leave history to the repository",
+      "description": "A document is a pure content snapshot — it carries no history fields.",
+      "content": "The document records no history: revision lineage lives in the repository layer (a hub instance's commit chain: seq, root_hash, parent_hash, message), and \"this practice improves that one\" is instance metadata on the hub, never a document field. A document that carries POP 1.x history fields (revisions, refines) is rejected — strip them with practi fix and let the repository remember."
     },
     {
       "type": "action",
       "name": "Refine instead of rewriting",
       "description": "Editing a node produces a new node under a new hash.",
-      "content": "Content is immutable: editing means uploading the changed tree under its new root hash. An improved practice may point at what it improves with refines (optional, may dangle, never enforced). Old references keep addressing old content — the git model, with no drift and no repinning."
+      "content": "Content is immutable: editing means uploading the changed tree under its new root hash, and the commit chain remembers where it grew from. An improved practice is a new instance on the hub whose refines metadata points at the root hash it improves — optional, may dangle, never enforced. Old references keep addressing old content — the git model, with no drift and no repinning."
     },
     {
       "type": "practice",

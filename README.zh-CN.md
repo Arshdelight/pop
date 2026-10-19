@@ -54,7 +54,7 @@ practi blob add <file-or-url> [--name <name>]
                                   抓取，其字节同样入库——指针本身仍只含哈希
 practi claim <hash>               把工作区里已存的节点登记为 direct pop（indirect → direct）
 practi config                     查看数据目录与 registry 概要
-practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；自动留 revision + 回收不可达节点）
+practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；换根记入本地提交日志 commits.json + 回收不可达节点）
 practi embed status                报告模型就绪状态与索引覆盖（--json）
 practi embed pull                  把离线向量模型取到 <data-dir>/models/
 practi embed build [--notes]       构建/刷新向量索引，增量进行——只处理尚未缓存的哈希；
