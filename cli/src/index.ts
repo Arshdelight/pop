@@ -27,6 +27,8 @@ import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runRemote } from './cmd/remote.js';
 import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
+import { runClone } from './cmd/clone.js';
+import { runFetch } from './cmd/fetch.js';
 import { runInstance } from './cmd/instance.js';
 import { runBranch } from './cmd/branch.js';
 import { runSwitch } from './cmd/switch.js';
@@ -51,6 +53,12 @@ usage:
                                  from the current branch head (or --from, a registered
                                  revision), -d deletes the pointer (default branch is kept)
   practi claim <hash>              register an existing stored node as a direct pop (indirect → direct)
+  practi clone <owner>/<name>[@branch]
+                                 fetch a practice instance from the hub into this workspace,
+                                 bind to it (git clone: the instance IS the repository), pull
+                                 every revision of its branch, and check out the head as a
+                                 direct pop. The hub has no claim table — clone is how
+                                 someone else's practice travels
   practi config                     show data dir and registry summary
   practi edit <hash> <file.json>    replace a direct POP (new hash; the swap is recorded in the
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
@@ -63,6 +71,11 @@ usage:
                                  lexical-only, and search --semantic says so
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
+  practi fetch <hash>               pull a single POP from the hub into your local registry
+                                 (direct; full sha256 hash — no prefix guessing). Public
+                                 content is fetchable by anyone; private only by instance
+                                 owners. No instance involved — the object goes straight
+                                 into your pop library
   practi fix <file.json> | <hash> | --all
                                  migrate POP 1.x documents to 2.0: strip the removed history
                                  fields (revisions/refines), re-validate, report the new hash.
@@ -96,8 +109,11 @@ usage:
   practi new <file.json>            create a POP from a JSON document (local)
        | practi new --json '<text>'
        | practi new < file.json
-  practi pull [hash]                sync the hub's claim table into the local workspace
-                                 (multi-device bridge; content is hash-verified on arrival)
+  practi pull                        sync the bound instance's remote revisions into the
+                                 workspace (git pull inside the repository): missing chain
+                                 revisions are fetched (hash-verified), the branch head is
+                                 fast-forwarded when your local direct is an ancestor,
+                                 checked out when the workspace has none on the chain
   practi push [hash] [--branch <b>] one call: store the document and bind it as the branch
        [--message <text>]         head (the commit is appended with parent = current head;
                                  --message or the local commit log supplies the commit
@@ -518,8 +534,18 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'pull': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi pull [hash]   (sync the hub claim table into the workspace)'); return 0; }
+      if (values.help) { console.log('usage: practi pull   (sync the bound instance\'s remote revisions into the workspace; clone/fetch bring new content in)'); return 0; }
       return await runPull({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'clone': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi clone <owner>/<name>[@branch]   (fetch a practice instance, bind the workspace to it, check out its head)'); return 0; }
+      return await runClone({ dataDir: str(values['data-dir']), positional: positionals });
+    }
+    case 'fetch': {
+      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
+      if (values.help) { console.log('usage: practi fetch <hash>   (pull a single POP from the hub into your local registry, full sha256 hash)'); return 0; }
+      return await runFetch({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'instance': {
       const { values, positionals } = parseArgs({

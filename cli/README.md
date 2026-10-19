@@ -129,6 +129,8 @@ The workspace can back onto a practice **instance** on practihub — a single-ow
 practi remote set <url> | remove   point at a hub (default: https://practihub.com)
 practi login [--no-open] [--reauth]  OAuth sign-in / re-credentials; logout revokes + drops
 practi me                          show the signed-in account
+practi clone <owner>/<name>[@branch]  fetch a practice instance, bind the workspace to it and
+                               check out its head (git clone: the instance IS the repository)
 practi instance create <name> [--public] [--desc <text>]   create + bind (branch main)
 practi instance bind <owner>/<name> | show                 bind an existing instance / summary
 practi push [hash] [--branch <b>]  one call: store the document AND bind it as the branch head —
@@ -144,10 +146,16 @@ practi merge <branch>              merge into the current branch: fast-forward (
                                merge commit is appended (tree = the branch tip, parent = the
                                head, note = "merge branch 'X'") — the merge always completes;
                                `practi pull` syncs it back
-practi pull [hash]                 sync the hub claim table into the workspace (multi-device)
+practi pull                        sync the bound instance's remote revisions into the workspace
+                               (git pull inside the repository): missing chain revisions are
+                               fetched hash-verified, the head fast-forwards when your local
+                               direct is an ancestor, checks out otherwise
+practi fetch <hash>                pull a single POP from the hub into your local registry (direct;
+                               full sha256 hash). Public content fetchable by anyone, private
+                               only by instance owners — no instance involved
 ```
 
-Content addressing is untouched: the hub re-derives the root hash server-side with the same SDK, stored documents default to PRIVATE, and publishing (review + public visibility) is a hub-web workflow. POP lives on the hub only as practice instances — `push` requires a bound instance; the document store (`pop_documents` + claims) is object storage addressed by hash, not an inbox.
+Content addressing is untouched: the hub re-derives the root hash server-side with the same SDK, and visibility follows the instance — a PUBLIC instance's chain is readable by anyone (that's what `clone`/`fetch` read), PRIVATE only by its owner. Making an instance public is a hub-web workflow. POP lives on the hub only as practice instances — `push`/`pull` require a bound instance (start with `clone` or `instance create`/`bind`); the document store is object storage addressed by hash, not an inbox.
 
 ## License
 

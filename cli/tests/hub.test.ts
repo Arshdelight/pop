@@ -8,7 +8,8 @@ import { createdRoot, freePort, init, pop, readState, tempDataDir } from './help
 /**
  * hub 桥集成测试（login 除外）：本地 mock hub 打桩全部端点，凭据直写 practi.auth.json
  * （OAuth 授权页要真浏览器，不进 CI）。覆盖 instance create/bind、branch/switch、
- * push 存文档+绑支头（含 E_NOT_FAST_FORWARD）、merge 快进与 squash 双路径、log、pull。
+ * push 存文档+绑支头（含 E_NOT_FAST_FORWARD）、merge 快进与 squash 双路径、log、
+ * clone/pull（实例同步）/fetch（单拉 POP）。
  */
 
 const DOC = { name: 'Hub bridge doc', content: 'Content that travels to the hub.' };
@@ -23,8 +24,10 @@ interface MockState {
   featParent: string | null;
   /** 最近一次 POST revisions 的提交说明（--message 透传断言用） */
   lastMessage: string | null;
-  /** mine 端点追加返回的认领（pull 测试用；push 的 diff 基准随之变化） */
-  mineExtra: string | null;
+  /** /api/v1/pop/:ref 的文档体服务表（root_hash → 创作文档；默认只装 DOC） */
+  remoteDocs: Map<string, unknown>;
+  /** main 支链覆盖（null=默认硬编码两条；[0] 视为 tip）——clone/pull 用例的远端演进 */
+  mainChain: { seq: number; root_hash: string; parent_hash: string | null }[] | null;
   /** revisions 端点对该 hash 回 already_head=true（up-to-date 用例） */
   upToDateFor: string | null;
   storeCalls: number;
@@ -55,7 +58,16 @@ async function readBody(req: http.IncomingMessage): Promise<string> {
 
 beforeAll(async () => {
   const port = await freePort();
-  mock = { rejectBindFor: null, featHead: 'sha256:' + 'f'.repeat(64), featParent: MAIN_HEAD, mineExtra: null, upToDateFor: null, lastMessage: null, storeCalls: 0, seqCounter: 0, seenHashes: new Set(), bindCalls: [], createdBranches: [], deletedBranches: [] };
+  mock = {
+    rejectBindFor: null,
+    featHead: 'sha256:' + 'f'.repeat(64),
+    featParent: MAIN_HEAD,
+    lastMessage: null,
+    remoteDocs: new Map([[parseDocument(DOC).rootHash, DOC]]),
+    mainChain: null,
+    upToDateFor: null,
+    storeCalls: 0, seqCounter: 0, seenHashes: new Set(), bindCalls: [], createdBranches: [], deletedBranches: [],
+  };
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
     const p = url.pathname;
@@ -73,17 +85,13 @@ beforeAll(async () => {
       respond(res, 201, { id: 'inst-1', name: body.name, visibility: body.visibility ?? 'PRIVATE' });
       return;
     }
-    if (p === '/api/v1/pop/mine') {
-      respond(res, 200, { results: mock.mineExtra ? [{ root_hash: mock.mineExtra, status: 'PRIVATE' }] : [], total: mock.mineExtra ? 1 : 0 });
-      return;
-    }
     const docMatch = /^\/api\/v1\/pop\/([^/]+)$/.exec(p);
     if (docMatch && req.method === 'GET') {
-      // pull：文档体必须让客户端验算出同一 root——直接回 DOC 的真身（ref 是 URL 编码的）
+      // 文档体服务表（ref 是 URL 编码的）：内容寻址验算过闸的前提是回真身
       const ref = decodeURIComponent(docMatch[1]);
-      const parsed = parseDocument(DOC);
-      if (ref === parsed.rootHash) {
-        respond(res, 200, { document: DOC, status: 'PRIVATE' });
+      const doc = mock.remoteDocs.get(ref);
+      if (doc !== undefined) {
+        respond(res, 200, { document: doc, status: 'PRIVATE' });
       } else {
         respond(res, 404, { error: 'not found' });
       }
@@ -103,20 +111,26 @@ beforeAll(async () => {
           respond(res, 404, { error: 'branch not found', code: 'E_BRANCH_NOT_FOUND' });
           return;
         }
+        // main 支链可被测试覆盖（clone/pull 的远端演进）；默认=硬编码两条（log/merge 用例依赖其名字与日期）
+        const defaultChain = [
+          { seq: 2, root_hash: mock.featHead, parent_hash: mock.featParent, message: 'second edit', created_at: '2026-10-18T00:00:00Z', name: 'second' },
+          { seq: 1, root_hash: MAIN_HEAD, parent_hash: null, message: null, created_at: '2026-10-17T00:00:00Z', name: 'first' },
+        ];
+        const chain = mock.mainChain
+          ? mock.mainChain.map((c) => ({ ...c, message: `v${c.seq}`, created_at: '2026-10-19T00:00:00Z', name: `v${c.seq}` }))
+          : defaultChain;
+        const head = mock.mainChain ? (chain[0]?.root_hash ?? null) : (wanted === 'feat' ? mock.featHead : MAIN_HEAD);
         respond(res, 200, {
           name,
           visibility: 'PRIVATE',
           owner: { account: owner },
           branch: wanted,
-          branch_head_hash: wanted === 'feat' ? mock.featHead : MAIN_HEAD,
+          branch_head_hash: head,
           branches: [
-            { name: 'main', head_hash: MAIN_HEAD, is_default: true },
+            { name: 'main', head_hash: head, is_default: true },
             { name: 'feat', head_hash: mock.featHead, is_default: false },
           ],
-          revisions: [
-            { seq: 2, root_hash: mock.featHead, parent_hash: mock.featParent, message: 'second edit', created_at: '2026-10-18T00:00:00Z', name: 'second', status: 'PRIVATE', missing: false },
-            { seq: 1, root_hash: MAIN_HEAD, parent_hash: null, created_at: '2026-10-17T00:00:00Z', name: 'first', status: 'PRIVATE', missing: false },
-          ],
+          revisions: chain.map((c) => ({ ...c, status: 'PRIVATE', missing: false })),
         });
         return;
       }
@@ -365,7 +379,7 @@ describe('practi hub bridge: merge', () => {
   });
 });
 
-describe('practi hub bridge: log / pull', () => {
+describe('practi hub bridge: log', () => {
   it('log 列当前支历史（tip 在前）；--json 出结构', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['instance', 'bind', 'tester/my-practice']);
@@ -379,19 +393,128 @@ describe('practi hub bridge: log / pull', () => {
     expect(parsed.branch).toBe('feat');
     expect(parsed.revisions).toHaveLength(2);
   });
+});
 
-  it('pull 拉远端文档入库为 direct（内容寻址验算过闸）', async () => {
+describe('practi hub bridge: clone / pull / fetch', () => {
+  const CHAIN_V1 = { name: 'Chain doc', content: 'v1 body' };
+  const CHAIN_V2 = { name: 'Chain doc', content: 'v2 body with more' };
+  const rootV1 = parseDocument(CHAIN_V1).rootHash;
+  const rootV2 = parseDocument(CHAIN_V2).rootHash;
+
+  it('clone 拉实例+绑定+检出头为 direct（git clone：对象就是实例）', async () => {
     const dir = await hubWorkspace();
-    const root = parseDocument(DOC).rootHash;
-    mock.mineExtra = root; // ref 定位走 mine 认领表
+    mock.remoteDocs.set(rootV1, CHAIN_V1);
+    mock.mainChain = [{ seq: 1, root_hash: rootV1, parent_hash: null }];
     try {
-      const out = await pop(dir, ['pull', root.slice(0, 12)]);
+      const out = await pop(dir, ['clone', 'tester/my-practice']);
       expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-      expect(out.stdout).toMatch(new RegExp(`pulled:  ${root}`));
-      expect(readState(dir).direct).toContain(root);
-      expect(fs.existsSync(path.join(dir, 'nodes', root.slice('sha256:'.length) + '.md'))).toBe(true);
+      expect(out.stdout).toMatch(/cloned:  tester\/my-practice \(PRIVATE, branch main, 1 revision/);
+      expect(readState(dir).instance).toEqual({ owner: 'tester', name: 'my-practice', branch: 'main' });
+      expect(readState(dir).direct).toEqual([rootV1]);
+      expect(fs.existsSync(path.join(dir, 'nodes', rootV1.slice('sha256:'.length) + '.md'))).toBe(true);
     } finally {
-      mock.mineExtra = null;
+      mock.mainChain = null;
+      mock.remoteDocs.delete(rootV1);
     }
+  });
+
+  it('clone 坏 ref 报 usage；clone @branch 段进绑定', async () => {
+    const dir = await hubWorkspace();
+    const bad = await pop(dir, ['clone', 'not-a-ref']);
+    expect(bad.code).toBe(1);
+    expect(bad.stderr).toMatch(/usage: practi clone/);
+
+    mock.remoteDocs.set(rootV1, CHAIN_V1);
+    mock.mainChain = [{ seq: 1, root_hash: rootV1, parent_hash: null }];
+    try {
+      const out = await pop(dir, ['clone', 'tester/my-practice@feat']);
+      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+      expect(out.stdout).toMatch(/branch feat/);
+      expect(readState(dir).instance).toEqual({ owner: 'tester', name: 'my-practice', branch: 'feat' });
+    } finally {
+      mock.mainChain = null;
+      mock.remoteDocs.delete(rootV1);
+    }
+  });
+
+  it('pull：检出远端头 → 远端前进 → fast-forward 换根（git pull 语义）', async () => {
+    const dir = await hubWorkspace();
+    await pop(dir, ['instance', 'bind', 'tester/my-practice']);
+    mock.remoteDocs.set(rootV1, CHAIN_V1);
+    mock.mainChain = [{ seq: 1, root_hash: rootV1, parent_hash: null }];
+    const first = await pop(dir, ['pull']);
+    expect(first.code, `stdout=${first.stdout} stderr=${first.stderr}`).toBe(0);
+    expect(readState(dir).direct).toEqual([rootV1]);
+
+    // 远端前进到 v2（parent=v1）：本地头在链上 → fast-forward
+    mock.remoteDocs.set(rootV2, CHAIN_V2);
+    mock.mainChain = [
+      { seq: 2, root_hash: rootV2, parent_hash: rootV1 },
+      { seq: 1, root_hash: rootV1, parent_hash: null },
+    ];
+    try {
+      const out = await pop(dir, ['pull']);
+      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+      expect(out.stdout).toMatch(/pulled:  1 revision/);
+      expect(out.stdout).toMatch(/fast-forwarded/);
+      expect(readState(dir).direct).toEqual([rootV2]);
+      expect(fs.existsSync(path.join(dir, 'nodes', rootV2.slice('sha256:'.length) + '.md'))).toBe(true);
+
+      // 再拉一次：up to date
+      const again = await pop(dir, ['pull']);
+      expect(again.code).toBe(0);
+      expect(again.stdout).toMatch(/up to date/);
+    } finally {
+      mock.mainChain = null;
+      mock.remoteDocs.delete(rootV1);
+      mock.remoteDocs.delete(rootV2);
+    }
+  });
+
+  it('pull 未绑实例 → 指引 clone/bind；带 hash → 指引 fetch', async () => {
+    const dir = await hubWorkspace();
+    const noBind = await pop(dir, ['pull']);
+    expect(noBind.code).toBe(1);
+    expect(noBind.stderr).toMatch(/no instance bound/);
+    expect(noBind.stderr).toMatch(/practi clone/);
+
+    await pop(dir, ['instance', 'bind', 'tester/my-practice']);
+    const withHash = await pop(dir, ['pull', rootV1]);
+    expect(withHash.code).toBe(1);
+    expect(withHash.stderr).toMatch(/practi fetch/);
+  });
+
+  it('pull：本地头不在链上（未推送的本地改动）→ 检出远端头、本地改动保留', async () => {
+    const dir = await hubWorkspace();
+    await pop(dir, ['instance', 'bind', 'tester/my-practice']);
+    // 本地先造一个未推送的 direct（远端链不含它）
+    const localRoot = createdRoot((await pop(dir, ['new', '--json', JSON.stringify({ name: 'Local edit', content: 'not pushed' })])).stdout);
+    mock.remoteDocs.set(rootV1, CHAIN_V1);
+    mock.mainChain = [{ seq: 1, root_hash: rootV1, parent_hash: null }];
+    try {
+      const out = await pop(dir, ['pull']);
+      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+      expect(out.stdout).toMatch(/checked out/);
+      const st = readState(dir);
+      expect(st.direct).toContain(localRoot); // 本地改动保留
+      expect(st.direct).toContain(rootV1); // 远端头检出为 direct
+    } finally {
+      mock.mainChain = null;
+      mock.remoteDocs.delete(rootV1);
+    }
+  });
+
+  it('fetch 单拉 POP 入库为 direct（内容寻址验算过闸）；未知 hash 报错', async () => {
+    const dir = await hubWorkspace();
+    const root = parseDocument(DOC).rootHash; // DOC 默认在服务表里
+    const out = await pop(dir, ['fetch', root]);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+    expect(out.stdout).toMatch(new RegExp(`fetched: ${root}`));
+    expect(readState(dir).direct).toContain(root);
+    expect(fs.existsSync(path.join(dir, 'nodes', root.slice('sha256:'.length) + '.md'))).toBe(true);
+
+    const bad = await pop(dir, ['fetch', 'sha256:' + '9'.repeat(64)]);
+    expect(bad.code).toBe(1);
+    expect(bad.stderr).toMatch(/fetch failed/);
   });
 });

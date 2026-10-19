@@ -163,8 +163,10 @@ The workspace can back onto a practice **instance** on practihub — a single-ow
 practi remote set https://practihub.com   # point at the hub (default; remove falls back to it)
 practi login                              # OAuth sign-in (browser consent); --no-open prints the URL
 practi me                                 # show the signed-in account
+practi clone <owner>/<name>[@branch]      # fetch a practice instance, bind the workspace to it and
+                                           # check out its head (git clone: the instance IS the repository)
 practi instance create <name> [--public] [--desc <text>]   # create + bind (branch main)
-practi instance bind <owner>/<name>       # bind an existing instance instead
+practi instance bind <owner>/<name>       # bind an existing instance (pointer only — clone also fetches)
 practi instance show                      # binding summary: branch, visibility, branches
 
 practi push [hash] [--branch <b>]         # one call stores the doc AND binds it as the branch
@@ -177,13 +179,17 @@ practi switch <branch>                    # switch the bound branch (local point
 practi merge <branch>                     # merge into the current branch: fast-forward when the tip's
                                            # parent chain reaches the head, otherwise a squash merge
                                            # commit is appended — always succeeds
-practi pull [hash]                        # sync the hub claim table into the workspace (multi-device)
+practi pull                               # sync the bound instance's remote revisions into the workspace
+                                           # (git pull inside the repository: fetch missing chain revisions,
+                                           # fast-forward the head when your local direct is an ancestor)
+practi fetch <hash>                       # pull a single POP from the hub into your local registry (direct;
+                                           # full sha256 hash — public content fetchable by anyone)
 practi logout                             # revoke + drop stored credentials
 ```
 
 - **The commit is repository state, the document is a snapshot.** The instance keeps a commit chain (`seq`, `root_hash`, `parent_hash`, `message`) — history lives there, never in the document. Pushing appends one commit (parent = current head) and moves the branch pointer. A fast-forward means the merged tip's parent chain reaches the current head (a pointer move); a diverged `merge` appends a squash commit whose tree is the branch tip's, with parent = current head — the merge always completes.
-- **The hub never changes the content.** `POST /api/v1/pop` re-derives the root hash server-side with the same SDK; documents default to PRIVATE on the hub. Publishing (review + public visibility) is a hub-web workflow, not a CLI one.
-- Without a bound instance `push` refuses — POP lives on the hub only as practice instances (the document store is object storage addressed by hash, not an inbox). `pull` works off your claim table either way.
+- **The hub never changes the content.** Pushes are re-hashed server-side with the same SDK; visibility follows the instance (a PUBLIC instance's chain is readable by anyone, PRIVATE only by its owner). Making an instance public is a hub-web workflow, not a CLI one.
+- POP lives on the hub only as practice instances (the document store is object storage addressed by hash, not an inbox): without a bound instance `push` and `pull` refuse — start with `clone` or `instance bind`/`create`. There is no claim table: what you pulled from an instance is its chain, and a lone hash travels via `fetch`.
 
 ## Finding things again
 

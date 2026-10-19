@@ -6,6 +6,8 @@ import {
 } from './credentials.js';
 import { refreshAccessToken } from './oauth.js';
 import { fetchUrl, type FetchUrlResult } from './net.js';
+import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
+import { openWorkspace } from './workspace.js';
 
 /** refresh 被服务端拒绝（token 端点有应答但 HTTP 报错）——凭据已死，需重新 login */
 export class RefreshRejectedError extends Error {}
@@ -130,57 +132,42 @@ export async function authedFetch(
   return toReply(res);
 }
 
-/** hub 上「我的」认领列表（DIRECT 根），按 total 分页拉全——push/pull 做认领表 diff 的基准。 */
-export async function fetchMine(
-  dataDir: string,
-  remote: string
-): Promise<{ root_hash: string; status: string; name?: string }[]> {
-  const out: { root_hash: string; status: string; name?: string }[] = [];
-  const limit = 100;
-  for (let page = 1; ; page++) {
-    const res = await authedFetch(dataDir, remote, `/api/v1/pop/mine?page=${page}&limit=${limit}`);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(`listing own documents failed — ${body.error ?? `HTTP ${res.status}`}`);
-    }
-    const body = (await res.json()) as {
-      results?: { root_hash: string; status: string; name?: string }[];
-      total?: number;
-    };
-    const results = body.results ?? [];
-    out.push(...results);
-    // total 缺省时旧写法恒真=永远只取第一页；按页满即续页收口
-    if (results.length === 0 || (body.total !== undefined && out.length >= body.total)) break;
-  }
-  return out;
-}
-
 /** hub 端点一律要 `sha256:` 全形 root_hash；CLI 面子统一接受裸 64-hex 自动补前缀。
- *  前缀短哈希这里不猜——直传端点的命令（clone/comment）没法可靠解析任意公开文档的
- *  前缀，宁要全哈希也不要猜错。返回 null = 不是全哈希。 */
+ *  前缀短哈希这里不猜——直传端点的命令没法可靠解析任意公开文档的前缀，
+ *  宁要全哈希也不要猜错。返回 null = 不是全哈希。 */
 export function normalizeHashRef(ref: string): string | null {
   const hex = ref.replace(/^sha256:/i, '').toLowerCase();
   return /^[0-9a-f]{64}$/.test(hex) ? `sha256:${hex}` : null;
 }
 
-/** POST /api/v1/pop：把文档（创作 JSON 或展开树均可）交给 hub——服务端委托官方 SDK *  解析、规范化、算 root_hash 并认领（默认 PRIVATE）。new --remote / edit --remote 共用。 */
-export async function storeDocumentRemote(
+/** GET /api/v1/pop/:ref + 入库前验算（内容寻址的客户端责任，hub 读路径不代验）：
+ *  纯导入（不落库）算出的根哈希必须等于请求地址——不符即拒绝，防止
+ *  「另一身份的文档被悄悄注册进本地库」。clone/pull/fetch 共用。
+ *  可见性随 hub：公开内容任何人可拉，私有内容仅实例利益方（登录账号是 owner 即可）。 */
+export async function fetchRemoteDoc(
   dataDir: string,
   remote: string,
-  doc: unknown
-): Promise<{ rootHash: string; status: string; idempotent: boolean }> {
-  const res = await authedFetch(dataDir, remote, '/api/v1/pop', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(doc),
-  });
+  ref: string
+): Promise<{ rootHash: string; status: string }> {
+  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(ref)}`);
   const body = (await res.json().catch(() => ({}))) as {
-    root_hash?: string; status?: string; idempotent?: boolean; code?: string; message?: string;
+    document?: unknown;
+    status?: string;
+    error?: string;
+    message?: string;
   };
   if (!res.ok) {
-    const code = body.code ? `[${body.code}] ` : '';
-    throw new Error(`${code}${body.message ?? `HTTP ${res.status}`}`);
+    const detail = typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : `HTTP ${res.status}`;
+    throw new Error(`${ref} — ${detail}`);
   }
-  if (!body.root_hash) throw new Error('hub stored the document but the response carries no root_hash');
-  return { rootHash: body.root_hash, status: body.status ?? 'PRIVATE', idempotent: body.idempotent === true };
+  if (body.document === undefined || body.document === null) {
+    throw new Error(`${ref} — response missing document`);
+  }
+  const parsed = parseDocument(body.document);
+  if (parsed.rootHash !== ref) {
+    throw new Error(`${ref} — hash mismatch: content hashes to ${parsed.rootHash}`);
+  }
+  const ws = openWorkspace(dataDir);
+  createFromDoc(ws, body.document);
+  return { rootHash: parsed.rootHash, status: body.status ?? 'PRIVATE' };
 }
