@@ -85,11 +85,16 @@ beforeAll(async () => {
       respond(res, 201, { id: 'inst-1', name: body.name, visibility: body.visibility ?? 'PRIVATE' });
       return;
     }
-    const docMatch = /^\/api\/v1\/pop\/([^/]+)$/.exec(p);
-    if (docMatch && req.method === 'GET') {
+    // 实例范围修订读取（2026-10-19 内容访问收进仓库上下文；全局 /api/v1/pop/:ref 已退役）
+    const revMatch = /^\/api\/v1\/instances\/([^/]+)\/([^/]+)\/revisions\/([^/]+)$/.exec(p);
+    if (revMatch && req.method === 'GET') {
       // 文档体服务表（ref 是 URL 编码的）：内容寻址验算过闸的前提是回真身
-      const ref = decodeURIComponent(docMatch[1]);
-      const doc = mock.remoteDocs.get(ref);
+      const [, revOwner, , ref] = revMatch;
+      if (revOwner !== ME.username) {
+        respond(res, 404, { error: 'E_INSTANCE_NOT_FOUND' });
+        return;
+      }
+      const doc = mock.remoteDocs.get(decodeURIComponent(ref));
       if (doc !== undefined) {
         respond(res, 200, { document: doc, status: 'PRIVATE' });
       } else {
@@ -366,7 +371,7 @@ describe('practi hub bridge: merge', () => {
       const out = await pop(dir, ['merge', 'feat']);
       expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
       expect(out.stdout).toMatch(new RegExp(`merged \\(squash\\): feat → main as ${root.slice(7, 19)}`));
-      expect(out.stdout).toMatch(new RegExp(`practi fetch ${root.slice(7, 19)}`));
+      expect(out.stdout).toMatch(new RegExp(`practi fetch tester/my-practice ${root.slice(7, 19)}`));
       // POP 2.0：squash 不再改写文档内容——同一棵树，提交说明走 message
       expect(mock.lastMessage).toBe("merge branch 'feat'");
       const lastBind = mock.bindCalls.at(-1);
@@ -504,16 +509,20 @@ describe('practi hub bridge: clone / pull / fetch', () => {
     }
   });
 
-  it('fetch 单拉 POP 入库为 direct（内容寻址验算过闸）；未知 hash 报错', async () => {
+  it('fetch 带仓库上下文单拉修订入库为 direct（内容寻址验算过闸）；未知 hash/缺仓库段报错', async () => {
     const dir = await hubWorkspace();
     const root = parseDocument(DOC).rootHash; // DOC 默认在服务表里
-    const out = await pop(dir, ['fetch', root]);
+    const usage = await pop(dir, ['fetch', root]);
+    expect(usage.code).toBe(1);
+    expect(usage.stderr).toMatch(/usage: practi fetch <owner>\/<name> <hash>/);
+
+    const out = await pop(dir, ['fetch', 'tester/my-practice', root]);
     expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
     expect(out.stdout).toMatch(new RegExp(`fetched: ${root}`));
     expect(readState(dir).direct).toContain(root);
     expect(fs.existsSync(path.join(dir, 'nodes', root.slice('sha256:'.length) + '.md'))).toBe(true);
 
-    const bad = await pop(dir, ['fetch', 'sha256:' + '9'.repeat(64)]);
+    const bad = await pop(dir, ['fetch', 'tester/my-practice', 'sha256:' + '9'.repeat(64)]);
     expect(bad.code).toBe(1);
     expect(bad.stderr).toMatch(/fetch failed/);
   });

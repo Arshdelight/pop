@@ -35,7 +35,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
   }
   const { owner, name, branch } = state.instance;
   if (opts.positional[0]) {
-    console.error('error: pull takes no <hash> — it syncs the bound instance (use `practi fetch <hash>` for a single POP)');
+    console.error('error: pull takes no <hash> — it syncs the bound instance (use `practi fetch <owner>/<name> <hash>` for a single revision)');
     return 1;
   }
 
@@ -48,7 +48,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
   }
 
   const ws = openWorkspace(dataDir);
-  const sync = await syncInstanceObjects(dataDir, state.remote.url, view, (h) => ws.nodes.has(h));
+  const sync = await syncInstanceObjects(dataDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
 
   const next = loadState(dataDir);
   const outcome = checkoutTip(next, view);

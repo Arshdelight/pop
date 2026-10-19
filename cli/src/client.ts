@@ -140,16 +140,23 @@ export function normalizeHashRef(ref: string): string | null {
   return /^[0-9a-f]{64}$/.test(hex) ? `sha256:${hex}` : null;
 }
 
-/** GET /api/v1/pop/:ref + 入库前验算（内容寻址的客户端责任，hub 读路径不代验）：
- *  纯导入（不落库）算出的根哈希必须等于请求地址——不符即拒绝，防止
- *  「另一身份的文档被悄悄注册进本地库」。clone/pull/fetch 共用。
- *  可见性随 hub：公开内容任何人可拉，私有内容仅实例利益方（登录账号是 owner 即可）。 */
+/** GET /api/v1/instances/{owner}/{name}/revisions/{hash} + 入库前验算（内容寻址的客户端责任，
+ *  hub 读路径不代验）：纯导入（不落库）算出的根哈希必须等于请求地址——不符即拒绝，防止
+ *  「另一身份的文档被悄悄注册进本地库」。pull/fetch 共用。
+ *  访问带仓库上下文（GitHub blobs 同构，2026-10-19 拍板；全局 /api/v1/pop/:ref 已退役）：
+ *  公开实例任何人可拉，私有实例仅 owner/admin。 */
 export async function fetchRemoteDoc(
   dataDir: string,
   remote: string,
+  owner: string,
+  name: string,
   ref: string
 ): Promise<{ rootHash: string; status: string }> {
-  const res = await authedFetch(dataDir, remote, `/api/v1/pop/${encodeURIComponent(ref)}`);
+  const res = await authedFetch(
+    dataDir,
+    remote,
+    `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/revisions/${encodeURIComponent(ref)}`
+  );
   const body = (await res.json().catch(() => ({}))) as {
     document?: unknown;
     status?: string;

@@ -62,10 +62,13 @@ export interface SyncResult {
   failed: string[];
 }
 
-/** 把实例链上本地缺失的版本逐个拉进工作区（历史=对象，不动 direct——检出由调用方决定） */
+/** 把实例链上本地缺失的版本逐个拉进工作区（历史=对象，不动 direct——检出由调用方决定）；
+ *  内容读取带仓库上下文（owner/name，实例范围端点） */
 export async function syncInstanceObjects(
   dataDir: string,
   remote: string,
+  owner: string,
+  name: string,
   view: InstanceChainView,
   hasObject: (hash: string) => boolean
 ): Promise<SyncResult> {
@@ -79,7 +82,7 @@ export async function syncInstanceObjects(
     }
     if (hasObject(rev.root_hash)) continue;
     try {
-      await fetchRemoteDoc(dataDir, remote, rev.root_hash);
+      await fetchRemoteDoc(dataDir, remote, owner, name, rev.root_hash);
       fetched++;
     } catch (e) {
       console.error(`pull failed: ${(e as Error).message}`);

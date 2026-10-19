@@ -182,8 +182,9 @@ practi merge <branch>                     # merge into the current branch: fast-
 practi pull                               # sync the bound instance's remote revisions into the workspace
                                            # (git pull inside the repository: fetch missing chain revisions,
                                            # fast-forward the head when your local direct is an ancestor)
-practi fetch <hash>                       # pull a single POP from the hub into your local registry (direct;
-                                           # full sha256 hash — public content fetchable by any signed-in account)
+practi fetch <owner>/<name> <hash>        # pull one revision of that instance into your local registry (direct;
+                                           # full sha256 hash — content access is repo-scoped: public instances
+                                           # fetchable by anyone, private ones only by their owners)
 practi logout                             # revoke + drop stored credentials
 ```
 

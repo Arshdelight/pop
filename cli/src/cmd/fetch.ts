@@ -7,10 +7,11 @@ export interface FetchOpts {
 }
 
 /**
- * practi fetch <hash>：从 hub 拉取单个 POP 存进本地 pop 库（direct）——git 无此对应的
- * 特例：内容寻址让「一个对象」本身可寻址，pull（仓库内同步）之外允许单取一件。
+ * practi fetch <owner>/<name> <hash>：从指定实例拉取一份修订存进本地 pop 库（direct）。
+ * 内容访问带仓库上下文（GitHub blobs 同构，2026-10-19 拍板）——同一 root 可属多个实例，
+ * 全局按哈希取内容的口子已在 hub 退役。
  * - 必须全哈希（sha256: 前缀可选；前缀短哈希没法对 hub 反查，宁拒勿猜）
- * - 可见性随 hub：公开内容任何人可拉；私有内容仅实例利益方（登录账号 own 的实例）
+ * - 可见性随实例：公开实例任何人可拉；私有实例仅 owner/admin
  * - 入库前验算内容寻址（fetchRemoteDoc 过闸），注册为 direct
  */
 export async function runFetch(opts: FetchOpts): Promise<number> {
@@ -20,16 +21,22 @@ export async function runFetch(opts: FetchOpts): Promise<number> {
     console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
-  const ref = opts.positional[0];
-  const full = ref ? normalizeHashRef(ref) : null;
+  const [repoRef, rawRef] = opts.positional;
+  const repoMatch = repoRef ? /^([\w-]+)\/([\w-]+)$/.exec(repoRef) : null;
+  if (!repoMatch) {
+    console.error('usage: practi fetch <owner>/<name> <hash>   (full sha256 root hash; pulls one revision of that instance into your local registry)');
+    return 1;
+  }
+  const [, owner, name] = repoMatch;
+  const full = rawRef ? normalizeHashRef(rawRef) : null;
   if (!full) {
-    console.error('usage: practi fetch <hash>   (full sha256 root hash; pulls one POP from the hub into your local registry)');
+    console.error('usage: practi fetch <owner>/<name> <hash>   (full sha256 root hash; pulls one revision of that instance into your local registry)');
     return 1;
   }
 
   let result;
   try {
-    result = await fetchRemoteDoc(dataDir, state.remote.url, full);
+    result = await fetchRemoteDoc(dataDir, state.remote.url, owner, name, full);
   } catch (e) {
     console.error(`fetch failed: ${(e as Error).message}`);
     return 1;

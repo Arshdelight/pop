@@ -71,11 +71,11 @@ usage:
                                  lexical-only, and search --semantic says so
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
-  practi fetch <hash>               pull a single POP from the hub into your local registry
-                                 (direct; full sha256 hash — no prefix guessing). Public
-                                 content is fetchable by any signed-in account; private
-                                 only by instance owners. No instance involved — the
-                                 object goes straight into your pop library
+  practi fetch <owner>/<name> <hash>
+                                 pull one revision of that instance into your local registry
+                                 (direct; full sha256 hash — no prefix guessing). Content
+                                 access is repo-scoped: public instances are fetchable by
+                                 anyone, private ones only by their owners
   practi fix <file.json> | <hash> | --all
                                  migrate POP 1.x documents to 2.0: strip the removed history
                                  fields (revisions/refines), re-validate, report the new hash.
@@ -551,7 +551,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'fetch': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi fetch <hash>   (pull a single POP from the hub into your local registry, full sha256 hash)'); return 0; }
+      if (values.help) { console.log('usage: practi fetch <owner>/<name> <hash>   (pull one revision of that instance into your local registry, full sha256 hash)'); return 0; }
       return await runFetch({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'instance': {

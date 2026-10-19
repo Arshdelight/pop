@@ -52,7 +52,7 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   }
 
   const ws = openWorkspace(dataDir);
-  const sync = await syncInstanceObjects(dataDir, state.remote.url, view, (h) => ws.nodes.has(h));
+  const sync = await syncInstanceObjects(dataDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
   if (sync.failed.length > 0) {
     console.error(`clone incomplete: ${sync.failed.length} revision(s) failed to fetch`);
     return 1;
