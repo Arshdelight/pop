@@ -4,9 +4,9 @@
 
 一套把实践知识——"怎么做一件事"——定义为开放数据的协议：可发布、可链接、可验证、可组合。
 
-**兼容 skill 生态**：每份 POP 文档都读作一个 skill——action 是原子技能，practice 是组合技能（组合技能的技能）。skill 可**无损映射为**文档（`name`/`description`/正文 → `name`/`description`/`content`，文件 → `attachments`），换来可验证的身份、链接与组合能力。反方向是**投影**：文档的数据流接线、op 组合与修订历史在 skill 侧没有序列化形式——把文档读作 skill 得到的是它的一个视图，而非无损编码。该映射是身份定义、不是导入通道：工具只回放导出物，外来 skill 靠重新撰写进入 POP。
+**兼容 skill 生态**：每份 POP 文档都读作一个 skill——action 是原子技能，practice 是组合技能（组合技能的技能）。skill 可**无损映射为**文档（`name`/`description`/正文 → `name`/`description`/`content`，文件 → `attachments`），换来可验证的身份、链接与组合能力。反方向是**投影**：文档的数据流接线与 op 组合在 skill 侧没有序列化形式——把文档读作 skill 得到的是它的一个视图，而非无损编码。该映射是身份定义、不是导入通道：工具只回放导出物，外来 skill 靠重新撰写进入 POP。
 
-**协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 1.1.0。spec 只管协议本身；其余一切都在本仓库。
+**协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 2.1.0。spec 只管协议本身；其余一切都在本仓库。
 
 ## 快速开始
 
@@ -52,9 +52,18 @@ POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 re
 practi blob add <file-or-url> [--name <name>]
                                   暂存附件：对字节算哈希并存入本地 blob 库。URL 来源经系统代理
                                   抓取，其字节同样入库——指针本身仍只含哈希
+practi branch [name] [--from <hash>] | -d <name>
+                                  实例分支（需先绑定实例）：无参列出分支（* = 默认分支），
+                                  带名字则从当前分支头建新分支，-d 删除分支指针
 practi claim <hash>               把工作区里已存的节点登记为 direct pop（indirect → direct）
+practi clone <owner>/<name>[@branch]
+                                  把 hub 上的实践实例拉进本工作区并绑定（git clone：实例即仓库），
+                                  拉全分支的每个版本并把头检出为 direct pop
 practi config                     查看数据目录与 registry 概要
 practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；换根记入本地提交日志 commits.json + 回收不可达节点）
+practi fix <file> | <hash> | --all  把 POP 1.x 文档迁移到 2.0：剥除已删除的历史字段（revisions/refines），
+                                  重新校验并报告新哈希。<hash> 重存工作区节点并重绑 direct/claims；
+                                  --all 扫全部 direct；--dry-run 预览
 practi embed status                报告模型就绪状态与索引覆盖（--json）
 practi embed pull                  把离线向量模型取到 <data-dir>/models/
 practi embed build [--notes]       构建/刷新向量索引，增量进行——只处理尚未缓存的哈希；
@@ -62,12 +71,24 @@ practi embed build [--notes]       构建/刷新向量索引，增量进行—�
 practi embed prune                 清掉旧模型指纹遗留的向量桶。整层可选：没有模型时 practi
                                    退化为纯词法检索，`search --semantic` 会说明缺什么，
                                    而不是悄悄少召回
+practi fetch <hash>               从 hub 单拉一份 POP 进本地 registry（direct；须完整 sha256
+                                  哈希——不猜前缀）。与实例无关——对象直接进你的 pop 库
 practi gc [--apply]                释放孤儿 blob——没有节点引用的附件字节（默认 dry-run；--apply 才删）
 practi init [path]                初始化数据目录（默认： ~/.practi）
+practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
+                                  在 hub 上建实践实例，或把本工作区绑定到一个实例（git 的 origin）；
+                                  push/merge/log 默认走绑定
 practi lint [--json] [--limit N]  对全部 direct pop 做记录质量审计：与 `practi new` 创建时打印的
                                   是同一组 W_* 提示，按需可查。只读、永不阻断（退出码恒为 0）
                                   ——是待办清单，不是闸门
+practi log [--branch <b>] [--limit N] [--json]
+                                  绑定实例分支的修订历史（tip 在前）
 practi ls [-a] [--json]           列出 direct POP（-a 连 indirect 节点一起列）
+practi login [--no-open] [--reauth]  OAuth 登录 hub（浏览器授权；--no-open 打印 URL 供无头使用）
+practi logout                     吊销并清除本地凭据
+practi me                         查看当前登录账号、角色与 scope
+practi merge <branch>             把分支合并进当前分支：tip 的父链能到达当前头则快进，
+                                  否则追加一个 squash 合并提交
 practi migrate [path] [--keep]      把 workspace 剪切到新数据目录（逐文件校验后删除旧目录；
                                    --keep 保留为 .bak 备份；无参 = ~/.practi；带路径则记入
                                    ~/.practi-home 作为默认目录）
@@ -77,8 +98,14 @@ practi note promote <note-id> [--out <file>]
                                   钉住的节点位置——只起草、不代你编辑（内容寻址下编辑即新哈希，
                                   拍板权在你）
 practi new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
+practi push [hash] [--branch <b>] [--message <text>]
+                                  一次调用：存文档并绑为分支头（提交以 parent=当前头 追加）。
+                                  需要绑定实例——POP 在 hub 上只以实践实例的形式存在
+practi pull                       把绑定实例的修订同步进工作区（仓库内的 git pull）：补齐缺失的
+                                  链上修订（逐哈希校验），本地 direct 是祖先则快进分支头，否则检出 tip
 practi remove <hash>               把一个 direct 根移出本地目录（注册层操作；回收从剩余 direct
                                    出发不可达的节点——共享的 indirect 节点保得住）
+practi remote set <url> | remove  配置 practi 指向的 hub
 practi repair                     从节点文件 mtime 回补缺失的认领时刻（幂等）
 practi search [query...]          搜索全部已存节点——direct、indirect 与孤儿一视同仁：
                                   字段加权 BM25、标题优先排序，`field:` 限定（name: desc:
@@ -99,6 +126,7 @@ practi skill uninstall             卸载已安装的 use-practi skill
 practi skill import <dir>          把 `practi skill export` 导出的目录回放成 POP（须带 sidecar；外来 skill 靠撰写进入 POP，不做机械导入）
 practi skill export <ref> [--dir]  把 POP 投影成可安装的技能目录（SKILL.md + 附件文件 + pop.doc.json sidecar）
 practi spec                       打印包内 pop-spec.md（无网络依赖）
+practi switch <branch>            切换绑定实例的当前分支（本地指针；用 "practi pull" 把内容带进工作区）
 practi unclaim <hash>              把仍被引用的 direct pop 退回 indirect（未被引用时报错——
                                    那会孤儿化它；要删除请用 "remove"）
 practi update                     经 npm 自更新（检查 registry 最新版）
@@ -113,9 +141,9 @@ npm link -w @arshdelight/practi   # 全局安装 `practi` 命令
 
 两个包同仓为 npm workspace（根目录 `npm install` 即本地互链）。
 
-## 所有权与留存（面向托管 hub）
+## 仓库语义（面向托管 hub）
 
-协议只定义文档；若未来存在托管 hub，由它决定谁拥有文档、存活多久。spec §9.1 记录了 hub 应实现的所有权与留存契约：一个哈希一份（内容寻址去重）、所有权是声明表而非列（direct = 自己上传，indirect = 自己 direct 文档引用的派生节点）、`{ hash }` ChildRef 在存储时解析（绝不存第二份）、零声明 → 可回收。
+协议只定义文档；若存在托管 hub，由它决定谁拥有文档、存活多久。spec §9.1 记录了 hub 应实现的仓库层契约：实践实例=单 owner 仓库，演进是一条提交链（`{ seq, root_hash, parent_hash?, message?, created_at }`）、分支是指向链的指针；一个哈希一份（内容寻址去重）；`{ hash }` ChildRef 在存储时解析（绝不存第二份）；`refines` 边是实例元数据并带反向索引；留存按链可达性——删除实例回收仅它引用的内容，与其它实例共享的内容幸存。
 
 ## 演进
 
@@ -123,6 +151,8 @@ npm link -w @arshdelight/practi   # 全局安装 `practi` 命令
 
 ## 版本历史
 
+- **2.1.0**（2026-10-19）——§9 传输契约按实例模型重写。认领时代的端点（`POST /pop`、`GET /pop/mine`、submit/unpublish/DELETE 及认领制搜索 scope）替换为实例/分支写契约：写入门 `POST /instances/:owner/:name/branches/:branch/revisions`（幂等存储+快进追加提交，一次调用）、分支链读取、绑头快进。§9.1 更名「仓库语义」：实例=单 owner 仓库独占一条提交链，留存按链可达性（取代声明表引用计数），§1 的「referencing is claiming」相应改写——留存是仓库层策略，与文档无关。无文档格式变更：哈希、§1–§8 与附录 A 不受影响。
+- **2.0.0**（2026-10-19）——**破坏性**：`revisions` 字段（全部节点）与 `refines` 字段（practice）从文档模型移除。文档自此是纯内容快照；历史归仓库层（§9.1）：实例的提交链 `{ seq, root_hash, parent_hash?, message?, created_at }`，refines（改进关系）变为实例元数据——fork 边指向被改进实践的根哈希。携带被删字段的文档按 §8 拒绝（`E_SCHEMA`）——用 `practi fix` 剥除。从未带过这两个字段的文档在 v1/v2 下哈希一致；剥除后产生新哈希（旧哈希仍是旧内容的有效地址）。测试向量（附录 A）不变——没有任何向量用到被删字段。
 - **1.1.0**（2026-09-03）——§5.1：行内媒体引用只对节点的附件列表解析；`![caption](https://…)` 外部 URL 目标不再是合法语法（`E_MEDIA_REF`）。外部字节可变、不可审计——审过的链接不会一直是审过的状态。`content` 里的普通 markdown 链接与附件指针可选的 `url` 抓取提示（§5）不变。从未用过外部媒体引用的文档不受影响；哈希不变。
 - **1.0.2**（2026-08-27）——§9 不再点名具体认证机制：认证方式及其 scope 一律是 hub 策略。§6 澄清资源守卫（嵌套深度、载荷大小）是实现策略——以 `E_SCHEMA` 拒绝，绝不静默丢弃内容。无格式变更；哈希不受影响。
 - **1.0.1**（2026-08-25）——校验澄清（§5.1）：行内代码块是代码，永不扫描其中的媒体语法（围栏代码块此前已是）。无格式变更；哈希不受影响。

@@ -6,7 +6,7 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 **Skill-compatible**: every POP document reads as a skill — an action is an atomic skill, a practice is a compositional skill (a skill that composes skills). A skill maps losslessly **into** a document (`name`/`description`/body → `name`/`description`/`content`, files → `attachments`), gaining verifiable identity, linking, and composition in exchange. The reverse direction is a **projection**: a document's flow wiring and op composition have no skill-side serialization — reading a document as a skill is a view of it, not a lossless encoding. The mapping defines identity, it is not an import channel: tools replay exports only — foreign skills enter POP by authoring.
 
-**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 1.1.0. The spec covers only the protocol; everything else lives here.
+**The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 2.1.0. The spec covers only the protocol; everything else lives here.
 
 ## Quick start
 
@@ -53,7 +53,16 @@ practi blob add <file-or-url> [--name <name>]
                                   stage an attachment: hashes the bytes and stores local blobs.
                                   A URL source is fetched through the system proxy and its bytes
                                   are stored too — the pointer itself stays hash-only
+practi branch [name] [--from <hash>] | -d <name>
+                                  instance branches (needs a bound instance): no arg lists
+                                  branches (* = default), a name creates one from the current
+                                  branch head, -d deletes the pointer
 practi claim <hash>               register an existing stored node as a direct pop (indirect → direct)
+practi clone <owner>/<name>[@branch]
+                                  fetch a practice instance from the hub into this workspace and
+                                  bind to it (git clone: the instance IS the repository), pulling
+                                  every revision of the branch and checking out the head as a
+                                  direct pop
 practi config                     show data dir and registry summary
 practi edit <hash> <file.json>    replace a direct POP (new hash; swap recorded in the local commit
                                 log commits.json; GC of unreachable nodes)
@@ -67,13 +76,28 @@ practi embed prune                 drop vector buckets left behind by an older m
                                   The whole layer is optional: no model means practi is
                                   lexical-only, and `search --semantic` says what is missing
                                   instead of quietly recalling less
+practi fetch <hash>               pull a single POP from the hub into your local registry (direct;
+                                  full sha256 hash — no prefix guessing). No instance involved —
+                                  the object goes straight into your pop library
 practi gc [--apply]               free orphan blobs — bytes no stored node references
                                   (dry-run by default; --apply removes)
 practi init [path]                initialize a data directory (default: ~/.practi)
+practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
+                                  create a practice instance on the hub, or bind this workspace to
+                                  one (git's origin); push/merge/log default to the binding
 practi lint [--json] [--limit N]  audit recording quality across every direct pop: the same W_*
                                   hints `practi new` prints once, on demand. Read-only and never
                                   blocking (exit code is always 0) — a to-do list, not a gate
+practi log [--branch <b>] [--limit N] [--json]
+                                  revision history of the bound instance branch (tip first)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
+practi login [--no-open] [--reauth]  OAuth sign-in to the hub (browser consent; --no-open prints
+                                  the URL for headless use)
+practi logout                     revoke and drop stored credentials
+practi me                         show the signed-in account, role and scopes
+practi merge <branch>             merge a branch into the current one: fast-forward when the tip's
+                                  parent chain reaches the current head, otherwise a squash merge
+                                  commit is appended
 practi migrate [path] [--keep]      move the workspace to a new data directory (cut: the old
                                   directory is removed after per-file verification; --keep retains
                                   it as .bak; no arg = ~/.practi; a path is recorded in ~/.practi-home)
@@ -84,8 +108,17 @@ practi note promote <note-id> [--out <file>]
                                   drafts and stops, never edits for you (under content addressing an
                                   edit is a new hash, and that is your call)
 practi new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
+practi push [hash] [--branch <b>] [--message <text>]
+                                  one call: store the document and bind it as the branch head (the
+                                  commit is appended with parent = current head). Requires a bound
+                                  instance — POP lives on the hub only as practice instances
+practi pull                       sync the bound instance's revisions into the workspace (git pull
+                                  inside the repository): missing chain revisions are fetched
+                                  (hash-verified), the branch head is fast-forwarded or the tip
+                                  is checked out
 practi remove <hash>              take a direct pop out of the local directory (registry op;
                                   GCs nodes unreachable from the rest — shared indirect nodes survive)
+practi remote set <url> | remove  point practi at a hub
 practi repair                     backfill missing claim timestamps from node file times (idempotent)
 practi search [query...]          search every stored node — direct, indirect and orphans alike:
                                   field-weighted BM25 with title-first ranking, `field:` scoping
@@ -109,6 +142,8 @@ practi skill uninstall             remove the installed use-practi skill
 practi skill import <dir>          replay a `practi skill export` directory back into a POP (sidecar required; foreign skills enter POP by authoring, not import)
 practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + attachment files + pop.doc.json sidecar)
 practi spec                       print the bundled pop-spec.md (no network fetch)
+practi switch <branch>            switch the bound instance's current branch (local pointer; bring
+                                  the content into the workspace with "practi pull")
 practi unclaim <hash>             take a referenced direct pop back to indirect (fails when unreferenced —
                                   that would orphan it; delete with "remove" instead)
 practi update                     self-update via npm (checks the registry's latest)
@@ -123,9 +158,9 @@ npm link -w @arshdelight/practi   # installs the `practi` command globally
 
 Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally).
 
-## Ownership & retention (for hosted hubs)
+## Repository semantics (for hosted hubs)
 
-The protocol defines the document; a hosted hub — if one ever exists — decides who owns it and how long it lives. §9.1 of the spec records the ownership & retention contract a hub should implement: one copy per hash (content-addressed dedup), ownership as a claim table rather than a column (direct = own upload, indirect = derived from what your direct documents reference), `{ hash }` ChildRefs resolved at store time (never a second copy), and no-claim → garbage collection.
+The protocol defines the document; a hosted hub — if one exists — decides who owns it and how long it lives. §9.1 of the spec records the repository contract a hub should implement: practice instances are single-owner repositories whose evolution is a commit chain (`{ seq, root_hash, parent_hash?, message?, created_at }`) with branches as pointers into the chain; one copy per hash (content-addressed dedup); `{ hash }` ChildRefs resolved at store time (never a second copy); `refines` edges as instance metadata with a reverse index; retention by chain reachability — deleting an instance reclaims what only it referenced, while content shared with other instances survives.
 
 ## Evolution
 
@@ -133,6 +168,7 @@ Semver from 1.0.0: evolution adds optional fields where possible (existing ident
 
 ## History
 
+- **2.1.0** (2026-10-19) — §9 transport contract rewritten for the instance model. The claim-era endpoints (`POST /pop`, `GET /pop/mine`, submit/unpublish/DELETE and the claim-based search scopes) are replaced by the instance/branch write contract: the write gate `POST /instances/:owner/:name/branches/:branch/revisions` (idempotent store + fast-forward commit append in one call), branch chain reads, and fast-forward head re-binding. §9.1 becomes "Repository semantics": instances are single-owner repositories owning one commit chain, retention follows chain reachability (replacing the claim-table reference count), and the §1 principle "referencing is claiming" is reworded — retention is repository-layer policy, never a document property. No document-format change: hashes, §1–§8 and Appendix A are unaffected.
 - **2.0.0** (2026-10-19) — **breaking**: the `revisions` field (all nodes) and the `refines` field (practices) are removed from the document model. A document is now a pure content snapshot; history lives in the repository layer (§9.1): an instance's commit chain `{ seq, root_hash, parent_hash?, message?, created_at }`, and refinement (`refines`) becomes instance metadata — the fork edge points at the root hash a practice improves. Documents carrying the removed fields are rejected per §8 (`E_SCHEMA`) — strip them with `practi fix`. Documents that never carried the fields hash identically under v1 and v2; stripping them from a document that had them yields a new hash (the old hash remains a valid address of the old content). Test vectors (Appendix A) are unchanged — none of them exercised the removed fields.
 - **1.1.0** (2026-09-03) — §5.1: inline media references resolve exclusively against the node's attachment list; `![caption](https://…)` external URL targets are no longer valid grammar (`E_MEDIA_REF`). External bytes are mutable and unauditable — a reviewed link does not stay reviewed. Ordinary markdown links in `content` and an attachment pointer's optional `url` fetch hint (§5) are unchanged. Documents that never used external media references are unaffected; their hashes are unchanged.
 - **1.0.2** (2026-08-27) — §9 no longer names a concrete auth mechanism: authentication and its scopes are hub policy, full stop. §6 clarifies that resource guards (nesting depth, payload size) are implementation policy — refuse with `E_SCHEMA`, never silently drop content. No format change; hashes are unaffected.
