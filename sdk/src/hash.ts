@@ -105,9 +105,6 @@ function hashNode(node: HashableNode, depth: number): string {
   if (node.description !== undefined && node.description.trim() !== '') payload.description = node.description;
   if (node.license !== undefined && node.license.trim() !== '') payload.license = node.license;
   if (node.metadata !== undefined && Object.keys(node.metadata).length > 0) payload.metadata = node.metadata;
-  // Revisions are part of the content (history changes the identity chain);
-  // the trigger pointer may dangle but still participates in the hash
-  if (node.revisions !== undefined && node.revisions.length > 0) payload.revisions = node.revisions;
   if (node.type === 'action') {
     // Attachment pointers participate (attachments change → identity changes);
     // attachment bytes do not (blobs are content-addressed separately).
@@ -130,7 +127,6 @@ function hashNode(node: HashableNode, depth: number): string {
     //   so the two forms are interchangeable (§1 rule 3).
     payload.children = node.children.map(c => childHash(c, depth));
     if (node.loop !== undefined) payload.loop = node.loop;
-    if (node.refines !== undefined && node.refines.trim() !== '') payload.refines = node.refines;
   }
   return `sha256:${createHash('sha256').update(stableStringify(payload), 'utf8').digest('hex')}`;
 }

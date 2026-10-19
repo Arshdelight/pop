@@ -31,20 +31,30 @@ function writeDoc(dir: string, doc: unknown): string {
 }
 
 describe('exportSubtree ↔ createFromDoc round-trip', () => {
-  it('revisions/refines/attachments survive with all fields, hash byte-identical', async () => {
+  it('v1 history fields (revisions/refines) are rejected per §8 — removed in POP 2.0', async () => {
     const dir = await setup();
-    const blobHash = storeBlob(dir, Buffer.from('photo-bytes'));
     const tree = {
       name: 'A tree with history',
       revisions: [{ when: '2026-08-19', what: 'initial version', trigger: 'external trigger' }],
-      refines: `sha256:${'e'.repeat(64)}`, // history pointer, outside the workspace (dangling tolerated)
+      refines: `sha256:${'e'.repeat(64)}`,
+      children: [{ name: 'leaf', content: 'x' }],
+    };
+    await expect(runCreate(dir, { file: writeDoc(dir, tree), ...T })).rejects.toThrow(/unknown field "revisions"/);
+    const bare = { name: 'A tree', refines: `sha256:${'e'.repeat(64)}`, children: [{ name: 'leaf', content: 'x' }] };
+    await expect(runCreate(dir, { file: writeDoc(dir, bare), ...T })).rejects.toThrow(/unknown field "refines"/);
+  });
+
+  it('attachments survive with all fields, hash byte-identical', async () => {
+    const dir = await setup();
+    const blobHash = storeBlob(dir, Buffer.from('photo-bytes'));
+    const tree = {
+      name: 'A tree with photos',
       children: [
         {
           name: 'leaf',
           content: 'x',
           attachments: [{ name: 'photo.png', hash: blobHash, mime: 'image/png', size: 'photo-bytes'.length }],
           outputs: [{ name: 'hot water' }],
-          revisions: [{ when: '2026-08-18', what: 'leaf revision', from: `sha256:${'d'.repeat(64)}` }],
         },
       ],
     };
@@ -62,11 +72,8 @@ describe('exportSubtree ↔ createFromDoc round-trip', () => {
     expect(result.count).toBe(2);
     const root = ws2loaded.nodes.get(result.root)!;
     expect(computeNodeHash(root)).toBe(created.root); // hash identical
-    expect(root.type === 'practice' && root.refines).toBe(tree.refines); // refines preserved
-    expect(root.revisions).toEqual(tree.revisions); // root revisions preserved
     const leaf = [...ws2loaded.nodes.values()].find(n => n.name === 'leaf')!;
     expect(leaf.type === 'action' && leaf.attachments).toEqual(tree.children[0].attachments); // attachment pointers preserved
-    expect(leaf.revisions).toEqual(tree.children[0].revisions); // leaf revisions preserved
 
     // Blobs are content-addressed storage: store the same content in the target
     // workspace and the pointer reconciles

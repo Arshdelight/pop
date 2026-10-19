@@ -4,7 +4,7 @@ import path from 'node:path';
 import { aggregateView, type StandardView } from '../src/aggregate.js';
 import { createFromDoc } from '../src/doc.js';
 import { initWorkspace, loadWorkspace, resolveNodeRef } from '../src/store.js';
-import { upgradeStatus, validateWorkspace } from '../src/validate.js';
+import { validateWorkspace } from '../src/validate.js';
 
 /**
  * Test helpers: thin wrappers over the protocol functions; file I/O lives at this layer.
@@ -38,10 +38,6 @@ export async function runValidate(dir: string, _opts: Opts = {}) {
   const ws = loadWorkspace(dir);
   const issues = validateWorkspace(ws);
   return { ok: issues.length === 0, nodeCount: ws.nodes.size, issues };
-}
-
-export async function runStatus(dir: string, _opts: Opts = {}) {
-  return upgradeStatus(loadWorkspace(dir));
 }
 
 /** Quick node creation (single-node shortcut over the spec §1 document form): input accepts name@from(hash), output accepts name=spec or JSON */

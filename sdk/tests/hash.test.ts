@@ -62,8 +62,6 @@ describe('computeNodeHash', () => {
     expect(computeNodeHash(action({ license: '' }))).toBe(computeNodeHash(action()));
     expect(computeNodeHash(action({ inputs: [] }))).toBe(computeNodeHash(action()));
     expect(computeNodeHash(action({ outputs: [] }))).toBe(computeNodeHash(action()));
-    const p = { type: 'practice', name: 'P', content: '', op: 'seq', children: [{ hash: FAKE }] } as const;
-    expect(computeNodeHash({ ...p, refines: '' })).toBe(computeNodeHash(p));
   });
 
   it('metadata values are arbitrary JSON and participate in the hash (recursive canonical serialization)', () => {

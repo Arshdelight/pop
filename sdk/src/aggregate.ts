@@ -1,6 +1,6 @@
 import { PracticeError } from './errors.js';
 import { computeNodeHash } from './hash.js';
-import type { Attachment, Op, PNode, PracticeNode, Revision } from './model.js';
+import type { Attachment, Op, PNode, PracticeNode } from './model.js';
 
 export interface StepItem {
   /** The step node's content hash — the only address (renderers show `name` to humans) */
@@ -73,8 +73,6 @@ export interface StandardView {
   /** Declared needs/productions aggregated from the subtree (§7), with provenance */
   inputs: FlowDeclarationView[];
   outputs: FlowDeclarationView[];
-  /** The root node's own revisions (timeline; not aggregated from the subtree) */
-  revisions?: Revision[];
   /** Child pins whose node files are absent (read tolerance: the view still renders; creation-time import remains strict) */
   missing?: MissingRef[];
 }
@@ -130,7 +128,6 @@ export function aggregateView(rootHash: string, nodes: Map<string, PNode>, opts?
     inputs: acc.inputs,
     outputs: acc.outputs,
   };
-  if (root.revisions !== undefined && root.revisions.length > 0) view.revisions = root.revisions;
   if (root.type === 'practice') view.op = root.op;
   if (acc.missing.length > 0) view.missing = acc.missing;
   return view;

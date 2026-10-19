@@ -24,7 +24,7 @@ describe('store', () => {
     expect(ws.nodes.get(hash)).toEqual(node);
   });
 
-  it('practice write/read round-trip equivalence (children pins/loop/refines)', () => {
+  it('practice write/read round-trip equivalence (children pins/loop)', () => {
     const dir = tempDir();
     const p: PracticeNode = {
       type: 'practice',
@@ -33,7 +33,6 @@ describe('store', () => {
       op: 'loop',
       children: [{ hash: FAKE }],
       loop: { mode: 'count', count: 3 },
-      refines: FAKE,
     };
     const hash = saveNode(dir, p);
     const ws = loadWorkspace(dir);

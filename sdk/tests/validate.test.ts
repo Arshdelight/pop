@@ -35,42 +35,16 @@ function updateNode(dir: string, hash: string, edit: (n: PNode) => void): PNode 
 }
 
 describe('validate: structural invariants (spec §6)', () => {
-  it('refinement graph (§7/§9.1): from pins and child pins whose target has a refinement are surfaced — advisory, never issues', async () => {
+  it('v1 refinement edges are rejected: refines is no longer a document field (POP 2.0)', async () => {
     const dir = await setup();
     const write = (doc: unknown): string => {
       fs.writeFileSync(path.join(dir, 'doc.json'), JSON.stringify(doc), 'utf8');
       return 'doc.json';
     };
-    const boil = await runCreate(dir, { file: write({ name: 'Boil water', content: 'Heat until boiling.' }), ...T });
-    // an improved version: a practice refining the stored boil action
-    const better = await runCreate(dir, {
-      file: write({ name: 'Boil water (kettle version)', refines: boil.root, children: [{ name: 'Fill kettle', content: 'Fill and switch on.' }] }),
+    await expect(runCreate(dir, {
+      file: write({ name: 'Boil water (kettle version)', refines: `sha256:${'b'.repeat(64)}`, children: [{ name: 'Fill kettle', content: 'Fill and switch on.' }] }),
       ...T,
-    });
-    // a consumer wiring from the original via a child pin AND a from pin
-    const tea = await runCreate(dir, {
-      file: write({
-        name: 'Make tea',
-        children: [
-          { hash: boil.root },
-          { name: 'Pour', content: 'Pour.', inputs: [{ name: 'boiling water', from: boil.root }] },
-        ],
-      }),
-      ...T,
-    });
-
-    const status = await runStatus(dir, { json: true });
-    const ws = loadWorkspace(dir);
-    const pourHash = computeNodeHash([...ws.nodes.values()].find(n => n.name === 'Pour')!);
-    expect(status.refinableInputs).toEqual([
-      { node: pourHash, input: 'boiling water', from: boil.root, candidates: [better.root] },
-    ]);
-    expect(status.upgradeable).toEqual([
-      { parent: tea.root, child: boil.root, candidates: [better.root] },
-    ]);
-    // advisory only: validate stays green
-    const check = await runValidate(dir, { json: true });
-    expect(check.ok).toBe(true);
+    })).rejects.toThrow(/unknown field "refines"/);
   });
 
   it('parse issues carry line numbers: derived-view fields point at the offending frontmatter line', async () => {

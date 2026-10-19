@@ -136,7 +136,6 @@ export function nodeToMarkdown(node: PNode): string {
   if (node.description !== undefined) fm.description = node.description;
   if (node.license !== undefined) fm.license = node.license;
   if (node.metadata !== undefined && Object.keys(node.metadata).length > 0) fm.metadata = node.metadata;
-  if (node.revisions !== undefined && node.revisions.length > 0) fm.revisions = node.revisions;
   if (node.type === 'action') {
     if (node.attachments !== undefined && node.attachments.length > 0) fm.attachments = node.attachments;
     if (node.inputs !== undefined) fm.inputs = node.inputs;
@@ -145,7 +144,6 @@ export function nodeToMarkdown(node: PNode): string {
     fm.op = node.op;
     fm.children = node.children;
     if (node.loop !== undefined) fm.loop = node.loop;
-    if (node.refines !== undefined) fm.refines = node.refines;
   }
   return matter.stringify(`\n${node.content}`, fm);
 }

@@ -1,18 +1,18 @@
 import { PracticeError } from './errors.js';
 import { computeNodeHash } from './hash.js';
 import {
-  MAX_NODE_DEPTH, OPS, extractMediaRefs, isHashFormat, isRecord, jsonValueViolation, parseAttachmentItem, parseRevisions, presentString,
+  MAX_NODE_DEPTH, OPS, extractMediaRefs, isHashFormat, isRecord, jsonValueViolation, parseAttachmentItem, presentString,
   rejectUnknownKeys,
   type ActionNode, type Attachment, type FlowItem, type LoopConfig, type Op,
-  type PNode, type PracticeNode, type Revision,
+  type PNode, type PracticeNode,
 } from './model.js';
 import type { Workspace } from './store.js';
 import { saveNode } from './store.js';
 
 /** Document-form node fields (§1/§2). Anything else is rejected, not dropped (§8). */
 const NODE_FIELDS = [
-  'name', 'type', 'description', 'license', 'metadata', 'content', 'revisions',
-  'attachments', 'inputs', 'outputs', 'children', 'op', 'loop', 'refines',
+  'name', 'type', 'description', 'license', 'metadata', 'content',
+  'attachments', 'inputs', 'outputs', 'children', 'op', 'loop',
 ] as const;
 
 /** A planned (parsed, not yet built) node — the transient form of document import */
@@ -26,12 +26,10 @@ export interface Planned {
   isPractice: boolean;
   op: Op;
   loop?: LoopConfig;
-  refines?: string;
   children: ChildEntry[];
   attachments: Attachment[];
   inputs: FlowItem[];
   outputs: FlowItem[];
-  revisions?: Revision[];
 }
 
 /**
@@ -77,14 +75,6 @@ function parseMetadataField(v: unknown, nodePath: string): Record<string, unknow
     }
   }
   return v;
-}
-
-function parseRevisionsField(v: unknown, nodePath: string): Revision[] | undefined {
-  if (v === undefined) return undefined;
-  if (!Array.isArray(v)) failDoc(`${nodePath}.revisions`, 'must be an array');
-  const revs = parseRevisions(v);
-  if (revs !== undefined && revs.length === 0) return undefined; // empty ≡ absent
-  return revs;
 }
 
 function parseFlowField(v: unknown, kind: 'inputs' | 'outputs', nodePath: string): FlowItem[] {
@@ -136,7 +126,6 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
   const license = presentString(raw.license, `${nodePath}.license`);
   const metadata = parseMetadataField(raw.metadata, nodePath);
   const content = presentString(raw.content, `${nodePath}.content`) ?? '';
-  const revisions = parseRevisionsField(raw.revisions, nodePath);
 
   if (raw.children === undefined) {
     const explicit = optionalString(raw.type);
@@ -145,7 +134,6 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
     }
     if (raw.op !== undefined) failDoc(`${nodePath}.op`, 'action must not carry op (no children means action)');
     if (raw.loop !== undefined) failDoc(`${nodePath}.loop`, 'action must not carry loop');
-    if (raw.refines !== undefined) failDoc(`${nodePath}.refines`, 'refines belongs to practices only (actions have no containment)');
     return {
       path: nodePath,
       name,
@@ -159,7 +147,6 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
       attachments: parseAttachmentsField(raw.attachments, nodePath),
       inputs: parseFlowField(raw.inputs, 'inputs', nodePath),
       outputs: parseFlowField(raw.outputs, 'outputs', nodePath),
-      revisions,
     };
   }
 
@@ -210,8 +197,6 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
     isPractice: true,
     op: op as Op,
     loop,
-    // History pointer: may target nodes outside the document/workspace; preserved verbatim (dangling-tolerant, like the store layer)
-    refines: presentString(raw.refines, `${nodePath}.refines`),
     children: raw.children.map((c: unknown, i: number) => {
       const childPath = `${nodePath}.children[${i}]`;
       if (typeof c === 'string') {
@@ -239,7 +224,6 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
     attachments: [],
     inputs: [],
     outputs: [],
-    revisions,
   };
 }
 
@@ -292,7 +276,6 @@ export function buildPlannedNode(p: Planned): { node: PNode; hash: string } {
     if (p.attachments.length > 0) action.attachments = p.attachments;
     if (p.inputs.length > 0) action.inputs = p.inputs;
     if (p.outputs.length > 0) action.outputs = p.outputs;
-    if (p.revisions !== undefined && p.revisions.length > 0) action.revisions = p.revisions;
     node = action;
   } else {
     const children = p.children.map(entry =>
@@ -309,8 +292,6 @@ export function buildPlannedNode(p: Planned): { node: PNode; hash: string } {
     if (p.license !== undefined) practice.license = p.license;
     if (p.metadata !== undefined && Object.keys(p.metadata).length > 0) practice.metadata = p.metadata;
     if (p.loop !== undefined) practice.loop = p.loop;
-    if (p.refines !== undefined) practice.refines = p.refines;
-    if (p.revisions !== undefined && p.revisions.length > 0) practice.revisions = p.revisions;
     node = practice;
   }
   const result = { node, hash: computeNodeHash(node) };

@@ -65,7 +65,6 @@ function exportNode(
   if (node.description !== undefined) doc.description = node.description;
   if (node.license !== undefined) doc.license = node.license;
   if (node.metadata !== undefined && Object.keys(node.metadata).length > 0) doc.metadata = node.metadata;
-  if (node.revisions !== undefined && node.revisions.length > 0) doc.revisions = node.revisions;
   if (node.type === 'action') {
     if (node.attachments !== undefined && node.attachments.length > 0) doc.attachments = node.attachments;
     if (node.inputs !== undefined && node.inputs.length > 0) {
@@ -81,7 +80,6 @@ function exportNode(
   } else {
     doc.op = node.op;
     if (node.loop !== undefined) doc.loop = node.loop;
-    if (node.refines !== undefined) doc.refines = node.refines;
     doc.children = node.children.map((ref) => {
       const child = nodes.get(ref.hash);
       // 读取宽容：引用的节点缺失时按 pin 原样导出（{ hash } 是文档合法形态）——

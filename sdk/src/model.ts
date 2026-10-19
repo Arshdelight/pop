@@ -35,20 +35,6 @@ export interface ChildRef {
   hash: string;
 }
 
-/**
- * Revision record: the timeline in the format. The structure is acyclic,
- * time is directed — trigger is a history pointer (to the node that caused
- * the revision), not a containment edge; it may dangle and is never validated.
- */
-export interface Revision {
-  when: string;
-  what: string;
-  /** Content hash of the node before this revision (the overwritten version remains nameable) */
-  from?: string;
-  /** The node hash that triggered this revision (the "back edge" of exploratory practices) */
-  trigger?: string;
-}
-
 export interface CountLoop {
   mode: 'count';
   count: number;
@@ -75,7 +61,6 @@ export interface ActionNode {
   attachments?: Attachment[];
   inputs?: FlowItem[];
   outputs?: FlowItem[];
-  revisions?: Revision[];
 }
 
 export interface PracticeNode {
@@ -89,9 +74,6 @@ export interface PracticeNode {
   /** Containment pins: each child addressed by its own node hash (the pin is the address — content addressing) */
   children: ChildRef[];
   loop?: LoopConfig;
-  /** Which action this practice refines, by hash (recorded on refine; may dangle) */
-  refines?: string;
-  revisions?: Revision[];
 }
 
 export type PNode = ActionNode | PracticeNode;
@@ -229,8 +211,13 @@ export function parseAttachmentItem(item: unknown, prefix = 'attachments'): Atta
 export function rejectUnknownKeys(obj: Record<string, unknown>, allowed: readonly string[], what: string): void {
   for (const k of Object.keys(obj)) {
     if (!allowed.includes(k)) {
+      // POP 2.0 把 revisions/refines 移出文档（历史归仓库层，spec §9.1）；旧格式文档走到这里
+      // 时给出指向迁移工具的专属提示，而不是泛泛的 §8 说教。
+      const legacy = k === 'revisions' || k === 'refines';
       throw new PracticeError('E_SCHEMA', `${what}: unknown field "${k}" (allowed: ${allowed.join(', ')})`, {
-        hint: 'spec §8: unrecognized fields must be rejected, not dropped — dropped fields fork hashes',
+        hint: legacy
+          ? `"${k}" was removed in POP 2.0 — history lives in the repository layer (spec §9.1); strip it with \`practi fix\``
+          : 'spec §8: unrecognized fields must be rejected, not dropped — dropped fields fork hashes',
       });
     }
   }
@@ -325,26 +312,9 @@ function parseMetadata(v: unknown, fmText?: string): Record<string, unknown> | u
   return v as Record<string, unknown>;
 }
 
-export function parseRevisions(v: unknown): Revision[] | undefined {
-  if (v === undefined) return undefined;
-  if (!Array.isArray(v)) throw new PracticeError('E_SCHEMA', 'revisions must be an array');
-  return v.map((item, i) => {
-    if (!isRecord(item)) throw new PracticeError('E_SCHEMA', `revisions[${i}] must be objects`);
-    rejectUnknownKeys(item, ['when', 'what', 'from', 'trigger'], `revisions[${i}]`);
-    const when = requireString(item.when, `revisions[${i}].when`);
-    const what = requireString(item.what, `revisions[${i}].what`);
-    const rev: Revision = { when, what };
-    const from = presentString(item.from, `revisions[${i}].from`);
-    const trigger = presentString(item.trigger, `revisions[${i}].trigger`);
-    if (from !== undefined) rev.from = from;
-    if (trigger !== undefined) rev.trigger = trigger;
-    return rev;
-  });
-}
-
 const NODE_FIELDS = [
-  'type', 'name', 'description', 'license', 'metadata', 'revisions',
-  'attachments', 'inputs', 'outputs', 'op', 'children', 'loop', 'refines',
+  'type', 'name', 'description', 'license', 'metadata',
+  'attachments', 'inputs', 'outputs', 'op', 'children', 'loop',
 ] as const;
 
 /**
@@ -364,7 +334,6 @@ export function parseNodeFromMatter(data: Record<string, unknown>, content: stri
     if (data.children !== undefined) throw schemaErr('action must not carry children', fmText, 'children');
     if (data.op !== undefined) throw schemaErr('action must not carry op', fmText, 'op');
     if (data.loop !== undefined) throw schemaErr('action must not carry loop', fmText, 'loop');
-    if (data.refines !== undefined) throw schemaErr('refines belongs to practices only', fmText, 'refines');
     const inputs = parseFlowList(data.inputs, 'inputs', fmText);
     const outputs = parseFlowList(data.outputs, 'outputs', fmText);
     const node: ActionNode = {
@@ -379,8 +348,6 @@ export function parseNodeFromMatter(data: Record<string, unknown>, content: stri
     if (outputs.length > 0) node.outputs = outputs;
     const attachments = parseAttachments(data.attachments, fmText);
     if (attachments !== undefined && attachments.length > 0) node.attachments = attachments;
-    const actionRevisions = parseRevisions(data.revisions);
-    if (actionRevisions !== undefined && actionRevisions.length > 0) node.revisions = actionRevisions;
     return node;
   }
 
@@ -409,12 +376,9 @@ export function parseNodeFromMatter(data: Record<string, unknown>, content: stri
       op: op as Op,
       children: parseChildren(data.children, fmText),
       loop: parseLoop(data.loop, fmText),
-      refines: presentString(data.refines, 'refines'),
     };
     if (license !== undefined) node.license = license;
     if (metadata !== undefined && Object.keys(metadata).length > 0) node.metadata = metadata;
-    const practiceRevisions = parseRevisions(data.revisions);
-    if (practiceRevisions !== undefined && practiceRevisions.length > 0) node.revisions = practiceRevisions;
     return node;
   }
 
