@@ -92,10 +92,6 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
     console.log('\nattachments:');
     for (const a of view.attachments) console.log(`  ${a.name}  ${a.mime ?? ''}  ${a.size ?? ''}b  ${short(a.hash)}`);
   }
-  if (view.revisions !== undefined && view.revisions.length > 0) {
-    console.log('\nrevisions:');
-    for (const r of view.revisions) console.log(`  ${r.when}  ${r.what}${r.from ? `  (from ${short(r.from)})` : ''}`);
-  }
   if (view.missing !== undefined && view.missing.length > 0) {
     console.error(`\nerror [E_MISSING]: ${view.missing.length} referenced node(s) absent from this workspace:`);
     for (const m of view.missing) {

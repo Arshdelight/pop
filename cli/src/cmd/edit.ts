@@ -13,13 +13,13 @@ import { shortHash } from '../render.js';
 import { printQualityHints } from '../quality.js';
 import { nodeIndexFields } from '../retrieval.js';
 import { describeRefresh, refreshVectors } from '../embed/optional.js';
+import { appendCommit } from '../commits.js';
 
 export interface EditOpts {
   dataDir?: string;
   json?: string;
   file?: string;
   message?: string;
-  noRevision?: boolean;
   keep?: boolean;
   positional: string[];
 }
@@ -59,7 +59,8 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
 
 /**
  * practi edit <hash>：非交互编辑一个 direct 根——新文档（file/--json/stdin）→ 新哈希换注册。
- * 编辑即修订：根节点自动追加 revisions（from = 旧根哈希；spec §2.2 历史指针，允许悬空、永不校验）。
+ * POP 2.0：文档是纯快照，不写历史；本次编辑的血统记进本地提交日志 commits.json
+ * （from = 旧根哈希，--message 是提交说明，push 时上送 hub）。
  * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
  * 纯本地操作。
  */
@@ -73,7 +74,7 @@ export async function runEdit(opts: EditOpts): Promise<number> {
 
   if (!ref || text === undefined || text.trim() === '') {
     console.error("usage: practi edit <hash> <file.json> | practi edit <hash> --json '<text>' | practi edit <hash> < file.json");
-    console.error('       [--message <text>] [--no-revision] [--keep]');
+    console.error('       [--message <text>] [--keep]');
     return 1;
   }
 
@@ -99,19 +100,6 @@ export async function runEdit(opts: EditOpts): Promise<number> {
     return 1;
   }
 
-  if (opts.noRevision !== true) {
-    const revisions = Array.isArray(doc.revisions) ? (doc.revisions as unknown[]) : [];
-    const already = revisions.some((r) => isRecord(r) && r.from === oldRoot);
-    if (!already) {
-      revisions.push({
-        when: new Date().toISOString().slice(0, 10),
-        what: opts.message ?? 'edited via practi edit',
-        from: oldRoot,
-      });
-      doc.revisions = revisions;
-    }
-  }
-
   const { root: newRoot, count } = createFromDoc(ws, doc);
   // 门禁只统计本次子树：其它文档的历史问题不连坐本次 swap-in（与 new 同口径）
   const loaded = loadWorkspace(dataDir);
@@ -133,6 +121,7 @@ export async function runEdit(opts: EditOpts): Promise<number> {
   state.direct = state.direct.filter((h) => h !== oldRoot);
   claimDirect(state, newRoot);
   saveState(dataDir, state);
+  appendCommit(dataDir, newRoot, oldRoot, opts.message ?? 'edited via practi edit');
   console.log(`edited:   ${oldRoot} -> ${newRoot}  (${count} nodes)`);
   printQualityHints(loaded, newRoot);
   // 向量保鲜放在 GC 之前？不 —— GC 会删掉不可达节点，索引要按**最终**工作区来算，

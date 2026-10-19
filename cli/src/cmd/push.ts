@@ -3,12 +3,15 @@ import { defaultDataDir, loadState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { authedFetch } from '../client.js';
 import { shortHash } from '../render.js';
+import { markPushed, messageFor } from '../commits.js';
 
 export interface PushOpts {
   dataDir?: string;
   positional: string[];
   /** 绑定分支头时用哪条支（缺省=工作区绑定的当前支；需已 `practi instance bind`） */
   branch?: string;
+  /** 提交说明（缺省取本地提交日志里该根的 message，再缺省由 hub 记空） */
+  message?: string;
 }
 
 /**
@@ -30,12 +33,13 @@ export function stripAttachmentUrls<T>(node: T): T {
 }
 
 /**
- * practi push [hash] [--branch <b>]：存文档 + 绑分支头（一个调用，git push 语义）。
+ * practi push [hash] [--branch <b>] [--message <text>]：存文档 + 绑分支头（一个调用，git push 语义）。
  * - **pop 在 hub 上只以实践实例的形式存放**（2026-10-18 用户拍板）：未绑实例=拒绝，
  *   不再有无实例的认领兜底；本地 pop 由 CLI 像编辑器一样管理，同步单元只有实例。
- * - 服务端幂等：同内容重复 push 命中已存文档（idempotent），重推当前支头=up to date。
- * - fast-forward 校验在服务端（E_NOT_FAST_FORWARD = 分支头不是新头的直接修订，
- *   先 merge/变基）。
+ * - 提交说明（message）随请求上送，落 hub 的实例提交链（POP 2.0 §9.1 仓库层历史）；
+ *   缺省取 edit 记下的本地提交日志（commits.json），成功后本地条目盖 pushedAt。
+ * - 服务端幂等：同内容重复 push 命中已存文档（idempotent），重推当前支头=up to date；
+ *   父链由服务端按当前支头落库（线性血统由构造保证，push 无需声明 base）。
  */
 export async function runPush(opts: PushOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -83,6 +87,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
   }
   const doc = stripAttachmentUrls(exportSubtree(node, ws.nodes));
   const bound = { ...state.instance, ...(opts.branch !== undefined ? { branch: opts.branch } : {}) };
+  const message = opts.message ?? messageFor(dataDir, tipHash);
 
   let res;
   try {
@@ -93,7 +98,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ document: doc }),
+        body: JSON.stringify(message !== undefined ? { document: doc, message } : { document: doc }),
       },
     );
   } catch (e) {
@@ -103,11 +108,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
   const body = await res.json();
   if (!res.ok) {
     const detail = typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : `HTTP ${res.status}`;
-    if (body.code === 'E_NOT_FAST_FORWARD') {
-      console.error(`push failed: ${bound.branch}'s head is not ${shortHash(tipHash)}'s direct revision — merge or rebase first (\`practi merge\`, \`practi switch\`)`);
-    } else {
-      console.error(`push failed: ${detail}`);
-    }
+    console.error(`push failed: ${detail}`);
     return 1;
   }
 
@@ -118,5 +119,6 @@ export async function runPush(opts: PushOpts): Promise<number> {
   }
   console.log(`pushed:  ${tipHash}  (${body.idempotent ? 'already existed' : 'stored'}, ${body.status ?? 'PRIVATE'})  ${name}`);
   console.log(`bound:   ${bound.owner}/${bound.name}@${bound.branch} → ${String(body.root_hash)}  (v${body.seq})`);
+  markPushed(dataDir, tipHash);
   return 0;
 }

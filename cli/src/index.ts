@@ -19,6 +19,7 @@ import { runEmbed } from './cmd/embed.js';
 import { runNote } from './cmd/note.js';
 import { runRemove } from './cmd/remove.js';
 import { runClaim, runUnclaim } from './cmd/claim.js';
+import { runFix } from './cmd/fix.js';
 import { runUpdate } from './cmd/update.js';
 import { runSpec } from './cmd/spec.js';
 import { runSkill } from './cmd/skill.js';
@@ -51,9 +52,10 @@ usage:
                                  revision), -d deletes the pointer (default branch is kept)
   practi claim <hash>              register an existing stored node as a direct pop (indirect → direct)
   practi config                     show data dir and registry summary
-  practi edit <hash> <file.json>    replace a direct POP (new hash; auto-revision + GC)
+  practi edit <hash> <file.json>    replace a direct POP (new hash; the swap is recorded in the
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
-       [--message <text>] [--no-revision] [--keep]
+       local commit log (commits.json) and pushed as the commit message)
+       [--message <text>] [--keep]
   practi embed status|pull|build|prune  optional offline vector model (bge-small-zh-v1.5,
                                  ~24MB int8 ONNX). pull fetches it, build embeds every
                                  stored node (incrementally), status reports coverage.
@@ -61,7 +63,11 @@ usage:
                                  lexical-only, and search --semantic says so
   practi gc [--apply]               free orphan blobs — attachment bytes on disk that no
                                  stored node references (dry-run by default; --apply removes)
-  practi init [path]                initialize a data directory (default: ~/.practi)
+  practi fix <file.json> | <hash> | --all
+                                 migrate POP 1.x documents to 2.0: strip the removed history
+                                 fields (revisions/refines), re-validate, report the new hash.
+                                 <hash> re-stores a workspace node and re-binds direct/claims;
+                                 --all sweeps every direct pop; --dry-run previews
   practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
                                  bind this workspace to a practice instance on the hub
                                  (git's origin); push/merge/log default to the binding
@@ -75,9 +81,9 @@ usage:
                                  prints the URL for headless use, --reauth re-credentials)
   practi logout                     revoke and drop stored credentials
   practi me                         show the signed-in account, role and scopes
-  practi merge <branch>             merge a branch into the current one: fast-forward when
-                                 possible, otherwise a squash merge revision is constructed
-                                 locally (legal revisions.from semantics) — always succeeds
+  practi merge <branch>             merge a branch into the current one: fast-forward when the
+                                 tip's parent chain reaches the current head, otherwise a
+                                 squash merge commit is appended — always succeeds
   practi migrate [path] [--keep]      move the workspace to a new data directory
                                  (cut: the old directory is removed after per-file
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
@@ -93,8 +99,10 @@ usage:
   practi pull [hash]                sync the hub's claim table into the local workspace
                                  (multi-device bridge; content is hash-verified on arrival)
   practi push [hash] [--branch <b>] one call: store the document and bind it as the branch
-                                 head (fast-forward enforced server-side). Requires a bound
-                                 instance — POP lives on the hub only as practice instances
+       [--message <text>]         head (the commit is appended with parent = current head;
+                                 --message or the local commit log supplies the commit
+                                 message). Requires a bound instance — POP lives on the
+                                 hub only as practice instances
   practi remote set <url> | remove  point practi at a hub (default: https://practihub.com)
   practi remove <hash>              take a direct pop out of the local directory (registry op;
                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
@@ -133,7 +141,8 @@ options:
 
 the data directory is a POP workspace: nodes are content-addressed (nodes/*.md),
 practi.json records the registered direct roots plus the remote/instance binding;
-notes live in notes.json. Hub commands need 'practi login' + 'practi remote set'.
+notes live in notes.json, the local commit log in commits.json. Hub commands need
+'practi login' + 'practi remote set'.
 `;
 
 const COMMON = {
@@ -260,19 +269,17 @@ async function main(argv: string[]): Promise<number> {
           ...COMMON,
           json: { type: 'string' as const },
           file: { type: 'string' as const },
-          message: { type: 'string' as const },
-          'no-revision': { type: 'boolean' as const },
+          message: { type: 'string' as const, short: 'm' },
           keep: { type: 'boolean' as const },
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi edit <hash> <file.json> | --json \'<text>\' | < file.json [--message] [--no-revision] [--keep]'); return 0; }
-      return await runEdit({
+      if (values.help) { console.log('usage: practi edit <hash> <file.json> | --json \'<text>\' | < file.json [--message] [--keep]'); return 0; }
+      return runEdit({
         dataDir: str(values['data-dir']),
         json: values.json,
         file: values.file,
         message: values.message,
-        noRevision: values['no-revision'] === true,
         keep: values.keep === true,
         positional: positionals,
       });
@@ -488,14 +495,26 @@ async function main(argv: string[]): Promise<number> {
     case 'push': {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { ...COMMON, branch: { type: 'string' as const } },
+        options: { ...COMMON, branch: { type: 'string' as const }, message: { type: 'string' as const, short: 'm' } },
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi push [hash] [--branch <b>]   (store + bind branch head; requires a bound instance — POP lives on the hub as practice instances)');
+        console.log('usage: practi push [hash] [--branch <b>] [--message <text>]   (store + bind branch head; requires a bound instance — POP lives on the hub as practice instances)');
         return 0;
       }
-      return await runPush({ dataDir: str(values['data-dir']), positional: positionals, branch: values.branch });
+      return await runPush({ dataDir: str(values['data-dir']), positional: positionals, branch: values.branch, message: values.message });
+    }
+    case 'fix': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, all: { type: 'boolean' as const }, 'dry-run': { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi fix <file.json> | <hash> | --all [--dry-run]   (strip POP 1.x history fields — revisions/refines — and re-validate under POP 2.0)');
+        return 0;
+      }
+      return runFix({ dataDir: str(values['data-dir']), positional: positionals, all: values.all === true, dryRun: values['dry-run'] === true });
     }
     case 'pull': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
