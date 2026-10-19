@@ -19,6 +19,10 @@ interface MockState {
   rejectBindFor: string | null;
   /** mock 里 feat 支的头（测试可改写，squash 场景指到本地工作区的真文档） */
   featHead: string;
+  /** feat 头提交的 parent_hash（FF 场景=MAIN_HEAD；squash 场景置 null=分叉） */
+  featParent: string | null;
+  /** 最近一次 POST revisions 的提交说明（--message 透传断言用） */
+  lastMessage: string | null;
   /** mine 端点追加返回的认领（pull 测试用；push 的 diff 基准随之变化） */
   mineExtra: string | null;
   /** revisions 端点对该 hash 回 already_head=true（up-to-date 用例） */
@@ -51,7 +55,7 @@ async function readBody(req: http.IncomingMessage): Promise<string> {
 
 beforeAll(async () => {
   const port = await freePort();
-  mock = { rejectBindFor: null, featHead: 'sha256:' + 'f'.repeat(64), mineExtra: null, upToDateFor: null, storeCalls: 0, seqCounter: 0, seenHashes: new Set(), bindCalls: [], createdBranches: [], deletedBranches: [] };
+  mock = { rejectBindFor: null, featHead: 'sha256:' + 'f'.repeat(64), featParent: MAIN_HEAD, mineExtra: null, upToDateFor: null, lastMessage: null, storeCalls: 0, seqCounter: 0, seenHashes: new Set(), bindCalls: [], createdBranches: [], deletedBranches: [] };
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
     const p = url.pathname;
@@ -110,8 +114,8 @@ beforeAll(async () => {
             { name: 'feat', head_hash: mock.featHead, is_default: false },
           ],
           revisions: [
-            { seq: 2, root_hash: mock.featHead, created_at: '2026-10-18T00:00:00Z', name: 'second', status: 'PRIVATE', missing: false },
-            { seq: 1, root_hash: MAIN_HEAD, created_at: '2026-10-17T00:00:00Z', name: 'first', status: 'PRIVATE', missing: false },
+            { seq: 2, root_hash: mock.featHead, parent_hash: mock.featParent, message: 'second edit', created_at: '2026-10-18T00:00:00Z', name: 'second', status: 'PRIVATE', missing: false },
+            { seq: 1, root_hash: MAIN_HEAD, parent_hash: null, created_at: '2026-10-17T00:00:00Z', name: 'first', status: 'PRIVATE', missing: false },
           ],
         });
         return;
@@ -139,14 +143,12 @@ beforeAll(async () => {
         return;
       }
       if (branchName && branchSeg === `/branches/${branchName}/revisions` && req.method === 'POST') {
-        // 存+绑合一端点：解析→FF 判定（rejectBindFor 模拟分叉）→记账→回执
-        const body = JSON.parse(await readBody(req)) as { document: unknown };
+        // 存+绑合一端点（POP 2.0）：父=当前支头由服务端落库，push 无 FF 拒绝；
+        // message 是提交说明（--message / 本地提交日志），记账后回执
+        const body = JSON.parse(await readBody(req)) as { document: unknown; message?: string };
         const root = parseDocument(body.document).rootHash;
         mock.storeCalls++;
-        if (mock.rejectBindFor !== null && root === mock.rejectBindFor) {
-          respond(res, 422, { error: 'not fast forward', code: 'E_NOT_FAST_FORWARD' });
-          return;
-        }
+        mock.lastMessage = body.message ?? null;
         mock.bindCalls.push({ branch: decodeURIComponent(branchName), root_hash: root });
         const idempotent = mock.seenHashes.has(root);
         mock.seenHashes.add(root);
@@ -272,22 +274,16 @@ describe('practi hub bridge: push', () => {
     expect(mock.bindCalls.at(-1)).toEqual({ branch: 'main', root_hash: root });
   });
 
-  it('push --branch 覆盖绑定支；E_NOT_FAST_FORWARD → 提示 merge/rebase 退出 1', async () => {
+  it('push --branch 覆盖绑定支；--message 上送提交说明（本地提交日志缺省取用）', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['instance', 'bind', 'tester/my-practice']);
     const root = createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
 
-    mock.rejectBindFor = root;
-    try {
-      const out = await pop(dir, ['push', root, '--branch', 'feat']);
-      expect(out.code).toBe(1);
-      expect(out.stdout).not.toMatch(/pushed:/);
-      expect(out.stderr).toMatch(/push failed.*merge or rebase first/);
-      // 合一端点：绑定记账只在成功路径（422 时 mock 不记 bindCalls——服务端语义=不留绑定）
-      expect(mock.bindCalls.at(-1)).not.toEqual({ branch: 'feat', root_hash: root });
-    } finally {
-      mock.rejectBindFor = null;
-    }
+    const out = await pop(dir, ['push', root, '--branch', 'feat', '--message', 'first drop']);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+    expect(out.stdout).toMatch(/pushed:/);
+    expect(mock.lastMessage).toBe('first drop');
+    expect(mock.bindCalls.at(-1)).toEqual({ branch: 'feat', root_hash: root });
   });
 
   it('多 direct 免参=拒绝并要求显式 hash（一次 push=一个支头）', async () => {
@@ -332,37 +328,39 @@ describe('practi hub bridge: push', () => {
 });
 
 describe('practi hub bridge: merge', () => {
-  it('快进合并：纯移指针零新文档', async () => {
+  it('快进合并：feat tip 沿 parent 链可达 main 头 → 纯移指针零新提交', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['instance', 'bind', 'tester/my-practice']);
     createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
-    // mock 的 feat 头=sha256:ff..，bind 放行（rejectBindFor=null）=FF 语义
+    // mock 默认 feat 头=sha256:ff..，其 parent_hash=MAIN_HEAD（GET revisions 带出）→ 客户端判 FF
     const storesBefore = mock.storeCalls;
     const out = await pop(dir, ['merge', 'feat']);
-    expect(out.code).toBe(0);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
     expect(out.stdout).toMatch(/fast-forward: main → f{12}/);
     expect(out.stdout).toMatch(/\(merged feat\)/);
-    expect(mock.storeCalls).toBe(storesBefore); // FF 零新文档
+    expect(mock.storeCalls).toBe(storesBefore); // FF 零新提交
   });
 
-  it('分叉合并：本地构造 squash 修订（store→bind）并提示 pull 同步', async () => {
+  it('分叉合并：parent 链不可达 → squash（POST 文档+message，内容哈希不变）并提示 pull 同步', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['instance', 'bind', 'tester/my-practice']);
     const root = createdRoot((await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout);
-    // feat 头指到本地工作区的真文档（squash 需要本地拿得到 tip 树），并对它拒绑一次=分叉
+    // feat 头指到本地工作区的真文档（squash 需要本地拿得到 tip 树），parent 置空=分叉
     mock.featHead = root;
-    mock.rejectBindFor = root;
+    mock.featParent = null;
     try {
       const out = await pop(dir, ['merge', 'feat']);
-      expect(out.code).toBe(0);
-      expect(out.stdout).toMatch(/merged \(squash\): feat → main as [0-9a-f]{12}/);
-      expect(out.stdout).toMatch(/practi pull [0-9a-f]{12}/);
+      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+      expect(out.stdout).toMatch(new RegExp(`merged \\(squash\\): feat → main as ${root.slice(7, 19)}`));
+      expect(out.stdout).toMatch(new RegExp(`practi pull ${root.slice(7, 19)}`));
+      // POP 2.0：squash 不再改写文档内容——同一棵树，提交说明走 message
+      expect(mock.lastMessage).toBe("merge branch 'feat'");
       const lastBind = mock.bindCalls.at(-1);
       expect(lastBind?.branch).toBe('main');
-      expect(lastBind?.root_hash).not.toBe(root); // squash 修订是新哈希
+      expect(lastBind?.root_hash).toBe(root);
     } finally {
-      mock.rejectBindFor = null;
       mock.featHead = 'sha256:' + 'f'.repeat(64);
+      mock.featParent = MAIN_HEAD;
     }
   });
 });

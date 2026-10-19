@@ -252,37 +252,7 @@ function sideHtml() {
     });
   })(doc, '', 0, []);
 
-  // 底部附加区：全文档 revisions（新→旧，点击跳到所属节点）+ refines 边
-  // （目标在文档内 → #编号跳转；悬空 → 短哈希）；两段空则整段不出现。
-  // 包在 .side-foot（margin-top:auto）里钉在侧栏最底，不贴着大纲
-  var foot = '';
-  var revs = [];
-  var refs = [];
-  (function w(n, p) {
-    (n.revisions || []).forEach(function (r) { revs.push({ p: p, name: n.name, r: r }); });
-    if (n.type === 'practice' && n.refines) refs.push({ p: p, name: n.name, target: n.refines });
-    (n.children || []).forEach(function (c, i) { w(c, p.concat([i])); });
-  })(doc, []);
-  if (revs.length) {
-    revs.sort(function (a, b) { return a.r.when < b.r.when ? 1 : -1; });
-    foot += '<div class="side-sec"><p class="side-count">' + POP_I18N.t('revisions', revs.length) + '</p>' +
-      revs.map(function (v) {
-        return '<a href="#" class="side-note" data-path="' + v.p.join(',') + '" data-tip="' + escapeHtml(v.name) + '">' +
-          escapeHtml(String(v.r.when).slice(0, 10)) + ' — ' + escapeHtml(v.r.what) + '</a>';
-      }).join('') + '</div>';
-  }
-  if (refs.length) {
-    foot += '<div class="side-sec"><p class="side-count">' + POP_I18N.t('refines', refs.length) + '</p>' +
-      refs.map(function (v) {
-        var tp = nodeIndex && nodeIndex[v.target];
-        var tail = tp
-          ? '<a href="#" class="side-note mono" data-path="' + tp.join(',') + '">→ #' + tp.map(function (i) { return i + 1; }).join('.') + '</a>'
-          : '<span class="side-note mono plain">→ ' + escapeHtml(shortHash(v.target)) + '</span>';
-        return '<div class="side-note-row"><span class="side-note plain" data-tip="' + escapeHtml(v.name) + '">' +
-          escapeHtml(v.name) + '</span>' + tail + '</div>';
-      }).join('') + '</div>';
-  }
-  return html + (foot ? '<div class="side-foot">' + foot + '</div>' : '');
+  return html;
 }
 
 function updateTabs() {
@@ -318,7 +288,7 @@ function nodeHtml(node) {
   html += proseHtml(node);
   if (node.type === 'action') html += outputsHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
-  // 笔记只住右侧栏（不进内容区）：revisions 已挪到左侧大纲底部（全文档汇总）；refines 同处
+  // 笔记只住右侧栏（不进内容区）
   return html;
 }
 

@@ -20,8 +20,12 @@ practi repair                     backfill missing claim timestamps from node fi
                                (idempotent; stamped claims are never touched)
 practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
 practi new <file.json>            create a POP from a JSON document (or --json '<text>', or stdin)
-practi edit <hash> <file.json>    replace a direct POP with new content (new hash; auto-revision
-                               + GC of nodes unreachable from any direct root)
+practi edit <hash> <file.json>    replace a direct POP with new content (new hash; the swap is
+                               recorded in the local commit log commits.json; GC of nodes
+                               unreachable from any direct root)
+practi fix <file> | <hash> | --all   migrate POP 1.x documents to 2.0: strip the removed history
+                               fields (revisions/refines), re-validate, report the new hash
+                               (--dry-run previews)
 practi gc [--apply]                free orphan blobs — bytes no stored node references
                                (dry-run by default; --apply removes)
 practi migrate [path] [--keep]     move the workspace to a new data directory (cut: old dir removed
@@ -80,7 +84,7 @@ The data directory is a POP workspace (nodes content-addressed under `nodes/*.md
 
 ### Edit
 
-Editing is replacing: content addressing means an edit produces a **new root hash**. `practi edit <hash> <file.json>` (or `--json` / stdin) validates and stores the new tree, swaps the old root out of the direct registration, and auto-appends a revision record on the root (`from` = old root hash — a history pointer that may dangle by design, never validated). Nodes no longer reachable from any direct root are garbage-collected: content still referenced by another direct POP survives, exclusive descendants go (`--keep` preserves them; `--message` sets the revision note; `--no-revision` skips it).
+Editing is replacing: content addressing means an edit produces a **new root hash**. `practi edit <hash> <file.json>` (or `--json` / stdin) validates and stores the new tree and swaps the old root out of the direct registration. The document carries no history (POP 2.0): the swap is recorded in the local commit log `commits.json` (`from` = old root hash; `--message` sets the commit note that `practi push` sends to the hub). Nodes no longer reachable from any direct root are garbage-collected: content still referenced by another direct POP survives, exclusive descendants go (`--keep` preserves them).
 
 ### Search
 
@@ -128,15 +132,18 @@ practi me                          show the signed-in account
 practi instance create <name> [--public] [--desc <text>]   create + bind (branch main)
 practi instance bind <owner>/<name> | show                 bind an existing instance / summary
 practi push [hash] [--branch <b>]  one call: store the document AND bind it as the branch head —
-                               fast-forward enforced server-side (E_NOT_FAST_FORWARD = merge or
-                               rebase first). Requires a bound instance
-practi log [--branch <b>] [--limit N] [--json]   revision history of the current branch (tip first)
+                               the commit is appended with parent = current head (linear lineage
+                               by construction); --message / the local commit log supplies the
+                               commit note. Requires a bound instance
+practi log [--branch <b>] [--limit N] [--json]   commit history of the current branch (tip first;
+                               unpushed local entries listed on top)
 practi branch [name] [--from <hash>] | -d <name>   list (* = default) / create / delete a branch
 practi switch <branch>             switch the bound branch (local pointer; pull brings content)
-practi merge <branch>              merge into the current branch: fast-forward when possible,
-                               otherwise a squash merge revision is constructed locally (a new
-                               root whose revisions entry points at the target head) — the
-                               merge always completes; `practi pull` syncs it back
+practi merge <branch>              merge into the current branch: fast-forward (pointer move)
+                               when the tip's parent chain reaches the head, otherwise a squash
+                               merge commit is appended (tree = the branch tip, parent = the
+                               head, note = "merge branch 'X'") — the merge always completes;
+                               `practi pull` syncs it back
 practi pull [hash]                 sync the hub claim table into the workspace (multi-device)
 ```
 
