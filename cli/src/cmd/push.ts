@@ -46,7 +46,9 @@ function detailOf(body: Record<string, unknown>, status: number): string {
       : `HTTP ${status}`;
 }
 
-/** 实例在 hub 侧不存在时创建（首次 push 诞生），回填 owner */
+/** 实例在 hub 侧不存在时创建（首次 push 诞生），回填 owner。
+ *  幂等：hub 已有同名实例（换机器重推/上次创建后中断）→ owner=登录账号（实例名
+ *  归属于本人命名空间）。 */
 async function ensureHubInstance(repo: PracticeRepo, dataDir: string, remote: string, state: State): Promise<string | null> {
   const res = await authedFetch(dataDir, remote, '/api/v1/instances', {
     method: 'POST',
@@ -54,15 +56,28 @@ async function ensureHubInstance(repo: PracticeRepo, dataDir: string, remote: st
     body: JSON.stringify({ name: repo.chain.name, visibility: 'PRIVATE' }),
   });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) {
-    console.error(`push failed: creating the instance on the hub — ${detailOf(body, res.status)}`);
+  if (res.ok) {
+    const owner = typeof body.owner === 'string' && body.owner !== '' ? body.owner : null;
+    if (owner === null) {
+      console.error('push failed: the hub accepted the instance but did not name its owner (hub version too old for the two-software model?)');
+      return null;
+    }
+    repo.chain.owner = owner;
+    return owner;
+  }
+  // 已有同名实例（E_DUPLICATE）→ 归属本人：owner=登录账号
+  if (res.status === 409 || body.code === 'E_DUPLICATE') {
+    const me = await authedFetch(dataDir, remote, '/api/auth/me');
+    const meBody = (await me.json().catch(() => ({}))) as { username?: unknown };
+    if (me.ok && typeof meBody.username === 'string' && meBody.username !== '') {
+      repo.chain.owner = meBody.username;
+      return meBody.username;
+    }
+    console.error('push failed: an instance with that name already exists and it is not yours — pick another name (`practi practice remove` + `practice new`)');
     return null;
   }
-  const owner = typeof body.owner === 'string' ? body.owner : null;
-  if (owner !== null) {
-    repo.chain.owner = owner;
-  }
-  return owner;
+  console.error(`push failed: creating the instance on the hub — ${detailOf(body, res.status)}`);
+  return null;
 }
 
 /** 从实例节点池导出某 root 的完整文档（附件 url 剥离） */
@@ -191,6 +206,9 @@ async function forcePush(
     parent_hash: c.parent,
     message: c.message,
   }));
+  // 支指针表随链上传（hub 侧全部支都必须落在新链上，悬空指针拒收）
+  const branches: Record<string, string | null> = {};
+  for (const [b, r] of Object.entries(repo.chain.branches)) branches[b] = r;
   // 只随链上传 hub 可能缺的文档：无法确知，干脆全带（内容寻址，hub 幂等）
   const documents: { root_hash: string; document: unknown }[] = [];
   for (const c of repo.chain.commits) {
@@ -200,7 +218,7 @@ async function forcePush(
   const res = await authedFetch(ctx.dataDir, ctx.remote, `${ctx.base}/branches/${encodeURIComponent(ctx.branch)}/revisions?force=1`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ commits, documents }),
+    body: JSON.stringify({ commits, documents, branches }),
   });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {

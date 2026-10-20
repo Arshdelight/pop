@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef, PracticeError } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState } from './state.js';
+import { listRegistryPractices } from './practice.js';
 import { nodeFileTime, openWorkspace } from './workspace.js';
 import { loadNotes, subtreeHashes, insertNote, updateNote, removeNote, NOTES_FILE } from './notes.js';
 import { runNew } from './cmd/new.js';
@@ -122,6 +123,21 @@ function handle(
     send(res, 200, 'text/javascript; charset=utf-8', LR_SCRIPT);
     return;
   }
+  if (pathname === '/api/practices') {
+    const practices = listRegistryPractices(dataDir).map(function (r) {
+      const head = r.chain.branches[r.chain.current] ?? null;
+      return {
+        name: r.chain.name,
+        owner: r.chain.owner,
+        branch: r.chain.current,
+        head: head,
+        commits: r.chain.commits.length,
+        unpushed: r.chain.commits.filter(function (c) { return !c.pushedAt; }).length,
+      };
+    });
+    send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ practices: practices }, null, 2));
+    return;
+  }
   if (pathname === '/api/directs') {
     send(res, 200, 'application/json; charset=utf-8', JSON.stringify(directsPayload(dataDir, ws, state), null, 2));
     return;
@@ -138,6 +154,50 @@ function handle(
   if (pathname === '/' || pathname === '/index.html') {
     if (serveStatic(res, 'index.html', dataDir)) return;
     send(res, 500, 'text/plain; charset=utf-8', 'built-in web frontend missing — reinstall the CLI');
+    return;
+  }
+  // practice 详情：链 JSON（/practice/<name>.json）与提交历史页（/practice/<name>）
+  const practice = pathname.match(/^\/practice\/([^/]+?)(\.json)?$/);
+  if (practice) {
+    const name = decodeURIComponent(practice[1]);
+    const repo = listRegistryPractices(dataDir).find((r) => r.chain.name === name);
+    if (!repo) {
+      send(res, 404, 'application/json; charset=utf-8', JSON.stringify({ error: 'no such practice' }));
+      return;
+    }
+    const rows = repo.chain.commits.slice().reverse().map((c) => ({
+      seq: c.seq,
+      root_hash: c.root,
+      parent_hash: c.parent,
+      message: c.message,
+      pushed: c.pushedAt !== undefined,
+    }));
+    if (practice[2] === '.json') {
+      send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ name, owner: repo.chain.owner, branch: repo.chain.current, revisions: rows }, null, 2));
+      return;
+    }
+    const table = rows
+      .map((r) => {
+        const mark = r.root_hash === repo.chain.branches[repo.chain.current] ? ' ●' : '';
+        return (
+          '<tr><td>v' + r.seq + '</td><td><a class="doc-name" href="/pop/' + encodeURIComponent(r.root_hash) + '">' +
+          r.root_hash.slice(7, 19) + '</a>' + mark + '</td><td>' +
+          String(r.message).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!) + '</td><td>' + (r.pushed ? 'synced' : 'local') + '</td></tr>'
+        );
+      })
+      .join('\n');
+    const owner = repo.chain.owner ? repo.chain.owner + '/' + name : name + ' (local only)';
+    send(
+      res,
+      200,
+      'text/html; charset=utf-8',
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' + name + ' — Practi</title>' +
+        '<link rel="stylesheet" href="/style.css"></head><body><header><a class="brand-link" href="/"><span class="brand">practi</span></a></header>' +
+        '<main id="app"><h3 class="page-title">' + owner + ' @ ' + repo.chain.current + '</h3>' +
+        '<table class="doc-table"><thead><tr><th>Seq</th><th>Root</th><th>Message</th><th>Sync</th></tr></thead><tbody>' +
+        table +
+        '</tbody></table></main></body></html>'
+    );
     return;
   }
   const pop = pathname.match(/^\/pop\/(.+)$/);

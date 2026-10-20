@@ -5,6 +5,7 @@
 
 var PAGE_SIZE = 20;
 var docs = [];
+var practices = [];
 var page = 1;
 
 function escapeHtml(s) {
@@ -45,39 +46,59 @@ function addedCell(d) {
 function render() {
   var t = POP_I18N.t;
   var app = document.getElementById('app');
-  if (docs.length === 0) {
+  var html = '';
+  if (practices.length > 0) {
+    var prows = practices.map(function (p) {
+      return '<tr>' +
+        '<td><a class="doc-name" href="/practice/' + encodeURIComponent(p.name) + '">' + escapeHtml(p.name) + '</a>' +
+        (p.owner ? '<p class="doc-desc">' + escapeHtml(p.owner + '/' + p.name) + '</p>' : '') + '</td>' +
+        '<td class="doc-nodes">' + escapeHtml(p.branch) + '</td>' +
+        '<td class="doc-date">' + (p.head ? escapeHtml(p.head.slice(7, 19)) : '—') + '</td>' +
+        '<td class="doc-nodes">' + p.commits + (p.unpushed > 0 ? ' <span class="derived">(+' + p.unpushed + ')</span>' : '') + '</td>' +
+        '</tr>';
+    }).join('
+');
+    html += '<h3 class="page-title">' + t('secPractices') + '</h3>' +
+      '<table class="doc-table">' +
+      '<thead><tr><th>' + t('thPractice') + '</th><th class="col-nodes">' + t('thBranch') + '</th><th class="col-added">' + t('thHead') + '</th><th class="col-nodes">' + t('thCommits') + '</th></tr></thead>' +
+      '<tbody>' + prows + '</tbody></table>';
+  }
+  if (docs.length === 0 && practices.length === 0) {
     app.innerHTML =
       '<div class="empty">' + BOOK_ICON +
       '<p class="lead">' + t('emptyLead') + '</p>' +
       '<p class="hint">' + t('emptyHint') + '</p></div>';
     return;
   }
-  var totalPages = Math.max(1, Math.ceil(docs.length / PAGE_SIZE));
-  if (page > totalPages) page = totalPages;
-  var rows = docs
-    .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    .map(function (d) {
-      return '<tr>' +
-        '<td><a class="doc-name" href="/pop/' + encodeURIComponent(d.hash) + '">' + escapeHtml(d.name) + '</a>' +
-        (d.description ? '<p class="doc-desc">' + escapeHtml(d.description) + '</p>' : '') + '</td>' +
-        '<td class="doc-nodes">' + d.nodes + '</td>' +
-        addedCell(d) +
-        '</tr>';
-    })
-    .join('\n');
-  var pager = '';
-  if (page > 1 || page < totalPages) {
-    pager = '<div class="pager">' +
-      (page > 1 ? '<button type="button" data-page="' + (page - 1) + '">' + t('pagerPrev') + '</button>' : '') +
-      (page < totalPages ? '<button type="button" data-page="' + (page + 1) + '">' + t('pagerNext') + '</button>' : '') +
-      '</div>';
+  if (docs.length > 0) {
+    var totalPages = Math.max(1, Math.ceil(docs.length / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    var rows = docs
+      .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+      .map(function (d) {
+        return '<tr>' +
+          '<td><a class="doc-name" href="/pop/' + encodeURIComponent(d.hash) + '">' + escapeHtml(d.name) + '</a>' +
+          (d.description ? '<p class="doc-desc">' + escapeHtml(d.description) + '</p>' : '') + '</td>' +
+          '<td class="doc-nodes">' + d.nodes + '</td>' +
+          addedCell(d) +
+          '</tr>';
+      })
+      .join('
+');
+    var pager = '';
+    if (page > 1 || page < totalPages) {
+      pager = '<div class="pager">' +
+        (page > 1 ? '<button type="button" data-page="' + (page - 1) + '">' + t('pagerPrev') + '</button>' : '') +
+        (page < totalPages ? '<button type="button" data-page="' + (page + 1) + '">' + t('pagerNext') + '</button>' : '') +
+        '</div>';
+    }
+    html += '<h3 class="page-title">' + t('secPops') + '</h3>' +
+      '<table class="doc-table">' +
+      '<thead><tr><th>' + t('thDocument') + '</th><th class="col-nodes">' + t('thNodes') + '</th><th class="col-added">' + t('thAdded') + '</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>' +
+      '<div class="count-row"><span>' + t('countDocs', docs.length) + ' · ' + t('pageOf', page, totalPages) + '</span>' + pager + '</div>';
   }
-  app.innerHTML =
-    '<h3 class="page-title">' + t('pageTitle') + '</h3>' +
-    '<table class="doc-table">' +
-    '<thead><tr><th>' + t('thDocument') + '</th><th class="col-nodes">' + t('thNodes') + '</th><th class="col-added">' + t('thAdded') + '</th></tr></thead>' +
-    '<tbody>' + rows + '</tbody></table>' +
-    '<div class="count-row"><span>' + t('countDocs', docs.length) + ' · ' + t('pageOf', page, totalPages) + '</span>' + pager + '</div>';
+  app.innerHTML = html;
 }
 
 // 翻页走事件委托：innerHTML 重渲染不需要重复绑监听
@@ -90,6 +111,11 @@ document.addEventListener('click', function (e) {
 
 // 语言切换：整页文案重渲染
 POP_I18N.onChange(render);
+
+fetch('/api/practices')
+  .then(function (r) { return r.json(); })
+  .then(function (data) { practices = data.practices || []; render(); })
+  .catch(function () {});
 
 fetch('/api/directs')
   .then(function (r) { return r.json(); })

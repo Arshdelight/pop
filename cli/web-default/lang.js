@@ -15,6 +15,8 @@ var POP_I18N = (function () {
       labelDocJson: '文档 JSON', labelSvJson: '标准视图 JSON',
       // 目录页
       pageTitle: '我的实践',
+      secPractices: '实践实例', secPops: 'POP 文档',
+      thPractice: '实例', thBranch: '支', thHead: '头', thCommits: '提交',
       thDocument: '文档', thNodes: '节点', thAdded: '添加时间',
       emptyLead: '还没有记录。写下第一手实践经验，成为一份 POP 文档——哈希可验证，永久保存。',
       emptyHint: '用 <code>practi new</code> 创建',
@@ -53,6 +55,8 @@ var POP_I18N = (function () {
       tabWizard: 'Todo', tabSv: 'StandardView', tabDoc: 'Document',
       labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',
+      secPractices: 'Practices', secPops: 'POP documents',
+      thPractice: 'Practice', thBranch: 'Branch', thHead: 'Head', thCommits: 'Commits',
       thDocument: 'Document', thNodes: 'Nodes', thAdded: 'Added',
       emptyLead: 'Nothing recorded yet. Write first-hand experience as a POP document — verifiable by hash, forever.',
       emptyHint: 'create one with <code>practi new</code>',
