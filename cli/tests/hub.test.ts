@@ -26,6 +26,8 @@ interface MockState {
   lastMessage: string | null;
   /** force 端点收到的链（断言用） */
   lastForceCommits: { seq: number; root_hash: string; parent_hash: string | null; message: string }[] | null;
+  /** CLI 对远端缺失的支自动建支的记录（真实 hub：显式未知支名视图 404，建支后重取） */
+  createdBranches: string[];
   remoteDocs: Map<string, unknown>;
   storeCalls: number;
   forceCalls: number;
@@ -54,6 +56,7 @@ beforeAll(async () => {
     forceDropped: 0,
     lastMessage: null,
     lastForceCommits: null,
+    createdBranches: [],
     remoteDocs: new Map(),
     storeCalls: 0,
     forceCalls: 0,
@@ -101,6 +104,11 @@ beforeAll(async () => {
       }
       if (!branchSeg) {
         const wanted = url.searchParams.get('branch') ?? 'main';
+        // 真实 hub 契约：显式支名必须存在，未知支名诚实 404（E_BRANCH_NOT_FOUND）
+        if (!['main', ...mock.createdBranches].includes(wanted)) {
+          respond(res, 404, { error: `Branch "${wanted}" not found`, code: 'E_BRANCH_NOT_FOUND' });
+          return;
+        }
         const chain = (mock.mainChain ?? []).map((c) => ({
           ...c,
           message: `v${c.seq}`,
@@ -116,6 +124,12 @@ beforeAll(async () => {
           branches: [{ name: 'main', head_hash: chain[0]?.root_hash ?? null, is_default: true }],
           revisions: chain.map((c) => ({ ...c, status: 'PRIVATE', missing: false })),
         });
+        return;
+      }
+      if (branchSeg === '/branches' && req.method === 'POST') {
+        const body = JSON.parse(await readBody(req)) as { name: string };
+        mock.createdBranches.push(body.name);
+        respond(res, 201, { name: body.name, head_hash: null, is_default: false });
         return;
       }
       if (branchName && branchSeg === `/branches/${branchName}/revisions` && req.method === 'POST') {
@@ -334,6 +348,7 @@ describe('branch / switch / merge（本地链）', () => {
   it('merge：FF 纯移指针零新提交；同树分叉=指针移动', async () => {
     const dir = await hubWorkspace();
     const root = await practiceWithCommit(dir);
+    mock.createdBranches = []; // 本测试要断言「推本地新支时对 hub 自动建支」
     await pop(dir, ['branch', 'feat']);
     // feat 支上发布一篇新 pop
     const root2 = (await pop(dir, ['new', '--json', JSON.stringify(DOC2)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
@@ -362,6 +377,8 @@ describe('branch / switch / merge（本地链）', () => {
     expect(diverged.code).toBe(0);
     expect(diverged.stdout).toMatch(/pointer move/);
     expect(chainOf(dir, 'my-practice').branches.main).toBe(root3);
+    // 两支都是本地诞生、首推时对 hub 自动建支（视图 404 → POST branches → 重取）
+    expect(mock.createdBranches).toEqual(['feat', 'topic']);
   });
 });
 

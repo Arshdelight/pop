@@ -116,20 +116,11 @@ export async function pushRepo(
   const branch = repo.chain.current;
   const head = chainHead(repo.chain);
 
-  // 远端链视图（对账基准）
-  const viewRes = await authedFetch(opts.dataDir, opts.remote, `${base}?branch=${encodeURIComponent(branch)}`);
-  const view = (await viewRes.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!viewRes.ok) {
-    console.error(`push failed: ${detailOf(view, viewRes.status)}`);
-    return 1;
-  }
-  const hubHead = typeof view.branch_head_hash === 'string' ? view.branch_head_hash : null;
-
-  // 本地新建的支，hub 侧还没有支行 → 自动创建（本地链权威：分支先在本地诞生）
-  const hubBranches = Array.isArray(view.branches)
-    ? (view.branches as { name?: unknown }[]).map((b) => b.name)
-    : [];
-  if (!hubBranches.includes(branch)) {
+  // 远端链视图（对账基准）。本地新建的支 hub 侧还没有支行，视图对显式未知支名
+  // 诚实 404（E_BRANCH_NOT_FOUND）——分支先在本地诞生（本地链权威），据此建支后重取。
+  let viewRes = await authedFetch(opts.dataDir, opts.remote, `${base}?branch=${encodeURIComponent(branch)}`);
+  let view = (await viewRes.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!viewRes.ok && view.code === 'E_BRANCH_NOT_FOUND') {
     const mk = await authedFetch(opts.dataDir, opts.remote, `${base}/branches`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -141,7 +132,14 @@ export async function pushRepo(
       return 1;
     }
     if (opts.verbose) console.log(`  branch created on the hub: ${branch}`);
+    viewRes = await authedFetch(opts.dataDir, opts.remote, `${base}?branch=${encodeURIComponent(branch)}`);
+    view = (await viewRes.json().catch(() => ({}))) as Record<string, unknown>;
   }
+  if (!viewRes.ok) {
+    console.error(`push failed: ${detailOf(view, viewRes.status)}`);
+    return 1;
+  }
+  const hubHead = typeof view.branch_head_hash === 'string' ? view.branch_head_hash : null;
 
   if (hubHead === head) {
     const dirtyChain = repo.chain.commits.some((c) => c.pushedAt === undefined);
