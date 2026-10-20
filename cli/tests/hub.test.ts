@@ -441,6 +441,16 @@ describe('history：本地链重写', () => {
     expect(chain.commits).toHaveLength(1);
     expect(chain.branches.main).toBe(chain.commits[0].root);
   });
+
+  it('reset 丢弃的提交被其它支指着 → 悬空指针沿重写前 parent 链落到存活祖先（不是空支）', async () => {
+    const dir = await hubWorkspace();
+    const { root1 } = await practiceWithTwoCommits(dir);
+    await pop(dir, ['branch', 'feat']); // feat = main 头 = v2
+    await pop(dir, ['history', 'reset', '1']); // main 回 v1，v2 丢弃——feat 悬空
+    const chain = chainOf(dir, 'my-practice');
+    expect(chain.branches.main).toBe(root1);
+    expect(chain.branches.feat).toBe(root1); // v2 的重写前 parent = v1（存活）
+  });
 });
 
 describe('log / clone / pull / fetch', () => {
