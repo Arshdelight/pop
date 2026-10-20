@@ -1,16 +1,16 @@
-import { defaultDataDir, loadState, saveState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
-import {
-  checkoutTip,
-  fetchInstanceChain,
-  persistIfMoved,
-  syncInstanceObjects,
-} from '../sync.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { defaultDataDir, loadState } from '../state.js';
+import { initDataDir, openWorkspace } from '../workspace.js';
+import { fetchInstanceChain, syncInstanceObjects } from '../sync.js';
+import { chainPathFor, saveChain, type ChainFile } from '../practice.js';
 import { shortHash } from '../render.js';
 
 export interface CloneOpts {
   dataDir?: string;
   positional: string[];
+  /** 克隆为独立目录实例（目录即仓库，自带节点池）；缺省=默认工作目录账本登记 */
+  dir?: string;
 }
 
 /** `practi clone <owner>/<name>[@branch]` 的 ref 形态（分支段可选，缺省=实例默认支） */
@@ -22,11 +22,10 @@ export function parseCloneRef(ref: string): { owner: string; name: string; branc
 }
 
 /**
- * practi clone <owner>/<name>[@branch]：把一个实践实例拉进工作区并绑定（git clone 同构）。
- * - 拉当前支全部版本的对象（历史=对象，不进 direct——git 同构：只有 HEAD 是 ref）
- * - 绑定写 practi.json 的 instance 字段（此后的 push/pull/log 都在「这个仓库」里）
- * - 检出支 tip 为 direct（工作区已有的其它 direct 原样保留，提示带 hash 操作）
- * 认领制退役（2026-10-19）：clone 的对象就是实践实例——没有脱离实例的「我的认领表」。
+ * practi clone <owner>/<name>[@branch] [--dir <path>]：把一个实践实例克隆成本地实例仓库。
+ * - 全链修订拉入实例节点池（历史=对象），链文件与 hub 链同构落盘（全部盖 pushedAt）
+ * - registry 式（缺省）：登记进默认工作目录 practices/<name>/；--dir：目录即仓库
+ * - 此后的 push/pull/log/publish 都以 cwd / --dir / --practice 定位到它
  */
 export async function runClone(opts: CloneOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -38,51 +37,59 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   const ref = opts.positional[0];
   const parsed = ref ? parseCloneRef(ref) : null;
   if (!parsed) {
-    console.error('usage: practi clone <owner>/<name>[@branch]');
+    console.error('usage: practi clone <owner>/<name>[@branch] [--dir <path>]');
     return 1;
   }
   const { owner, name, branch } = parsed;
 
-  let view;
-  try {
-    view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
-  } catch (e) {
-    console.error(`clone failed: ${(e as Error).message}`);
+  const view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
+
+  // 目标实例仓库（registry 式重名守卫）
+  const repoDir = opts.dir ? path.resolve(opts.dir) : dataDir;
+  const chainPath = opts.dir ? path.join(repoDir, 'chain.json') : chainPathFor(dataDir, name);
+  if (fs.existsSync(chainPath)) {
+    console.error(`clone failed: ${opts.dir ? opts.dir : name} already exists locally (chain.json present)`);
     return 1;
   }
+  if (opts.dir) {
+    fs.mkdirSync(repoDir, { recursive: true });
+    initDataDir(repoDir);
+  }
 
-  const ws = openWorkspace(dataDir);
-  const sync = await syncInstanceObjects(dataDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
+  const poolDir = repoDir;
+  const ws = openWorkspace(poolDir);
+  const sync = await syncInstanceObjects(poolDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
   if (sync.failed.length > 0) {
     console.error(`clone incomplete: ${sync.failed.length} revision(s) failed to fetch`);
     return 1;
   }
 
-  state.instance = { owner, name, branch: view.branch };
-  const outcome = checkoutTip(state, view);
-  saveState(dataDir, state);
-  persistIfMoved(dataDir, state, outcome);
+  // 链文件：视图 tip 在前 → 反转即链序；全部盖 pushedAt（与 hub 已同步）
+  const now = new Date().toISOString();
+  const ordered = view.revisions.slice().reverse();
+  const chain: ChainFile = {
+    schema: 1,
+    name,
+    owner,
+    current: view.branch,
+    branches: { [view.branch]: view.head },
+    commits: ordered.map((r, i) => ({
+      seq: i + 1,
+      root: r.root_hash,
+      parent: i > 0 ? ordered[i - 1].root_hash : null,
+      message: `cloned from ${owner}/${name}`,
+      pushedAt: now,
+    })),
+  };
+  fs.mkdirSync(path.dirname(chainPath), { recursive: true });
+  fs.writeFileSync(chainPath, JSON.stringify(chain, null, 2) + '\n', 'utf8');
+  saveChain({ kind: opts.dir ? 'directory' : 'registry', dataDir: repoDir, chainPath, chain });
 
   console.log(`cloned:  ${owner}/${name} (${view.visibility}, branch ${view.branch}, ${view.revisions.length} revision(s))`);
   if (sync.missing > 0) {
     console.log(`note: ${sync.missing} revision(s) missing on the hub (history traces of hard-deleted documents)`);
   }
-  switch (outcome.kind) {
-    case 'up-to-date':
-      console.log(`head:    ${shortHash(outcome.head)}  (already a direct pop)`);
-      break;
-    case 'fast-forward':
-      console.log(`head:    ${shortHash(outcome.to)}  (fast-forwarded from ${shortHash(outcome.from)})`);
-      break;
-    case 'checked-out':
-      console.log(`head:    ${outcome.head}`);
-      if (state.direct.length > 1) {
-        console.log(`note: ${state.direct.length - 1} other direct pop(s) remain — push/edit take an explicit hash when several are registered`);
-      }
-      break;
-    case 'untouched':
-      console.log(`head:    ${view.head ?? '(none)'}  (not checked out — ${outcome.reason})`);
-      break;
-  }
+  console.log(`head:    ${view.head ? shortHash(view.head) : '(empty)'}`);
+  console.log('next:    `practi log` for its history; publish a changed pop with `practi publish <pop> --to ' + name + '`');
   return 0;
 }

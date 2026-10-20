@@ -1,85 +1,61 @@
-import { defaultDataDir, loadState } from '../state.js';
-import { authedFetch } from '../client.js';
+import { defaultDataDir } from '../state.js';
+import { resolvePractice } from '../practice.js';
 import { shortHash } from '../render.js';
-import { unpushedCommits } from '../commits.js';
 
 export interface LogOpts {
   dataDir?: string;
+  positional: string[];
+  dir?: string;
+  practice?: string;
   branch?: string;
   limit?: number;
   json?: boolean;
 }
 
-interface LogRow {
-  seq: number;
-  root_hash: string;
-  parent_hash?: string | null;
-  message?: string | null;
-  created_at: string;
-  name: string | null;
-  status: string;
-  missing: boolean;
-}
-
 /**
- * practi log [--branch <b>] [--limit N] [--json]：当前绑定实例分支的提交历史
- * （tip 在前，hub 的支历史沿 parent_hash 现算，POP 2.0 §9.1 仓库层血统）。
- * git log 同构——seq 是实例内登记序号，短哈希是全球坐标。本地领先远端的
- * 提交（commits.json 未推送条目）列在最前，标注 (local, unpushed)。
+ * practi log [--branch <b>] [--limit N] [--json]：实例提交历史（本地链，tip 在前）。
+ * git log 同构——seq 是链内登记序号，短哈希是全球坐标；未推送到 hub 的提交标注
+ * (local, unpushed)。历史编辑（history squash/reword/drop/reset）后的链以此为准，
+ * push 时与 hub 对账。
  */
-export async function runLog(opts: LogOpts): Promise<number> {
+export function runLog(opts: LogOpts): number {
   const dataDir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
+  const repo = resolvePractice({ dataDir, explicitDir: opts.dir, explicitName: opts.practice, verb: 'log' });
+  if (repo === null) return 1;
+  const chain = repo.chain;
+  const branch = opts.branch ?? chain.current;
+  const head = chain.branches[branch] ?? null;
+
+  // 该支的提交：从支头沿 parent 回溯（多支时只显示所在链段）
+  const byRoot = new Map(chain.commits.map((c) => [c.root, c]));
+  const rows = [];
+  const seen = new Set<string>();
+  let cur: string | null = head;
+  while (cur !== null && !seen.has(cur)) {
+    const c = byRoot.get(cur);
+    if (!c) break;
+    seen.add(cur);
+    rows.push(c);
+    cur = c.parent;
   }
-  if (!state.instance) {
-    console.error('error: no instance bound — use `practi instance bind <owner>/<name>` first');
-    return 1;
-  }
-  const { owner, name, branch } = state.instance;
-  const showBranch = opts.branch ?? branch;
-  const res = await authedFetch(
-    dataDir,
-    state.remote.url,
-    `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}?branch=${encodeURIComponent(showBranch)}`
-  );
-  const body = (await res.json()) as unknown as {
-    branch?: string;
-    revisions?: LogRow[];
-    error?: string;
-    message?: string;
-  };
-  if (!res.ok) {
-    const detail = typeof body.message === 'string' ? body.message : `HTTP ${res.status}`;
-    console.error(`error: ${detail}`);
-    return 1;
-  }
-  const rows = body.revisions ?? [];
+
   if (opts.json === true) {
-    console.log(JSON.stringify({ instance: `${owner}/${name}`, branch: body.branch ?? showBranch, unpushed: unpushedCommits(dataDir), revisions: rows }, null, 2));
+    console.log(JSON.stringify({
+      practice: chain.owner ? `${chain.owner}/${chain.name}` : chain.name,
+      branch,
+      revisions: rows.map((c) => ({ seq: c.seq, root_hash: c.root, parent_hash: c.parent, message: c.message, pushed: c.pushedAt !== undefined })),
+    }, null, 2));
     return 0;
   }
-  const unpushed = unpushedCommits(dataDir);
-  if (unpushed.length > 0) {
-    console.log(`local, unpushed (${unpushed.length}):`);
-    for (const c of unpushed) {
-      console.log(`  ·       ${shortHash(c.hash)}  ${c.createdAt.slice(0, 10)}  ${c.message}${c.from ? `  (from ${shortHash(c.from)})` : ''}`);
-    }
-    console.log('');
-  }
   if (rows.length === 0) {
-    console.log(`no revisions on ${owner}/${name}@${body.branch ?? showBranch}`);
+    console.log(`no revisions on ${chain.name}@${branch}`);
     return 0;
   }
   const limit = opts.limit !== undefined && opts.limit > 0 ? opts.limit : rows.length;
-  for (const r of rows.slice(0, limit)) {
-    const date = r.created_at.slice(0, 10);
-    const title = r.name ?? '';
-    const note = r.message ? `  ${r.message}` : '';
-    console.log(`v${String(r.seq).padEnd(4)} ${shortHash(r.root_hash)}  ${date}  ${r.status.padEnd(15)} ${title}${r.missing ? ' (document deleted)' : ''}${note}`);
+  for (const c of rows.slice(0, limit)) {
+    const unpushed = c.pushedAt === undefined ? '  (local, unpushed)' : '';
+    console.log(`v${String(c.seq).padEnd(4)} ${shortHash(c.root)}  ${c.message}${unpushed}`);
   }
-  if (rows.length > limit) console.log(`... ${rows.length - limit} more (use --limit)`);
+  if (rows.length > limit) console.log(`... ${rows.length} more (use --limit)`);
   return 0;
 }

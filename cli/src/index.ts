@@ -29,7 +29,9 @@ import { runPush } from './cmd/push.js';
 import { runPull } from './cmd/pull.js';
 import { runClone } from './cmd/clone.js';
 import { runFetch } from './cmd/fetch.js';
-import { runInstance } from './cmd/instance.js';
+import { runPractice } from './cmd/practice.js';
+import { runPublish } from './cmd/publish.js';
+import { runHistory } from './cmd/history.js';
 import { runBranch } from './cmd/branch.js';
 import { runSwitch } from './cmd/switch.js';
 import { runMerge } from './cmd/merge.js';
@@ -48,22 +50,19 @@ usage:
   practi blob add <file-or-url> [--name <name>]
                                  (hashes the bytes, stores local blobs in the workspace)
   practi branch [name] [--from <hash>] | -d <name>
-                                 instance branches (needs 'practi instance bind'):
-                                 no arg lists branches (* = default), a name creates one
-                                 from the current branch head (or --from, a registered
-                                 revision), -d deletes the pointer (default branch is kept)
-  practi claim <hash>              register an existing stored node as a direct pop (indirect → direct)
-  practi clone <owner>/<name>[@branch]
-                                 fetch a practice instance from the hub into this workspace,
-                                 bind to it (git clone: the instance IS the repository), pull
-                                 every revision of its branch, and check out the head as a
-                                 direct pop. The hub has no claim table — clone is how
-                                 someone else's practice travels
+                                 branches of the current practice (local chain; * marks
+                                 the current branch; --from starts at a registered
+                                 revision); -d deletes the pointer (main is kept)
+  practi claim <hash>              register an existing stored node as a pop of the workspace (indirect → direct)
+  practi clone <owner>/<name>[@branch] [--dir <path>]
+                                 clone a hub practice into a local practice repo (full
+                                 chain; --dir makes it a standalone directory repo).
+                                 From there: log / publish a changed pop / push
   practi config                     show data dir and registry summary
-  practi edit <hash> <file.json>    replace a direct POP (new hash; the swap is recorded in the
+  practi edit <hash> <file.json>    replace a pop of the workspace (new hash; recorded in the
        | practi edit <hash> --json '<text>' | practi edit <hash> < file.json
-       local commit log (commits.json) and pushed as the commit message)
-       [--message <text>] [--keep]
+       local commit ledger commits.json). Publish moves a pop into a
+       [--message <text>] [--keep]    practice; the practice keeps its own history
   practi embed status|pull|build|prune  optional offline vector model (bge-small-zh-v1.5,
                                  ~24MB int8 ONNX). pull fetches it, build embeds every
                                  stored node (incrementally), status reports coverage.
@@ -81,11 +80,15 @@ usage:
                                  fields (revisions/refines), re-validate, report the new hash.
                                  <hash> re-stores a workspace node and re-binds direct/claims;
                                  --all sweeps every direct pop; --dry-run previews
-  practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
-                                 bind this workspace to a practice instance on the hub
-                                 (git's origin); push/merge/log default to the binding
+  practi history amend [<pop|file>] [-m <msg>] | reword <seq> -m <msg>
+       | practi history squash <seq> | drop <seq> | reset <seq>
+                                 rewrite the practice's local commit chain (git-style);
+                                 push reconciles with the hub — divergence needs --force
+  practi instance …                RETIRED: practice new <name> creates a local
+                                 practice (the hub copy is born by the first push);
+                                 commands locate it by cwd / --dir / --practice
   practi log [--branch <b>] [--limit N] [--json]
-                                 revision history of the bound instance branch (tip first)
+                                 the current practice's commit history (tip first)
   practi ls [-a] [--json]           list direct pops (-a also lists indirect nodes)
   practi lint [--json] [--limit N]  audit recording quality across every direct pop: the
                                  same W_* hints new prints once, on demand for the
@@ -96,7 +99,7 @@ usage:
   practi me                         show the signed-in account, role and scopes
   practi merge <branch>             merge a branch into the current one: fast-forward when the
                                  tip's parent chain reaches the current head, otherwise a
-                                 squash merge commit is appended — always succeeds
+                                 pointer move (same-tree commits are identical)
   practi migrate [path] [--keep]      move the workspace to a new data directory
                                  (cut: the old directory is removed after per-file
                                  verification; --keep retains it as <dir>.bak-<timestamp>;
@@ -106,19 +109,16 @@ usage:
                                  (sidecar notes.json, never uploaded). promote turns a
                                  note into a draft document of its owning direct root —
                                  a draft only, never an automatic edit
-  practi new <file.json>            create a POP from a JSON document (local)
-       | practi new --json '<text>'
+  practi new <file.json>            create a POP from a JSON document (in the workspace's
+       | practi new --json '<text>'   pops area; publish moves it into a practice)
        | practi new < file.json
-  practi pull                        sync the bound instance's remote revisions into the
-                                 workspace (git pull inside the repository): missing chain
-                                 revisions are fetched (hash-verified), the branch head is
-                                 fast-forwarded when your local direct is an ancestor,
-                                 checked out when the workspace has none on the chain
-  practi push [hash] [--branch <b>] one call: store the document and bind it as the branch
-       [--message <text>]         head (the commit is appended with parent = current head;
-                                 --message or the local commit log supplies the commit
-                                 message). Requires a bound instance — POP lives on the
-                                 hub only as practice instances
+  practi publish <pop-ref | file.json> [--to <practice>] [-m <msg>] [--keep]
+                                 a pop becomes the practice's new revision and goes to the
+                                 hub in one call (the hub copy is born if needed); --keep
+                                 keeps the pop in the workspace, default removes it
+  practi pull [--dir <path> | --practice <name>]
+                                 reconcile the practice with the hub: fetch missing
+                                 revisions, fast-forward the branch pointer
   practi remote set <url> | remove  point practi at a hub (no implicit default; hub commands
                                  need a remote)
   practi remove <hash>              take a direct pop out of the local directory (registry op;
@@ -516,16 +516,85 @@ async function main(argv: string[]): Promise<number> {
       return runRemote({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'push': {
-      const { values, positionals } = parseArgs({
+      const { values } = parseArgs({
         args: rest,
-        options: { ...COMMON, branch: { type: 'string' as const }, message: { type: 'string' as const, short: 'm' } },
+        options: {
+          ...COMMON,
+          force: { type: 'boolean' as const },
+          dir: { type: 'string' as const },
+          practice: { type: 'string' as const },
+        },
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi push [hash] [--branch <b>] [--message <text>]   (store + bind branch head; requires a bound instance — POP lives on the hub as practice instances)');
+        console.log('usage: practi push [--force] [--dir <path> | --practice <name>]   (local practice → hub; first push creates it; divergence errors, --force overwrites and the hub drops unreachable objects)');
         return 0;
       }
-      return await runPush({ dataDir: str(values['data-dir']), positional: positionals, branch: values.branch, message: values.message });
+      return await runPush({ dataDir: str(values['data-dir']), positional: [], dir: values.dir, practice: values.practice, force: values.force === true });
+    }
+    case 'publish': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          to: { type: 'string' as const },
+          dir: { type: 'string' as const },
+          message: { type: 'string' as const, short: 'm' },
+          keep: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi publish <pop-ref | file.json> [--to <practice>] [-m <msg>] [--keep]   (a pop becomes the practice\'s new revision and goes to the hub in one call; --keep keeps the pop in your workspace)');
+        return 0;
+      }
+      return await runPublish({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        to: values.to,
+        dir: values.dir,
+        message: values.message,
+        keep: values.keep === true,
+      });
+    }
+    case 'history': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          dir: { type: 'string' as const },
+          practice: { type: 'string' as const },
+          message: { type: 'string' as const, short: 'm' },
+          file: { type: 'string' as const },
+          json: { type: 'string' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi history amend [<pop-ref|file>] [-m <msg>] | reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>   (rewrite the local commit chain; push reconciles with the hub)');
+        return 0;
+      }
+      return await runHistory({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        dir: values.dir,
+        practice: values.practice,
+        message: values.message,
+        file: values.file,
+        json: values.json,
+      });
+    }
+    case 'practice': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, dir: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi practice new <name> [--dir <path>] | list | remove <name>   (create/list/remove local practice instances; first push births them on the hub)');
+        return 0;
+      }
+      return runPractice({ dataDir: str(values['data-dir']), positional: positionals, dir: values.dir });
     }
     case 'fix': {
       const { values, positionals } = parseArgs({
@@ -540,14 +609,22 @@ async function main(argv: string[]): Promise<number> {
       return runFix({ dataDir: str(values['data-dir']), positional: positionals, all: values.all === true, dryRun: values['dry-run'] === true });
     }
     case 'pull': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi pull   (sync the bound instance\'s remote revisions into the workspace; clone/fetch bring new content in)'); return 0; }
-      return await runPull({ dataDir: str(values['data-dir']), positional: positionals });
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, dir: { type: 'string' as const }, practice: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi pull [--dir <path> | --practice <name>]   (reconcile the practice with the hub: fetch missing revisions, fast-forward)'); return 0; }
+      return await runPull({ dataDir: str(values['data-dir']), positional: [], dir: values.dir, practice: values.practice });
     }
     case 'clone': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi clone <owner>/<name>[@branch]   (fetch a practice instance, bind the workspace to it, check out its head)'); return 0; }
-      return await runClone({ dataDir: str(values['data-dir']), positional: positionals });
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, dir: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi clone <owner>/<name>[@branch] [--dir <path>]   (clone a practice instance as a local practice repo — full chain, ready to publish)'); return 0; }
+      return await runClone({ dataDir: str(values['data-dir']), positional: positionals, dir: values.dir });
     }
     case 'fetch': {
       const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
@@ -555,52 +632,75 @@ async function main(argv: string[]): Promise<number> {
       return await runFetch({ dataDir: str(values['data-dir']), positional: positionals });
     }
     case 'instance': {
-      const { values, positionals } = parseArgs({
-        args: rest,
-        options: { ...COMMON, public: { type: 'boolean' as const }, desc: { type: 'string' as const } },
-        allowPositionals: true,
-      });
-      if (values.help) {
-        console.log('usage: practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show');
+      if (rest.join(' ').includes('help')) {
+        console.log('practi instance was retired by the two-software model (2026-10-20):');
+        console.log('  instance create → `practi practice new <name>` (local first; the hub copy is born by the first push)');
+        console.log('  instance bind   → retired: commands locate the practice by cwd / --dir / --practice');
+        console.log('  instance show   → `practi practice list` and `practi log`');
         return 0;
       }
-      return await runInstance({ dataDir: str(values['data-dir']), positional: positionals, publicVisibility: values.public === true, desc: values.desc });
+      console.error('error: `practi instance` was retired — use `practi practice new <name>` (local instances), --practice <name> / --dir <path> to locate, `practi push` to put one on the hub');
+      return 1;
     }
     case 'branch': {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { ...COMMON, from: { type: 'string' as const }, delete: { type: 'string' as const, short: 'd' } },
+        options: {
+          ...COMMON,
+          from: { type: 'string' as const },
+          delete: { type: 'string' as const, short: 'd' },
+          dir: { type: 'string' as const },
+          practice: { type: 'string' as const },
+        },
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi branch [name] [--from <hash>] | -d <name>   (list / create / delete instance branches)');
+        console.log('usage: practi branch [name] [-d <name>]   (list / create / delete branches of the practice; * marks the current branch)');
         return 0;
       }
-      return await runBranch({ dataDir: str(values['data-dir']), positional: positionals, from: values.from, deleteBranch: values.delete });
+      return runBranch({ dataDir: str(values['data-dir']), positional: positionals, from: values.from, deleteBranch: values.delete, dir: values.dir, practice: values.practice });
     }
     case 'switch': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi switch <branch>   (switch the bound instance\'s current branch)'); return 0; }
-      return await runSwitch({ dataDir: str(values['data-dir']), positional: positionals });
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, dir: { type: 'string' as const }, practice: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi switch <branch>   (switch the practice\'s current branch)'); return 0; }
+      return runSwitch({ dataDir: str(values['data-dir']), positional: positionals, dir: values.dir, practice: values.practice });
     }
     case 'merge': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi merge <branch>   (fast-forward, else squash-merge into the current branch)'); return 0; }
-      return await runMerge({ dataDir: str(values['data-dir']), positional: positionals });
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, dir: { type: 'string' as const }, practice: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi merge <branch>   (fast-forward, else move the pointer — same-tree commits are identical)'); return 0; }
+      return runMerge({ dataDir: str(values['data-dir']), positional: positionals, dir: values.dir, practice: values.practice });
     }
     case 'log': {
       const { values } = parseArgs({
         args: rest,
-        options: { ...COMMON, branch: { type: 'string' as const }, limit: { type: 'string' as const }, json: { type: 'boolean' as const } },
+        options: {
+          ...COMMON,
+          branch: { type: 'string' as const },
+          limit: { type: 'string' as const },
+          json: { type: 'boolean' as const },
+          dir: { type: 'string' as const },
+          practice: { type: 'string' as const },
+        },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi log [--branch <b>] [--limit N] [--json]   (revision history, tip first)'); return 0; }
+      if (values.help) { console.log('usage: practi log [--branch <b>] [--limit N] [--json]   (the practice\'s commit history, tip first)'); return 0; }
       const logLimit = values.limit ? Number(values.limit) : undefined;
-      return await runLog({
+      return runLog({
         dataDir: str(values['data-dir']),
+        positional: [],
         branch: values.branch,
         limit: logLimit !== undefined && Number.isInteger(logLimit) && logLimit > 0 ? logLimit : undefined,
         json: values.json === true,
+        dir: values.dir,
+        practice: values.practice,
       });
     }
     case 'help':

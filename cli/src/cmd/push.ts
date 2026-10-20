@@ -1,23 +1,29 @@
-import { exportSubtree, resolveNodeRef } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState } from '../state.js';
+import { exportSubtree, resolveNodeRef, createFromDoc } from '@arshdelight/pop-sdk';
+import { defaultDataDir, loadState, type State } from '../state.js';
 import { openWorkspace } from '../workspace.js';
 import { authedFetch } from '../client.js';
 import { shortHash } from '../render.js';
-import { markPushed, messageFor } from '../commits.js';
+import {
+  chainHead,
+  resolvePractice,
+  saveChain,
+  type ChainCommit,
+  type PracticeRepo,
+} from '../practice.js';
 
 export interface PushOpts {
   dataDir?: string;
   positional: string[];
-  /** 绑定分支头时用哪条支（缺省=工作区绑定的当前支；需已 `practi instance bind`） */
-  branch?: string;
-  /** 提交说明（缺省取本地提交日志里该根的 message，再缺省由 hub 记空） */
-  message?: string;
+  /** 定位覆盖：实例目录（--dir）或账本名（--practice） */
+  dir?: string;
+  practice?: string;
+  /** 强推：本地链覆盖远端支头（hub 清不可达对象）；分叉时必须 */
+  force?: boolean;
 }
 
 /**
  * hub 政策（2026-09-03）：hub 不收附件指针 url（E_ATTACH_URL 整篇拒收）——push 前置空。
- * url 不进哈希（§3.2 剥离），置空不改变 root_hash/文档身份；纯函数重建，本地工作区
- * 原件保留 url（溯源）。
+ * url 不进哈希（§3.2 剥离），置空不改变 root_hash/文档身份；纯函数重建，本地原件保留 url。
  */
 export function stripAttachmentUrls<T>(node: T): T {
   const out = { ...(node as Record<string, unknown>) };
@@ -32,14 +38,190 @@ export function stripAttachmentUrls<T>(node: T): T {
   return out as unknown as T;
 }
 
+function detailOf(body: Record<string, unknown>, status: number): string {
+  return typeof body.message === 'string'
+    ? body.message
+    : typeof body.error === 'string'
+      ? body.error
+      : `HTTP ${status}`;
+}
+
+/** 实例在 hub 侧不存在时创建（首次 push 诞生），回填 owner */
+async function ensureHubInstance(repo: PracticeRepo, dataDir: string, remote: string, state: State): Promise<string | null> {
+  const res = await authedFetch(dataDir, remote, '/api/v1/instances', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: repo.chain.name, visibility: 'PRIVATE' }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    console.error(`push failed: creating the instance on the hub — ${detailOf(body, res.status)}`);
+    return null;
+  }
+  const owner = typeof body.owner === 'string' ? body.owner : null;
+  if (owner !== null) {
+    repo.chain.owner = owner;
+  }
+  return owner;
+}
+
+/** 从实例节点池导出某 root 的完整文档（附件 url 剥离） */
+function exportDoc(repo: PracticeRepo, fallbackDataDir: string, root: string): unknown | null {
+  const poolDir = repo.kind === 'directory' ? repo.dataDir : fallbackDataDir;
+  try {
+    const ws = openWorkspace(poolDir);
+    const node = ws.nodes.get(root);
+    if (!node) return null;
+    return stripAttachmentUrls(exportSubtree(node, ws.nodes));
+  } catch {
+    return null;
+  }
+}
+
 /**
- * practi push [hash] [--branch <b>] [--message <text>]：存文档 + 绑分支头（一个调用，git push 语义）。
- * - **pop 在 hub 上只以实践实例的形式存放**（2026-10-18 用户拍板）：未绑实例=拒绝，
- *   不再有无实例的认领兜底；本地 pop 由 CLI 像编辑器一样管理，同步单元只有实例。
- * - 提交说明（message）随请求上送，落 hub 的实例提交链（POP 2.0 §9.1 仓库层历史）；
- *   缺省取 edit 记下的本地提交日志（commits.json），成功后本地条目盖 pushedAt。
- * - 服务端幂等：同内容重复 push 命中已存文档（idempotent），重推当前支头=up to date；
- *   父链由服务端按当前支头落库（线性血统由构造保证，push 无需声明 base）。
+ * 把实例仓库同步到 hub（push/publish 共用核心）：
+ * - 首推：hub 无此实例则创建（owner 回填）
+ * - FF：待推路径=从本地支头沿 parent 走到 hub 头（反序逐条 POST revisions）
+ * - 分叉：hub 头不在本地链 → 报错（--force 走 force 全链端点，hub 重建+清不可达）
+ */
+export async function pushRepo(
+  repo: PracticeRepo,
+  opts: { dataDir: string; remote: string; force?: boolean; verbose?: boolean }
+): Promise<number> {
+  const state = loadState(opts.dataDir);
+  // 首推：hub 无此实例 → 创建（owner 回填；publish/push 共用的诞生门）
+  if (repo.chain.owner === null) {
+    const owner = await ensureHubInstance(repo, opts.dataDir, opts.remote, state);
+    if (owner === null) return 1;
+    saveChain(repo);
+    console.log(`created on the hub: ${owner}/${repo.chain.name}  (PRIVATE)`);
+  }
+  const { owner: bindOwner, name } = repo.chain;
+  const base = `/api/v1/instances/${encodeURIComponent(bindOwner ?? '')}/${encodeURIComponent(name)}`;
+  const branch = repo.chain.current;
+  const head = chainHead(repo.chain);
+
+  // 远端链视图（对账基准）
+  const viewRes = await authedFetch(opts.dataDir, opts.remote, `${base}?branch=${encodeURIComponent(branch)}`);
+  const view = (await viewRes.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!viewRes.ok) {
+    console.error(`push failed: ${detailOf(view, viewRes.status)}`);
+    return 1;
+  }
+  const hubHead = typeof view.branch_head_hash === 'string' ? view.branch_head_hash : null;
+
+  if (hubHead === head) {
+    const dirtyChain = repo.chain.commits.some((c) => c.pushedAt === undefined);
+    if (dirtyChain) {
+      // 头相同但本地链元数据被重写过（reword/squash 后清戳）——FF 推不上去，须 force 同步链
+      console.error(
+        `push rejected: the head matches the hub, but your local chain was rewritten (history edit) —` +
+          ` \`practi push --force\` to sync the chain metadata (the hub drops unreachable objects)`
+      );
+      return 1;
+    }
+    console.log(`up to date — ${name}@${branch} → ${shortHash(head ?? '')}`);
+    return 0;
+  }
+
+  // 待推路径：从支头沿 parent 回溯到 hubHead（hubHead=null=全链）
+  const byRoot = new Map(repo.chain.commits.map((c) => [c.root, c]));
+  const path: ChainCommit[] = [];
+  let cursor = head;
+  let diverged = false;
+  while (cursor !== null && cursor !== hubHead) {
+    const c = byRoot.get(cursor);
+    if (!c) {
+      diverged = true;
+      break;
+    }
+    path.unshift(c);
+    cursor = c.parent;
+  }
+  if (cursor !== hubHead) diverged = true; // 走到链尾仍不是 hub 头 = 分叉（hub 有本地没有的历史）
+  if (diverged) {
+    if (opts.force !== true) {
+      console.error(
+        `push rejected: the hub's ${name}@${branch} is at ${shortHash(hubHead ?? '')}, which is not in your local chain —` +
+          ` the histories have diverged. Rewrite to match, or force with \`practi push --force\` (the hub drops unreachable objects)`
+      );
+      return 1;
+    }
+    return forcePush(repo, { dataDir: opts.dataDir, remote: opts.remote, base, branch, hubHead });
+  }
+
+  if (path.length === 0) {
+    console.log(`up to date — ${name}@${branch} → ${shortHash(head ?? '')}`);
+    return 0;
+  }
+
+  // FF 逐条推（服务端 parent=当前支头自动落链）
+  for (const c of path) {
+    const doc = exportDoc(repo, opts.dataDir, c.root);
+    if (doc === null) {
+      console.error(`push failed: node not found in the practice pool: ${c.root}`);
+      return 1;
+    }
+    const res = await authedFetch(opts.dataDir, opts.remote, `${base}/branches/${encodeURIComponent(branch)}/revisions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(c.message !== '' ? { document: doc, message: c.message } : { document: doc }),
+    });
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error(`push failed at v${c.seq} (${shortHash(c.root)}): ${detailOf(body, res.status)}`);
+      return 1;
+    }
+    c.pushedAt = new Date().toISOString();
+    if (opts.verbose) console.log(`  v${c.seq}  ${shortHash(c.root)}  ${c.message}`);
+  }
+  saveChain(repo);
+  console.log(`pushed:  ${path.length} revision(s) — ${name}@${branch} → ${shortHash(head ?? '')}  (v${path[path.length - 1].seq})`);
+  return 0;
+}
+
+/** force：本地全链+缺失文档一次性上传，hub 重建支链并清除不可达对象 */
+async function forcePush(
+  repo: PracticeRepo,
+  ctx: { dataDir: string; remote: string; base: string; branch: string; hubHead: string | null }
+): Promise<number> {
+  const commits = repo.chain.commits.map((c) => ({
+    seq: c.seq,
+    root_hash: c.root,
+    parent_hash: c.parent,
+    message: c.message,
+  }));
+  // 只随链上传 hub 可能缺的文档：无法确知，干脆全带（内容寻址，hub 幂等）
+  const documents: { root_hash: string; document: unknown }[] = [];
+  for (const c of repo.chain.commits) {
+    const doc = exportDoc(repo, ctx.dataDir, c.root);
+    if (doc !== null) documents.push({ root_hash: c.root, document: doc });
+  }
+  const res = await authedFetch(ctx.dataDir, ctx.remote, `${ctx.base}/branches/${encodeURIComponent(ctx.branch)}/revisions?force=1`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commits, documents }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    console.error(`force push failed: ${detailOf(body, res.status)}`);
+    return 1;
+  }
+  const now = new Date().toISOString();
+  for (const c of repo.chain.commits) c.pushedAt = now;
+  saveChain(repo);
+  const dropped = typeof body.dropped === 'number' ? body.dropped : 0;
+  console.log(
+    `forced:  ${repo.chain.commits.length} revision(s) — ${repo.chain.name}@${ctx.branch} → ${shortHash(repo.chain.branches[ctx.branch] ?? '')}` +
+      (dropped > 0 ? `  (hub dropped ${dropped} unreachable revision(s))` : '')
+  );
+  return 0;
+}
+
+/**
+ * practi push [--force] [--dir <path> | --practice <name>]：本地实例 → hub。
+ * 首推在 hub 诞生实例（此前它只在本地）；FF 逐条推；分叉报错，--force 用本地链
+ * 覆盖远端支头（hub 清不可达对象——spec §9.1 留存按链可达性的落地）。
  */
 export async function runPush(opts: PushOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -48,77 +230,12 @@ export async function runPush(opts: PushOpts): Promise<number> {
     console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
-  if (!state.instance) {
-    console.error('error: no instance bound — POP lives on the hub only as practice instances');
-    console.error('       run `practi instance create <name>` or `practi instance bind <owner>/<name>` first');
+  const repo = resolvePractice({ dataDir, explicitDir: opts.dir, explicitName: opts.practice, verb: 'push' });
+  if (repo === null) return 1;
+  const head = chainHead(repo.chain);
+  if (head === null) {
+    console.error(`error: practice "${repo.chain.name}" has no revisions yet — \`practi publish <pop> --to ${repo.chain.name}\` first`);
     return 1;
   }
-  const ws = openWorkspace(dataDir);
-
-  // 绑定目标=显式给定的那个 root；多个 direct 时无法猜头，要求显式传（先解析后联网）
-  const resolvedTargets: string[] = [];
-  for (const ref of opts.positional[0] ? [opts.positional[0]] : state.direct) {
-    try {
-      const resolved = resolveNodeRef(ws, ref);
-      if (!state.direct.includes(resolved)) {
-        console.error(`push failed: ${ref} — ${resolved} is not one of your direct pops (push exports YOUR direct roots; indirect nodes travel inside them)`);
-        return 1;
-      }
-      resolvedTargets.push(resolved);
-    } catch (e) {
-      console.error(`push failed: ${ref} — ${(e as Error).message}`);
-      return 1;
-    }
-  }
-  if (resolvedTargets.length === 0) {
-    console.error('error: no direct pops to push (none registered)');
-    return 1;
-  }
-  if (resolvedTargets.length > 1) {
-    console.error(`error: ${resolvedTargets.length} direct pops registered — pass <hash> to choose the revision to push (one push = one branch head)`);
-    return 1;
-  }
-  const tipHash = resolvedTargets[0];
-
-  const node = ws.nodes.get(tipHash);
-  if (!node) {
-    console.error(`push failed: node not found: ${tipHash}`);
-    return 1;
-  }
-  const doc = stripAttachmentUrls(exportSubtree(node, ws.nodes));
-  const bound = { ...state.instance, ...(opts.branch !== undefined ? { branch: opts.branch } : {}) };
-  const message = opts.message ?? messageFor(dataDir, tipHash);
-
-  let res;
-  try {
-    res = await authedFetch(
-      dataDir,
-      state.remote.url,
-      `/api/v1/instances/${encodeURIComponent(bound.owner)}/${encodeURIComponent(bound.name)}/branches/${encodeURIComponent(bound.branch)}/revisions`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(message !== undefined ? { document: doc, message } : { document: doc }),
-      },
-    );
-  } catch (e) {
-    console.error(`push failed: ${(e as Error).message}`);
-    return 1;
-  }
-  const body = await res.json();
-  if (!res.ok) {
-    const detail = typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : `HTTP ${res.status}`;
-    console.error(`push failed: ${detail}`);
-    return 1;
-  }
-
-  const name = (doc as { name?: string }).name ?? '';
-  if (body.already_head === true) {
-    console.log(`up to date — ${shortHash(String(body.root_hash))} is already the head of ${bound.branch} (v${body.seq})`);
-    return 0;
-  }
-  console.log(`pushed:  ${tipHash}  (${body.idempotent ? 'already existed' : 'stored'}, ${body.status ?? 'PRIVATE'})  ${name}`);
-  console.log(`bound:   ${bound.owner}/${bound.name}@${bound.branch} → ${String(body.root_hash)}  (v${body.seq})`);
-  markPushed(dataDir, tipHash);
-  return 0;
+  return pushRepo(repo, { dataDir, remote: state.remote.url, force: opts.force, verbose: true });
 }
