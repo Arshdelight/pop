@@ -16,7 +16,7 @@ import { fetchUrl } from './net.js';
  *   tokens = await exchangeCode(...)           // code + verifier → access/refresh
  */
 
-export const LOGIN_SCOPES = 'pop:read pop:write pop:publish pop:delete';
+export const LOGIN_SCOPES = 'practice:read practice:write practice:delete';
 const CALLBACK_PATH = '/callback';
 const TIMEOUT_MS = 5 * 60 * 1000; // 授权页等待上限
 

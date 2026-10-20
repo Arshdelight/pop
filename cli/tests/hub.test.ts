@@ -206,7 +206,7 @@ async function hubWorkspace(): Promise<string> {
       schema: 1,
       client_id: 'mock-client',
       resource: `${baseUrl}/cli`,
-      scope: 'pop:read pop:write pop:publish pop:delete',
+      scope: 'practice:read practice:write practice:delete',
       client_name: 'practi cli',
       access_token: 'mock-access',
       refresh_token: 'mock-refresh',
