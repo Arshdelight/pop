@@ -13,7 +13,7 @@ import { shortHash } from '../render.js';
 import { printQualityHints } from '../quality.js';
 import { nodeIndexFields } from '../retrieval.js';
 import { describeRefresh, refreshVectors } from '../embed/optional.js';
-import { appendCommit } from '../commits.js';
+import { appendCommit, commitChainRoots } from '../commits.js';
 
 export interface EditOpts {
   dataDir?: string;
@@ -30,6 +30,15 @@ function readStdin(): string {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * gc 的可达性根集合：direct + 提交账本上出现过的全部根（S2-3）——edit/.remove/unclaim
+ * 三处共用，判定只定义一次。链上历史（已推送的旧版、拉回的远端修订）是实例的一部分，
+ * 绑定后本地就是仓库副本：内容节点不因「不在 direct」被当孤儿清掉。
+ */
+export function gcRootSet(dataDir: string, direct: string[]): string[] {
+  return [...direct, ...commitChainRoots(dataDir)];
 }
 
 /**
@@ -59,10 +68,10 @@ export function collectUnreachable(ws: Workspace, directRoots: string[]): string
 
 /**
  * practi edit <hash>：非交互编辑一个 direct 根——新文档（file/--json/stdin）→ 新哈希换注册。
- * POP 2.0：文档是纯快照，不写历史；本次编辑的血统记进本地提交日志 commits.json
+ * POP 2.0：文档是纯快照，不写历史；本次编辑的血统记进本地提交账本 commits.json
  * （from = 旧根哈希，--message 是提交说明，push 时上送 hub）。
- * 默认 GC 不可达节点（旧根及其独有后代；仍被其它 direct 根引用的内容保留）；--keep 跳过。
- * 纯本地操作。
+ * 默认 GC 真正不可达的节点（gcRootSet：direct + 提交账本链根——旧版本是链上历史，
+ * 留在本地，反悔时可回滚）；--keep 跳过。纯本地操作。
  */
 export async function runEdit(opts: EditOpts): Promise<number> {
   const ref = opts.positional[0];
@@ -130,7 +139,8 @@ export async function runEdit(opts: EditOpts): Promise<number> {
   if (opts.keep === true) {
     console.log('gc:       skipped (--keep) — old nodes kept on disk');
   } else {
-    const dead = collectUnreachable(loadWorkspace(dataDir), state.direct);
+    // 可达性根集合 = direct + 提交账本链根（gcRootSet，见上）
+    const dead = collectUnreachable(loadWorkspace(dataDir), gcRootSet(dataDir, state.direct));
     for (const h of dead) fs.unlinkSync(nodeFilePath(dataDir, h));
     console.log(
       `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(shortHash).join(', ')}` : ''}`

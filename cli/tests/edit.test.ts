@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createdRoot, editedRoots, init, nodeFile, pop, readState, tempDataDir, writeDoc } from './helpers.js';
 
 describe('pop edit: swap a direct root, default GC of unreachable nodes', () => {
-  it('returns a new root hash and garbage-collects the old root from nodes/', async () => {
+  it('returns a new root hash; the old root survives as commit-chain history (S2-3)', async () => {
     const dir = tempDataDir();
     await init(dir);
     const created = await pop(dir, ['new', writeDoc(dir, { name: 'Boil water', content: 'v1' })]);
@@ -15,12 +15,15 @@ describe('pop edit: swap a direct root, default GC of unreachable nodes', () => 
     expect(from).toBe(oldRoot);
     expect(newRoot).not.toBe(oldRoot);
 
-    // the registration was swapped, the old node file was unlinked (unreachable)
+    // the registration was swapped; the old root is on the local commit ledger
+    // (from = oldRoot) — chain history is part of the instance, so its nodes
+    // stay on disk (rollback stays possible without a pull; S2-3)
     expect(readState(dir).direct).toEqual([newRoot]);
-    expect(fs.existsSync(nodeFile(dir, oldRoot))).toBe(false);
+    expect(fs.existsSync(nodeFile(dir, oldRoot))).toBe(true);
     expect(fs.existsSync(nodeFile(dir, newRoot))).toBe(true);
+    expect(r.stdout).toContain('gc:       removed 0 unreachable node(s)');
 
-    // and ls reflects the swap
+    // and ls reflects the swap (the old root shows up as indirect)
     const ls = await pop(dir, ['ls', '--json']);
     expect(JSON.parse(ls.stdout).direct.map((v: { hash: string }) => v.hash)).toEqual([newRoot]);
   });

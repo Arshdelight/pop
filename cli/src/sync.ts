@@ -1,4 +1,5 @@
 import { claimDirect, saveState, type State } from './state.js';
+import { appendCommit, ensureKnownCommit } from './commits.js';
 import { authedFetch, fetchRemoteDoc } from './client.js';
 
 /** 实例在 hub 侧的链上视图（GET /api/v1/instances/{o}/{n}?branch= 的 CLI 侧子集） */
@@ -63,7 +64,9 @@ export interface SyncResult {
 }
 
 /** 把实例链上本地缺失的版本逐个拉进工作区（历史=对象，不动 direct——检出由调用方决定）；
- *  内容读取带仓库上下文（owner/name，实例范围端点） */
+ *  内容读取带仓库上下文（owner/name，实例范围端点）。拉回的修订登记进提交账本
+ *  （origin: 'fetched'）——绑定实例后本地就是仓库副本，链上历史的内容节点留在本地，
+ *  不会被 edit 的 gc 当孤儿清掉（S2-3） */
 export async function syncInstanceObjects(
   dataDir: string,
   remote: string,
@@ -80,9 +83,15 @@ export async function syncInstanceObjects(
       missing++;
       continue;
     }
-    if (hasObject(rev.root_hash)) continue;
+    if (hasObject(rev.root_hash)) {
+      // 内容已在本地但可能没上过账（旧版 CLI 拉回的、push 绑过的）——幂等补登记，
+      // 不补的话下一次 edit 的 gc 仍会把它们当不可达清掉
+      ensureKnownCommit(dataDir, rev.root_hash, `fetched from ${owner}/${name}@${view.branch}`);
+      continue;
+    }
     try {
       await fetchRemoteDoc(dataDir, remote, owner, name, rev.root_hash);
+      appendCommit(dataDir, rev.root_hash, null, `fetched from ${owner}/${name}@${view.branch}`, 'fetched');
       fetched++;
     } catch (e) {
       console.error(`pull failed: ${(e as Error).message}`);

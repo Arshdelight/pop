@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { loadWorkspace, resolveNodeRef, nodeFilePath } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, saveState } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { collectUnreachable } from './edit.js';
+import { collectUnreachable, gcRootSet } from './edit.js';
 import { shortHash } from '../render.js';
 
 /**
@@ -38,7 +38,7 @@ export function runRemove(opts: RemoveOpts): number {
   saveState(dataDir, state); // claims 修剪在写盘口：被删根的认领时刻随之失效
   console.log(`removed:  ${root} from the local directory`);
 
-  const dead = collectUnreachable(loadWorkspace(dataDir), state.direct);
+  const dead = collectUnreachable(loadWorkspace(dataDir), gcRootSet(dataDir, state.direct));
   for (const h of dead) fs.unlinkSync(nodeFilePath(dataDir, h));
   console.log(
     `gc:       removed ${dead.length} unreachable node(s)${dead.length > 0 ? ` — ${dead.map(shortHash).join(', ')}` : ''}`

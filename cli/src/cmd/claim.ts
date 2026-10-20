@@ -1,7 +1,7 @@
 import { resolveNodeRef, computeNodeHash, nodeFilePath, type PNode, type Workspace } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, saveState, claimDirect } from '../state.js';
 import { openWorkspace } from '../workspace.js';
-import { collectUnreachable } from './edit.js';
+import { collectUnreachable, gcRootSet } from './edit.js';
 import fs from 'node:fs';
 import { shortHash } from '../render.js';
 
@@ -101,7 +101,7 @@ export function runUnclaim(opts: ClaimOpts): number {
   console.log(`unclaimed: ${root} — now indirect`);
   if (referencers.length > 0) console.log(`           referenced by: ${referencers.join(', ')}`);
 
-  const dead = collectUnreachable(ws, state.direct);
+  const dead = collectUnreachable(ws, gcRootSet(dataDir, state.direct));
   for (const h of dead) fs.unlinkSync(nodeFilePath(dataDir, h));
   if (dead.length > 0) {
     console.log(`gc:       removed ${dead.length} unreachable node(s) — ${dead.map(shortHash).join(', ')}`);
