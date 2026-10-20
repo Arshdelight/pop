@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PracticeError, initWorkspace, loadWorkspace, type Workspace } from '@arshdelight/pop-sdk';
-import { statePath, legacyStatePath } from './state.js';
+import { statePath, legacyStatePath, loadState } from './state.js';
 
 /** A data dir is initialized when it carries both the CLI state (practi.json,
  *  legacy pop.json counts) and the POP workspace marker */
@@ -33,7 +33,9 @@ export function nodeFileTime(dataDir: string, hash: string): string | null {
   }
 }
 
-/** Create the data dir (idempotent): workspace + CLI state. Adopts an existing workspace if present. */
+/** Create the data dir (idempotent): workspace + CLI state. Adopts an existing workspace if present.
+ *  既有 practi.json 一律保留（remote set 可先于 init 执行、legacy pop.json 迁移）——init 只补
+ *  workspace，不动账本；账本缺失时经 loadState 读旧写新落盘（S2-2：覆写会抹掉 remote/instance）。 */
 export function initDataDir(dataDir: string): 'created' | 'exists' {
   fs.mkdirSync(dataDir, { recursive: true });
   if (isInitialized(dataDir)) return 'exists';
@@ -43,7 +45,9 @@ export function initDataDir(dataDir: string): 'created' | 'exists' {
     // practice.yaml already exists (workspace created by another tool); we still adopt it
     if (!(e instanceof PracticeError && e.code === 'E_EXISTS')) throw e;
   }
-  fs.writeFileSync(statePath(dataDir), JSON.stringify({ schema: 1, direct: [] }, null, 2) + '\n', 'utf8');
+  if (!fs.existsSync(statePath(dataDir))) {
+    fs.writeFileSync(statePath(dataDir), JSON.stringify(loadState(dataDir), null, 2) + '\n', 'utf8');
+  }
   return 'created';
 }
 

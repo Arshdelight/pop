@@ -45,6 +45,31 @@ describe('pop init: the data directory', () => {
     expect(fs.existsSync(path.join(dir, 'pop.json'))).toBe(true);
   });
 
+  it('keeps an existing practi.json: remote set may run before init (S2-2 regression)', async () => {
+    const dir = tempDataDir();
+    // remote set 先于 init：practi.json 已带 remote/instance，但目录还没初始化（无 practice.yaml）
+    fs.writeFileSync(
+      path.join(dir, 'practi.json'),
+      JSON.stringify({
+        schema: 1,
+        direct: [],
+        remote: { url: 'http://localhost:3000' },
+        instance: { owner: 'xiaohong', name: 'green-tea', branch: 'main' },
+      }),
+      'utf8'
+    );
+
+    const r = await pop(dir, ['init']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('initialized:');
+
+    // init 补上了 workspace，但账本原样保留——remote/instance 不被抹掉
+    expect(fs.existsSync(path.join(dir, 'practice.yaml'))).toBe(true);
+    const state = JSON.parse(fs.readFileSync(path.join(dir, 'practi.json'), 'utf8'));
+    expect(state.remote).toEqual({ url: 'http://localhost:3000' });
+    expect(state.instance).toEqual({ owner: 'xiaohong', name: 'green-tea', branch: 'main' });
+  });
+
   it('config shows the resolved data dir and empty counts', async () => {
     const dir = tempDataDir();
     await init(dir);
