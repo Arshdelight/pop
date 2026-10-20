@@ -14,6 +14,7 @@ import { printQualityHints } from '../quality.js';
 import { nodeIndexFields } from '../retrieval.js';
 import { describeRefresh, refreshVectors } from '../embed/optional.js';
 import { appendCommit, commitChainRoots } from '../commits.js';
+import { listRegistryPractices } from '../practice.js';
 
 export interface EditOpts {
   dataDir?: string;
@@ -33,12 +34,22 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * gc 的可达性根集合：direct + 提交账本上出现过的全部根（S2-3）——edit/.remove/unclaim
- * 三处共用，判定只定义一次。链上历史（已推送的旧版、拉回的远端修订）是实例的一部分，
- * 绑定后本地就是仓库副本：内容节点不因「不在 direct」被当孤儿清掉。
+ * gc 的可达性根集合：direct + 提交账本上出现过的全部根 + 全部实例链的根（S2-3）——
+ * edit/remove/unclaim/publish 四处共用，判定只定义一次。链上历史（已推送的旧版、
+ * 拉回的远端修订）是实例的一部分，绑定后本地就是仓库副本：内容节点不因「不在 direct」
+ * 被当孤儿清掉。registry 实例的链在 practices/<name>/chain.json（双软件模型），与
+ * 旧编辑账本 commits.json 并读——漏一边就会把实例历史当孤儿吃掉。
  */
 export function gcRootSet(dataDir: string, direct: string[]): string[] {
-  return [...direct, ...commitChainRoots(dataDir)];
+  const roots = new Set<string>(direct);
+  for (const h of commitChainRoots(dataDir)) roots.add(h);
+  for (const repo of listRegistryPractices(dataDir)) {
+    for (const c of repo.chain.commits) roots.add(c.root);
+    for (const r of Object.values(repo.chain.branches)) {
+      if (r !== null) roots.add(r);
+    }
+  }
+  return [...roots];
 }
 
 /**

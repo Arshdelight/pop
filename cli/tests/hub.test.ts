@@ -247,6 +247,16 @@ describe('publish：pop → 实例新修订 + 推 hub', () => {
     expect(st.direct).toContain(root);
   });
 
+  it('publish 移入后实例链根受 gc 保护——第二次 publish 清 pops 不清历史节点', async () => {
+    const dir = await hubWorkspace();
+    const root1 = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
+    await pop(dir, ['publish', root1, '--to', 'my-practice']);
+    const root2 = (await pop(dir, ['new', '--json', JSON.stringify(DOC2)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
+    await pop(dir, ['publish', root2, '--to', 'my-practice']);
+    // 第二次 publish 的 gc：direct 已空，v1 只被实例链保护——registry 链必须计入根集合
+    expect(fs.existsSync(path.join(dir, 'nodes', root1.slice('sha256:'.length) + '.md'))).toBe(true);
+  });
+
   it('publish 文件路径直达：不经 pops，任意目录的 pop 文件发布进实例', async () => {
     const dir = await hubWorkspace();
     await pop(dir, ['practice', 'new', 'my-practice']);
