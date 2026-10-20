@@ -28,11 +28,11 @@ function renumber(chain: PracticeRepo['chain']): void {
   chain.commits.forEach((c, i) => (c.seq = i + 1));
 }
 
-/** 重写后统一收口：清全链 pushedAt（下次 push 与 hub 对账，分叉则 --force 全量重建） */
+/** 重写收口：清全链 pushedAt（对账靠 push --force），悬空支指针修到存活祖先 */
 function dirty(repo: PracticeRepo): void {
-  for (const c of repo.chain.commits) delete c.pushedAt;
-  saveChain(repo);
-  console.log('note:    the local chain diverged from the hub — `practi push --force` to overwrite (the hub drops unreachable objects)');
+  const alive = new Set(repo.chain.commits.map((c) => c.root));
+  const oldParents = new Map(repo.chain.commits.map((c) => [c.root, c.parent] as const));
+  rewriteSettle(repo, alive, oldParents);
 }
 
 function findCommit(repo: PracticeRepo, seqStr: string): ChainCommit | null {
@@ -40,6 +40,30 @@ function findCommit(repo: PracticeRepo, seqStr: string): ChainCommit | null {
   const c = repo.chain.commits.find((x) => x.seq === seq);
   if (!c) console.error(`error: no commit v${seqStr} in ${repo.chain.name} (practi log)`);
   return c ?? null;
+}
+
+/** 重写收口：清全链 pushedAt + 修悬空支指针。
+ *  指向已不存在 root 的支 → 重置到该 root 在旧 parent 链上仍存活的最近祖先
+ *  （找不到就置 null 空支）——与 hub「支指针必须落在新链上」的对账规则一致。 */
+function rewriteSettle(repo: PracticeRepo, alive: Set<string>, oldParents: Map<string, string | null>): void {
+  for (const [b, r] of Object.entries(repo.chain.branches)) {
+    if (r === null || alive.has(r)) continue;
+    let cur: string | null = r;
+    let moved: string | null = null;
+    const seen = new Set<string>();
+    while (cur !== null && !seen.has(cur)) {
+      seen.add(cur);
+      if (alive.has(cur)) {
+        moved = cur;
+        break;
+      }
+      cur = oldParents.get(cur) ?? null;
+    }
+    repo.chain.branches[b] = moved;
+  }
+  for (const c of repo.chain.commits) delete c.pushedAt;
+  saveChain(repo);
+  console.log('note:    the local chain diverged from the hub — `practi push --force` to overwrite (the hub drops unreachable objects)');
 }
 
 /**

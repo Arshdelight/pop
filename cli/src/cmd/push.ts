@@ -125,6 +125,24 @@ export async function pushRepo(
   }
   const hubHead = typeof view.branch_head_hash === 'string' ? view.branch_head_hash : null;
 
+  // 本地新建的支，hub 侧还没有支行 → 自动创建（本地链权威：分支先在本地诞生）
+  const hubBranches = Array.isArray(view.branches)
+    ? (view.branches as { name?: unknown }[]).map((b) => b.name)
+    : [];
+  if (!hubBranches.includes(branch)) {
+    const mk = await authedFetch(opts.dataDir, opts.remote, `${base}/branches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: branch }),
+    });
+    if (!mk.ok) {
+      const mkBody = (await mk.json().catch(() => ({}))) as Record<string, unknown>;
+      console.error(`push failed: creating branch "${branch}" on the hub — ${detailOf(mkBody, mk.status)}`);
+      return 1;
+    }
+    if (opts.verbose) console.log(`  branch created on the hub: ${branch}`);
+  }
+
   if (hubHead === head) {
     const dirtyChain = repo.chain.commits.some((c) => c.pushedAt === undefined);
     if (dirtyChain) {
