@@ -1,12 +1,8 @@
-import { defaultDataDir } from '../state.js';
-import { resolvePractice } from '../practice.js';
+import { resolveRepo } from '../practice.js';
 import { shortHash } from '../render.js';
 
 export interface LogOpts {
-  dataDir?: string;
-  positional: string[];
   dir?: string;
-  practice?: string;
   branch?: string;
   limit?: number;
   json?: boolean;
@@ -19,8 +15,7 @@ export interface LogOpts {
  * push 时与 hub 对账。
  */
 export function runLog(opts: LogOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const repo = resolvePractice({ dataDir, explicitDir: opts.dir, explicitName: opts.practice, verb: 'log' });
+  const repo = resolveRepo({ dir: opts.dir, verb: 'log' });
   if (repo === null) return 1;
   const chain = repo.chain;
   const branch = opts.branch ?? chain.current;

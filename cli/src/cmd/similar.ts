@@ -1,12 +1,10 @@
 import { resolveNodeRef } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, resolveRepo } from '../practice.js';
 import { shortHash } from '../render.js';
-import { computeOwnership } from '../ownership.js';
 import { nodeIndexFields, similarDocs, subtreeHashes, subtreeIndexFields } from '../retrieval.js';
 
 export interface SimilarOpts {
-  dataDir?: string;
+  dir?: string;
   /** 节点引用（全哈希或 ≥4 位唯一前缀） */
   ref: string;
   limit: number;
@@ -20,10 +18,6 @@ interface SimilarRow {
   name: string;
   score: number;
   shared: string[];
-  direct: boolean;
-  roots: { hash: string; name: string }[];
-  size?: number;
-  orphan?: boolean;
 }
 
 /**
@@ -38,23 +32,20 @@ interface SimilarRow {
  * 子树——practice 的根往往只有一句话，信息在步骤里。
  */
 export function runSimilar(opts: SimilarOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const ws = openWorkspace(dataDir);
+  const repo = resolveRepo({ dir: opts.dir, verb: 'similar' });
+  if (repo === null) return 1;
+  const ws = openPool(repo);
   const root = resolveNodeRef(ws, opts.ref); // 不存在/前缀歧义 → E_NOT_FOUND / E_AMBIGUOUS
-  const state = loadState(dataDir);
-  const own = computeOwnership(ws, state.direct);
   const node = ws.nodes.get(root)!;
 
   const target = subtreeIndexFields(root, ws.nodes);
   const exclude = subtreeHashes(root, ws.nodes);
-  // 全量节点（哈希升序 → 索引与结果确定），含 indirect 与孤儿
+  // 全量节点（哈希升序 → 索引与结果确定），含历史修订的节点
   const docs = [...ws.nodes.keys()].sort().map(h => nodeIndexFields(h, ws.nodes.get(h)!));
   const hits = similarDocs(docs, target, exclude, opts.limit);
 
   const rows: SimilarRow[] = hits.map((hit) => {
     const n = ws.nodes.get(hit.hash)!;
-    const roots = (own.owner.get(hit.hash) ?? []).filter((r) => r !== hit.hash)
-      .map((r) => ({ hash: r, name: ws.nodes.get(r)?.name ?? r }));
     return {
       hash: hit.hash,
       type: n.type,
@@ -62,10 +53,6 @@ export function runSimilar(opts: SimilarOpts): number {
       name: n.name,
       score: hit.score,
       shared: hit.shared,
-      direct: own.directSet.has(hit.hash),
-      roots,
-      ...(own.size.has(hit.hash) ? { size: own.size.get(hit.hash) } : {}),
-      ...(!own.directSet.has(hit.hash) && roots.length === 0 ? { orphan: true } : {}),
     };
   });
 
@@ -97,13 +84,8 @@ export function runSimilar(opts: SimilarOpts): number {
   console.log('');
   for (const row of rows) {
     const rowTag = row.type === 'practice' ? `[practice·${row.op}]` : '[action]';
-    const where = row.direct
-      ? `direct root, ${row.size} nodes`
-      : row.orphan === true
-        ? 'orphan (not reachable from any direct POP)'
-        : row.roots.map((r) => `in ${shortHash(r.hash)} (${r.name})`).join('; ');
     console.log(`  ${shortHash(row.hash)}  ${rowTag}  ${row.name}`);
-    console.log(`    ${String(pct(row.score)).padStart(3)}%  ·  ${where}  ·  shared: ${row.shared.join(', ') || '—'}`);
+    console.log(`    ${String(pct(row.score)).padStart(3)}%  ·  shared: ${row.shared.join(', ') || '—'}`);
   }
   console.log(`\n${rows.length} similar node(s) — literal (character-bigram) neighbours only, no semantics`);
   console.log('% is relative to the closest hit; --json also carries the absolute score (1.0 = identical content)');

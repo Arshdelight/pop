@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-/** CLI bookkeeping file inside the data directory (the data dir IS a POP workspace).
- *  旧名 pop.json 仍可读（读旧写新），写入一律走 practi.json。 */
+/**
+ * 配置家的账本（practi.json）：文件夹模型（2026-10-20 终稿）下实例=自包含文件夹，
+ * 家目录只存凭据与远端——direct/claims/instance 三个旧键随 pops 登记簿退役，读旧
+ * 文件时静默丢弃（下次写盘自然洗净）。
+ */
 export const STATE_FILE = 'practi.json';
-const LEGACY_STATE_FILE = 'pop.json';
-export const HASH_RE = /^sha256:[0-9a-f]{64}$/;
 
 /** 官方 hub 地址。仅作文档示例（`practi remote set` 的 usage 举例）——
  *  CLI 不设隐式默认：未配置 remote 时 hub 命令明确报错并指路 `practi remote set`。 */
@@ -17,27 +18,6 @@ export interface State {
   /** Remote hub origin（如 https://practihub.com）。无隐式默认——未配置时 hub 命令
    *  报 "no remote configured" 并指路 `practi remote set`。`practi remote set|remove` 维护。 */
   remote?: { url: string };
-  /** 工作区绑定的实践实例（git 的 origin+HEAD 同构）：owner/name 定位 /u/{owner}/{name}，
-   *  branch=当前支名。`practi instance bind|create` 与 `practi switch` 写入；
-   *  push/merge/log 缺省读它。 */
-  instance?: { owner: string; name: string; branch: string };
-  /** Root hashes the user created/imported themselves (own uploads, §9.1 "direct") */
-  direct: string[];
-  /** 认领时刻（collapsed reflog）：hash → ISO 时间。节点是内容寻址的、内容不携带时间，
-   *  时间属于引用内容的事件——与 git 的 refs/reflog 分工同构（direct=refs，本表=侧挂日志）。
-   *  只由 claimDirect 盖戳；saveState 修剪不在 direct 里的孤儿。旧文件无此表=未盖戳，
-   *  读取侧（web /api/directs）回落节点文件 mtime 并标注是推测值。 */
-  claims?: Record<string, string>;
-}
-
-/** 注册 direct 认领的唯一咽喉点：入列 + 盖认领时刻。幂等——已在列则不动，
- *  首次认领时间得以保留（删掉重认领才会重盖）。new/edit/skill 一律走这里，
- *  别处直接 push state.direct 会绕过盖戳。 */
-export function claimDirect(state: State, hash: string): boolean {
-  if (state.direct.includes(hash)) return false;
-  state.direct.push(hash);
-  (state.claims ??= {})[hash] = new Date().toISOString();
-  return true;
 }
 
 /* --------------------------------------------------------------- */
@@ -46,10 +26,7 @@ export function claimDirect(state: State, hash: string): boolean {
 
 /**
  * Persistent home pointer: `~/.practi-home`, a single absolute path. Written
- * ONLY by `practi migrate <path>`, and only when the new home is outside the
- * discovery chain — the workspace's location cannot be recorded inside the
- * workspace itself (self-bootstrapping), so an out-of-band pointer in $HOME is
- * the only record that survives relocation. Most users never have this file.
+ * ONLY by `practi migrate <path>`; most users never have this file.
  */
 export const POINTER_FILE = '.practi-home';
 
@@ -74,15 +51,13 @@ export function writePointer(dir: string, home: string = os.homedir()): void {
 }
 
 /**
- * Single source of truth for "where do I work when nobody said anything".
+ * Single source of truth for "where do I keep config and credentials".
  * Layers, strongest intent first:
  *   session     — $PRACTI_HOME (legacy $POP_HOME still honored); tests & CI
  *   persisted   — ~/.practi-home pointer (`practi migrate <path>` writes it)
  *   convention  — ~/.practi on every platform. Deliberately NOT
  *                 %APPDATA%\practi — that path belongs to the unrelated
- *                 "practi" Electron app's data on Windows. When ~/.practi
- *                 doesn't exist yet but a pre-rename workspace does
- *                 (%APPDATA%\pop or ~/.pop), adopt it silently.
+ *                 "practi" Electron app's data on Windows.
  * `--data-dir` outranks all layers but is per-invocation, so callers resolve
  * it themselves (`opts.dataDir ?? defaultDataDir()`).
  */
@@ -93,13 +68,6 @@ export function dataDirResolution(): { dir: string; via: 'env' | 'pointer' | 'co
   if (pointer) return { dir: pointer, via: 'pointer' };
   const fresh = path.join(os.homedir(), '.practi');
   if (fs.existsSync(fresh)) return { dir: fresh, via: 'convention' };
-  const legacyCandidates = [
-    process.env.APPDATA ? path.join(process.env.APPDATA, 'pop') : null,
-    path.join(os.homedir(), '.pop'),
-  ].filter((p): p is string => p !== null);
-  for (const legacy of legacyCandidates) {
-    if (fs.existsSync(legacy)) return { dir: legacy, via: 'convention' };
-  }
   return { dir: fresh, via: 'convention' };
 }
 
@@ -111,67 +79,29 @@ export function statePath(dataDir: string): string {
   return path.join(dataDir, STATE_FILE);
 }
 
-/** 旧版（改名前）状态文件路径；存在则优先级低于 practi.json */
-export function legacyStatePath(dataDir: string): string {
-  return path.join(dataDir, LEGACY_STATE_FILE);
-}
-
 function asRecord(v: unknown): Record<string, unknown> | null {
   return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
 export function loadState(dataDir: string): State {
-  const base: State = { schema: 1, direct: [] };
+  const base: State = { schema: 1 };
   const p = statePath(dataDir);
-  const legacy = legacyStatePath(dataDir);
-  const file = fs.existsSync(p) ? p : fs.existsSync(legacy) ? legacy : null;
-  if (file === null) return base;
+  if (!fs.existsSync(p)) return base;
   try {
-    const rec = asRecord(JSON.parse(fs.readFileSync(file, 'utf8')));
+    const rec = asRecord(JSON.parse(fs.readFileSync(p, 'utf8')));
     if (rec === null) return base;
-    const state: State = { schema: 1, direct: [] };
-    if (Array.isArray(rec.direct)) {
-      state.direct = rec.direct.filter((x): x is string => typeof x === 'string' && HASH_RE.test(x));
-    }
-    const claims = asRecord(rec.claims);
-    if (claims) {
-      const valid: Record<string, string> = {};
-      for (const [k, v] of Object.entries(claims)) {
-        if (HASH_RE.test(k) && typeof v === 'string') valid[k] = v;
-      }
-      state.claims = valid;
-    }
-    // remote/instance：读旧写新（旧文件无此键=缺省官方 hub / 未绑定）。字段逐一校验，
-    // 井绳不进 state——坏值按缺省处理，下次写盘自然洗净
+    const state: State = { schema: 1 };
     const remote = asRecord(rec.remote);
     if (remote && typeof remote.url === 'string' && /^https?:\/\//i.test(remote.url)) {
       state.remote = { url: remote.url };
     }
-    const instance = asRecord(rec.instance);
-    if (
-      instance &&
-      typeof instance.owner === 'string' && instance.owner !== '' &&
-      typeof instance.name === 'string' && instance.name !== '' &&
-      typeof instance.branch === 'string' && instance.branch !== ''
-    ) {
-      state.instance = { owner: instance.owner, name: instance.name, branch: instance.branch };
-    }
     return state;
   } catch (e) {
-    console.error(`warning: ${file} is corrupt (${(e as Error).message}) — reading defaults; the next state write will OVERWRITE it, back it up now if it matters`);
+    console.error(`warning: ${p} is corrupt (${(e as Error).message}) — reading defaults; the next state write will OVERWRITE it, back it up now if it matters`);
     return base;
   }
 }
 
 export function saveState(dataDir: string, state: State): void {
-  // 修剪孤儿认领时刻：hash 已不在 direct（edit 换根/删除）→ 时间随之失效，
-  // 不留陈旧条目。修剪放在写盘口，命令层怎么改 direct 都不会漏
-  if (state.claims) {
-    const live = new Set(state.direct);
-    for (const h of Object.keys(state.claims)) {
-      if (!live.has(h)) delete state.claims[h];
-    }
-    if (Object.keys(state.claims).length === 0) delete state.claims;
-  }
   fs.writeFileSync(statePath(dataDir), JSON.stringify(state, null, 2) + '\n', 'utf8');
 }

@@ -1,6 +1,5 @@
 import fs from 'node:fs';
-import { defaultDataDir } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, resolveRepo, type Repo } from '../practice.js';
 import { nodeIndexFields } from '../retrieval.js';
 import { notesByNode } from '../notes.js';
 import {
@@ -20,7 +19,7 @@ import {
 } from '../embed/cache.js';
 
 export interface EmbedOpts {
-  dataDir?: string;
+  dir?: string;
   positional: string[];
   json: boolean;
   /** build 时把本地笔记也嵌进去（与 search --notes 同一口径） */
@@ -29,7 +28,7 @@ export interface EmbedOpts {
 
 const USAGE = `usage: practi embed status|pull|build|prune [--json]
   practi embed status           model readiness and how many nodes the vector index covers
-  practi embed pull             download the offline vector model into <data-dir>/models/
+  practi embed pull             download the offline vector model into .practi/models/
                                 (~24MB, via the system proxy)
   practi embed build [--notes]  build / incrementally refresh the vector index (only nodes
                                 not cached yet)
@@ -40,33 +39,35 @@ and search --semantic says what is missing instead of quietly recalling less.`;
 
 export async function runEmbed(opts: EmbedOpts): Promise<number> {
   const sub = opts.positional[0];
-  const dataDir = opts.dataDir ?? defaultDataDir();
+  const repo = resolveRepo({ dir: opts.dir, verb: 'embed' });
+  if (repo === null) return 1;
   switch (sub) {
-    case 'status': return embedStatus(dataDir, opts);
-    case 'pull': return await embedPull(dataDir, opts);
-    case 'build': return await embedBuild(dataDir, opts);
-    case 'prune': return embedPrune(dataDir, opts);
+    case 'status': return embedStatus(repo, opts);
+    case 'pull': return await embedPull(repo, opts);
+    case 'build': return await embedBuild(repo, opts);
+    case 'prune': return embedPrune(repo, opts);
     default:
       console.error(USAGE);
       return 1;
   }
 }
 
-function embedStatus(dataDir: string, opts: EmbedOpts): number {
+function embedStatus(repo: Repo, opts: EmbedOpts): number {
+  const base = repo.poolDir;
   const spec = DEFAULT_MODEL;
-  const st = modelStatus(dataDir, spec);
+  const st = modelStatus(base, spec);
   const fingerprint = modelFingerprint(spec);
-  const index = readVectorIndex(dataDir, fingerprint);
+  const index = readVectorIndex(base, fingerprint);
   let nodes = 0;
   let covered = 0;
   try {
-    const ws = openWorkspace(dataDir);
+    const ws = openPool(repo);
     nodes = ws.nodes.size;
     covered = index === null ? 0 : index.hashes.filter((h) => ws.nodes.has(h)).length;
   } catch {
     nodes = 0;
   }
-  const buckets = listVectorBuckets(dataDir);
+  const buckets = listVectorBuckets(base);
   if (opts.json) {
     console.log(JSON.stringify({
       model: { id: st.id, dir: st.dir, present: st.present, bytes: st.bytes, bad: st.bad },
@@ -91,14 +92,15 @@ function embedStatus(dataDir: string, opts: EmbedOpts): number {
   return 0;
 }
 
-async function embedPull(dataDir: string, opts: EmbedOpts): Promise<number> {
+async function embedPull(repo: Repo, opts: EmbedOpts): Promise<number> {
+  const base = repo.poolDir;
   const spec = DEFAULT_MODEL;
-  console.error(`pulling ${spec.id} (~${spec.files.reduce((s, f) => s + f.bytes, 0) / 1024 / 1024 | 0} MB) into ${modelDir(dataDir, spec)}`);
-  const r = await pullModel(dataDir, {
+  console.error(`pulling ${spec.id} (~${spec.files.reduce((s, f) => s + f.bytes, 0) / 1024 / 1024 | 0} MB) into ${modelDir(base, spec)}`);
+  const r = await pullModel(base, {
     onProgress: (p) => console.error(`  ${p.file}: ${(p.done / 1024 / 1024).toFixed(1)} MB`),
   });
   if (opts.json) {
-    console.log(JSON.stringify({ model: spec.id, dir: modelDir(dataDir, spec), ...r }, null, 2));
+    console.log(JSON.stringify({ model: spec.id, dir: modelDir(base, spec), ...r }, null, 2));
     return 0;
   }
   console.log(`pulled:  ${spec.id}`);
@@ -108,19 +110,20 @@ async function embedPull(dataDir: string, opts: EmbedOpts): Promise<number> {
   return 0;
 }
 
-async function embedBuild(dataDir: string, opts: EmbedOpts): Promise<number> {
-  const ws = openWorkspace(dataDir);
-  const notes = opts.notes ? notesByNode(dataDir) : new Map<string, string>();
+async function embedBuild(repo: Repo, opts: EmbedOpts): Promise<number> {
+  const base = repo.poolDir;
+  const ws = openPool(repo);
+  const notes = opts.notes ? notesByNode(base) : new Map<string, string>();
   const docs = [...ws.nodes.keys()].sort()
     .map((h) => ({ hash: h, text: indexText(h, ws.nodes.get(h)!, notes.get(h)) }));
   if (docs.length === 0) {
     console.log('no stored nodes to embed');
     return 0;
   }
-  const embedder = await loadOnnxEmbedder(dataDir);
+  const embedder = await loadOnnxEmbedder(base);
   const t0 = Date.now();
   const r = await buildVectorIndex({
-    dataDir,
+    dataDir: base,
     embedder,
     docs,
     onProgress: (done, total) => process.stderr.write(`  embedding ${done}/${total}\r`),
@@ -151,10 +154,11 @@ function indexText(hash: string, node: Parameters<typeof nodeIndexFields>[1], no
   return Object.values(e.fields).filter((v): v is string => typeof v === 'string').join('\n');
 }
 
-function embedPrune(dataDir: string, opts: EmbedOpts): number {
+function embedPrune(repo: Repo, opts: EmbedOpts): number {
+  const base = repo.poolDir;
   const keep = modelFingerprint(DEFAULT_MODEL);
-  const before = listVectorBuckets(dataDir);
-  const removed = pruneVectorBuckets(dataDir, keep);
+  const before = listVectorBuckets(base);
+  const removed = pruneVectorBuckets(base, keep);
   if (opts.json) {
     console.log(JSON.stringify({ kept: keep, removed, before }, null, 2));
     return 0;

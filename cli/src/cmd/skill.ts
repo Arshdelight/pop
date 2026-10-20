@@ -3,8 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportSkill, importSkill, PracticeError, resolveNodeRef } from '@arshdelight/pop-sdk';
-import { claimDirect, defaultDataDir, loadState, saveState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, resolveRepo } from '../practice.js';
 
 /**
  * practi skill 子命令：
@@ -16,8 +15,8 @@ import { openWorkspace } from '../workspace.js';
  *   --dir <skills-dir> 覆盖；安装形态 <skills-dir>/use-practi/SKILL.md。
  *   install 幂等同步（含清理源里已不存在的陈旧文件），并顺带移除改名前安装的
  *   旧 use-pop 目录（CLI 自管产物）；update 要求已安装；uninstall 删整个目录。
- * - import|export：skill ⇄ POP 转换（spec §1/§8）。
- *   export 把 workspace 里的 POP 投影成可安装的技能目录（SKILL.md + 附件 +
+ * - import|export：skill ⇄ POP 转换（spec §1/§8），跑在 cwd 所在实例的内容池里。
+ *   export 把池里的 POP 投影成可安装的技能目录（SKILL.md + 附件 +
  *   pop.doc.json sidecar）；import 是它的逆运算——sidecar 精确回放（附件文件
  *   重新入库并验哈希），无 sidecar 的外来技能目录被拒绝（E_NO_SIDECAR）：
  *   外来 skill 靠重新撰写进入 POP，不做机械压平。
@@ -28,9 +27,8 @@ const LEGACY_SKILL_NAME = 'use-pop';
 
 export interface SkillOpts {
   action: 'install' | 'update' | 'uninstall' | 'import' | 'export';
+  /** install/update/uninstall：技能安装目录（--dir 覆盖，默认 ~/.agents/skills）；export：输出目录 */
   dir?: string;
-  /** import/export 的 pop 数据目录（默认 $PRACTI_HOME / ~/.practi / ~/.practi） */
-  dataDir?: string;
   /** import：技能源目录；export：节点引用（hash 或唯一前缀） */
   positional?: string;
 }
@@ -146,15 +144,16 @@ function slugOrHash(name: string, hash: string): string {
   return slug !== '' ? slug : hash.slice('sha256:'.length, 'sha256:'.length + 12);
 }
 
-/** practi skill import <dir>：回放 `practi skill export` 导出的目录（sidecar 精确复放，附件重新入库）+ 注册 direct */
+/** practi skill import <dir>：回放 `practi skill export` 导出的目录（sidecar 精确复放，附件重新入库入池） */
 function runSkillImport(opts: SkillOpts): number {
   if (!opts.positional) {
-    console.error('usage: practi skill import <skill-dir> [--data-dir <dir>]');
+    console.error('usage: practi skill import <skill-dir>');
     return 1;
   }
-  const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : defaultDataDir();
+  const repo = resolveRepo({ verb: 'skill import' });
+  if (repo === null) return 1;
   const skillDir = path.resolve(opts.positional);
-  const ws = openWorkspace(dataDir);
+  const ws = openPool(repo);
 
   const warns: string[] = [];
   let res;
@@ -167,25 +166,22 @@ function runSkillImport(opts: SkillOpts): number {
     return 1;
   }
 
-  const state = loadState(dataDir);
-  if (claimDirect(state, res.root)) {
-    saveState(dataDir, state);
-  }
-
-  console.log(`imported:  ${res.root}  (${res.count} node(s))  [direct]`);
+  console.log(`imported:  ${res.root}  (${res.count} node(s))`);
   console.log(`  source:   ${res.sidecarUsed ? 'pop.doc.json sidecar replay (byte-identical hash)' : 'edited SKILL.md body (sidecar out of sync — new hash)'}`);
   for (const w of warns) console.log(`  warning:  ${w}`);
+  console.log('  next:     staged in the pool, not on the chain — `practi commit -m "..."` records it');
   return 0;
 }
 
 /** practi skill export <ref> [--dir <out>]：POP → 技能目录（SKILL.md 投影 + 附件 + sidecar） */
 function runSkillExport(opts: SkillOpts): number {
   if (!opts.positional) {
-    console.error('usage: practi skill export <ref> [--dir <out-dir>] [--data-dir <dir>]');
+    console.error('usage: practi skill export <ref> [--dir <out-dir>]');
     return 1;
   }
-  const dataDir = opts.dataDir ? path.resolve(opts.dataDir) : defaultDataDir();
-  const ws = openWorkspace(dataDir);
+  const repo = resolveRepo({ verb: 'skill export' });
+  if (repo === null) return 1;
+  const ws = openPool(repo);
 
   let rootHash: string;
   try {

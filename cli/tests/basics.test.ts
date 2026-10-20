@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { init, pop, tempDataDir } from './helpers.js';
+import { init, pop, runIn, tempDataDir } from './helpers.js';
 
 describe('practi basics: version, help, unknown commands', () => {
   it('--version and `version` exit 0 and print CLI + spec versions', async () => {
@@ -17,8 +17,9 @@ describe('practi basics: version, help, unknown commands', () => {
     for (const args of [['help'], ['--help'], ['-h']]) {
       const r = await pop(tempDataDir(), args);
       expect(r.code).toBe(0);
-      expect(r.stdout).toContain('usage:');
-      expect(r.stdout).toContain('--data-dir');
+      expect(r.stdout).toContain('usage');
+      expect(r.stdout).toContain('--dir'); // 实例命令的文件夹定位选项
+      expect(r.stdout).toContain('practi new <name>');
     }
   });
 
@@ -26,7 +27,24 @@ describe('practi basics: version, help, unknown commands', () => {
     const r = await pop(tempDataDir(), ['frobnicate']);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain('unknown command: frobnicate');
-    expect(r.stderr).toContain('usage:');
+    expect(r.stderr).toContain('usage');
+  });
+
+  it('retired commands exit 1 and say where the work went', async () => {
+    for (const cmd of ['ls', 'edit', 'publish', 'migrate', 'instance']) {
+      const r = await pop(tempDataDir(), [cmd]);
+      expect(r.code, cmd).toBe(1);
+      expect(r.stderr).toContain(`\`practi ${cmd}\` was retired`);
+    }
+  });
+
+  it('practice commands outside a practice folder say so (the config home needs no init)', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const r = await runIn(tempDataDir(), home, ['log']);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('works inside a practice folder');
+    expect(r.stderr).toContain('practi new <name>');
   });
 
   it('missing required argument: `blob add` without a target → usage on stderr, nonzero exit', async () => {
@@ -35,13 +53,6 @@ describe('practi basics: version, help, unknown commands', () => {
     const r = await pop(dir, ['blob', 'add']);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain('usage: practi blob add');
-  });
-
-  it('commands outside an initialized data dir fail with typed E_NOT_INITIALIZED', async () => {
-    const r = await pop(tempDataDir(), ['ls']);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/error \[E_NOT_INITIALIZED\]/);
-    expect(r.stderr).toContain('run `practi init');
   });
 
   it('spec prints the bundled pop-spec offline (no data dir needed)', async () => {

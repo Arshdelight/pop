@@ -1,18 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defaultDataDir } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, resolveRepo } from '../practice.js';
 import { shortHash } from '../render.js';
 
 /**
  * practi gc — 清架工：清理孤儿 blob（盘上存在、但没有任何已存节点引用的附件字节）。
- * 引用判定刻意取「盘上全部节点」而非「direct 可达」——edit --keep 留下的节点、间接
+ * 引用判定刻意取「盘上全部节点」而非「头文档可达」——历史修订留着的节点、间接
  * 节点挂着的附件都算被引用，清架只清真正无主的字节（edit 的 GC 不碰 blobs，字节
  * 只有这道手动门）。默认 dry-run 只报不清，--apply 才动手；nodes 不归它管。
  */
 
 export interface GcOpts {
-  dataDir?: string;
+  dir?: string;
   apply: boolean;
 }
 
@@ -23,8 +22,9 @@ function fmtBytes(n: number): string {
 }
 
 export function runGc(opts: GcOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const ws = openWorkspace(dataDir);
+  const repo = resolveRepo({ dir: opts.dir, verb: 'gc' });
+  if (repo === null) return 1;
+  const ws = openPool(repo);
 
   // 附件只长在 action 上（schema 保证 practice 无 attachments），扫一遍全部节点即可
   const referenced = new Set<string>();
@@ -34,7 +34,7 @@ export function runGc(opts: GcOpts): number {
   }
 
   const orphans: { hash: string; file: string; size: number }[] = [];
-  const blobsDir = path.join(dataDir, 'blobs');
+  const blobsDir = path.join(repo.poolDir, 'blobs');
   if (fs.existsSync(blobsDir)) {
     for (const shard of fs.readdirSync(blobsDir)) {
       const shardDir = path.join(blobsDir, shard);

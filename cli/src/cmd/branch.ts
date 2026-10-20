@@ -1,25 +1,21 @@
-import { defaultDataDir } from '../state.js';
-import { resolvePractice, saveChain, type PracticeRepo } from '../practice.js';
+import { resolveRepo, saveChain, type Repo } from '../practice.js';
 import { shortHash } from '../render.js';
 
 export interface BranchOpts {
-  dataDir?: string;
   positional: string[];
-  dir?: string;
-  practice?: string;
   from?: string;
   deleteBranch?: string;
+  dir?: string;
 }
 
 /**
  * practi branch [name] [-d <name>] [--from <hash>]：实例支指针管理（本地链操作）。
- *   branch            列全部分支（* = 当前支——git 同款，S2-1 拍板修正）
+ *   branch            列全部分支（* = 当前支——git 同款）
  *   branch <name>     从当前支头建新支
  *   branch -d <name>  删支指针（默认支 main 不可删）
  */
 export function runBranch(opts: BranchOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const repo: PracticeRepo | null = resolvePractice({ dataDir, explicitDir: opts.dir, explicitName: opts.practice, verb: 'branch' });
+  const repo: Repo | null = resolveRepo({ dir: opts.dir, verb: 'branch' });
   if (repo === null) return 1;
   const chain = repo.chain;
 
@@ -62,11 +58,11 @@ export function runBranch(opts: BranchOpts): number {
     chain.branches[name] = head;
     saveChain(repo);
     console.log(`created branch: ${name} (from ${head ? head.slice(7, 19) : 'empty root'})`);
-    console.log(`next: \`practi switch ${name}\` then publish into it`);
+    console.log(`next: \`practi switch ${name}\` then commit into it`);
     return 0;
   }
 
-  // 列表：* = 当前支（git 同款；S2-1）
+  // 列表：* = 当前支（git 同款）
   for (const [b, r] of Object.entries(chain.branches)) {
     const mark = b === chain.current ? '*' : ' ';
     console.log(`${mark} ${b}${r ? `  ${r.slice(7, 19)}` : '  (empty)'}`);

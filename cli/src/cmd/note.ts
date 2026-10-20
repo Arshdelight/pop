@@ -1,25 +1,21 @@
 import { resolveNodeRef, type Workspace } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, chainHead, resolveRepo, type Repo } from '../practice.js';
 import { shortHash } from '../render.js';
 import { loadNotes, insertNote, updateNote, removeNote, subtreeHashes, type NoteEntry, type NoteMutation } from '../notes.js';
-import { runNotePromote } from './promote.js';
 
 /**
- * practi note — 本地学习笔记（sidecar notes.json，不进协议）。
+ * practi note — 本地学习笔记（sidecar .practi/notes.json，不进协议）。
  * 钉在任一节点的哈希上，侧重学习/复现经验；子命令式、-m 带内容、--json 给 agent。
  */
 
 export interface NoteOpts {
-  dataDir?: string;
+  dir?: string;
   positional: string[]; // [子命令, hash 或 note id]
   message?: string;
   json: boolean;
-  /** promote：草稿输出路径（省略则打到 stdout） */
-  out?: string;
 }
 
-const USAGE = `usage: practi note add|list|edit|delete|promote
+const USAGE = `usage: practi note add|list|edit|delete
   practi note add <node> -m "<text>" [--json]
                   pin a learning/reproduction note to a node hash (prefix OK; local only,
                   never uploaded)
@@ -27,51 +23,37 @@ const USAGE = `usage: practi note add|list|edit|delete|promote
                   no arg = all notes (grouped by owning document); hash = only notes within
                   that node's subtree
   practi note edit <note-id> -m "<new text>" [--json]
-  practi note delete <note-id>
-  practi note promote <note-id> [--out <file>]
-                  turn a note back into a draft document (the owning direct root's --doc,
-                  the note spliced in at its node); drafts only, never an automatic edit —
-                  merging it in is your call`;
+  practi note delete <note-id>`;
 
 export function runNote(opts: NoteOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
+  const repo = resolveRepo({ dir: opts.dir, verb: 'note' });
+  if (repo === null) return 1;
   const sub = opts.positional[0];
   switch (sub) {
     case 'add':
-      return noteAdd(opts, dataDir);
+      return noteAdd(opts, repo);
     case 'list':
-      return noteList(opts, dataDir);
+      return noteList(opts, repo);
     case 'edit':
-      return noteEdit(opts, dataDir);
+      return noteEdit(opts, repo.poolDir);
     case 'delete':
-      return noteDelete(opts, dataDir);
-    case 'promote':
-      return notePromote(opts, dataDir);
+      return noteDelete(opts, repo.poolDir);
     default:
       console.error(USAGE);
       return 1;
   }
 }
 
-function notePromote(opts: NoteOpts, dataDir: string): number {
-  const id = opts.positional[1];
-  if (!id) {
-    console.error('usage: practi note promote <note-id> [--out <file>]');
-    return 1;
-  }
-  return runNotePromote({ dataDir, id, out: opts.out });
-}
-
-function noteAdd(opts: NoteOpts, dataDir: string): number {
+function noteAdd(opts: NoteOpts, repo: Repo): number {
   const target = opts.positional[1];
   if (!target || !opts.message || !opts.message.trim()) {
     console.error('usage: practi note add <node> -m "<text>"');
     return 1;
   }
-  // 存在性校验兼前缀解析：笔记必须钉在工作区已有的节点上（挡手滑哈希）
-  const ws = openWorkspace(dataDir);
+  // 存在性校验兼前缀解析：笔记必须钉在池里已有的节点上（挡手滑哈希）
+  const ws = openPool(repo);
   const hash = resolveNodeRef(ws, target);
-  const note = insertNote(dataDir, hash, opts.message);
+  const note = insertNote(repo.poolDir, hash, opts.message);
   if (opts.json) {
     console.log(JSON.stringify(note, null, 2));
     return 0;
@@ -80,13 +62,13 @@ function noteAdd(opts: NoteOpts, dataDir: string): number {
   return 0;
 }
 
-function noteList(opts: NoteOpts, dataDir: string): number {
+function noteList(opts: NoteOpts, repo: Repo): number {
   const target = opts.positional[1];
-  const file = loadNotes(dataDir);
+  const file = loadNotes(repo.poolDir);
   let notes = file.notes;
 
   if (target) {
-    const ws = openWorkspace(dataDir);
+    const ws = openPool(repo);
     const hash = resolveNodeRef(ws, target);
     const set = subtreeHashes(ws, hash);
     notes = notes.filter(n => set.has(n.hash));
@@ -101,18 +83,18 @@ function noteList(opts: NoteOpts, dataDir: string): number {
     return 0;
   }
   if (target) {
-    const ws2 = openWorkspace(dataDir);
+    const ws2 = openPool(repo);
     printNotes(notes, h => ws2.nodes.get(h)?.name ?? shortHash(h));
     return 0;
   }
   // 无参：按所属文档分组（组内时间正序=学习轨迹，组按最新笔记倒序=最近在学的在前）；
-  // 钉在已 GC/换根孤儿上的笔记归入悬空组殿后
-  const ws = openWorkspace(dataDir);
-  const state = loadState(dataDir);
+  // 实例的「所属文档」就是当前支头，钉在已换根历史节点上的笔记归入悬空组殿后
+  const ws = openPool(repo);
+  const head = chainHead(repo.chain);
+  const roots = head !== null && ws.nodes.has(head) ? [head] : [];
   const claimed = new Set<string>();
   const groups: { title: string; items: NoteEntry[] }[] = [];
-  for (const root of state.direct) {
-    if (!ws.nodes.has(root)) continue;
+  for (const root of roots) {
     const set = subtreeHashes(ws, root);
     const items = notes.filter(n => set.has(n.hash));
     if (!items.length) continue;
@@ -165,13 +147,13 @@ function reportMutation(id: string, m: NoteMutation): number {
   return 0;
 }
 
-function noteEdit(opts: NoteOpts, dataDir: string): number {
+function noteEdit(opts: NoteOpts, poolDir: string): number {
   const id = opts.positional[1];
   if (!id || !opts.message || !opts.message.trim()) {
     console.error('usage: practi note edit <note-id> -m "<new text>"');
     return 1;
   }
-  const m = updateNote(dataDir, id, opts.message);
+  const m = updateNote(poolDir, id, opts.message);
   if (!m.ok) return reportMutation(id, m);
   if (opts.json) {
     console.log(JSON.stringify(m.note, null, 2));
@@ -181,13 +163,13 @@ function noteEdit(opts: NoteOpts, dataDir: string): number {
   return 0;
 }
 
-function noteDelete(opts: NoteOpts, dataDir: string): number {
+function noteDelete(opts: NoteOpts, poolDir: string): number {
   const id = opts.positional[1];
   if (!id) {
     console.error('usage: practi note delete <note-id>');
     return 1;
   }
-  const m = removeNote(dataDir, id);
+  const m = removeNote(poolDir, id);
   if (!m.ok) return reportMutation(id, m);
   console.log(`note ${m.note.id} deleted`);
   return 0;

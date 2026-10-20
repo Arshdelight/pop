@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { dataDirResolution, loadState, pointerPath } from '../state.js';
-import { openWorkspace } from '../workspace.js';
 import { CLI_VERSION, POP_SPEC_VERSION } from '../version.js';
 
 export interface ConfigOpts {
@@ -26,22 +25,8 @@ function describeDataDir(explicit?: string): { dir: string; via: string } {
 export function runConfig(opts: ConfigOpts): number {
   const { dir: dataDir, via } = describeDataDir(opts.dataDir);
   const state = loadState(dataDir);
-  let ws;
-  try {
-    ws = openWorkspace(dataDir);
-  } catch {
-    ws = null;
-  }
-  const direct = ws ? state.direct.filter((h) => ws.nodes.has(h)).length : state.direct.length;
-  const indirect = ws ? ws.nodes.size - direct : 0;
   console.log(`practi:    ${CLI_VERSION}   pop-spec: ${POP_SPEC_VERSION}`);
-  console.log(`data dir:   ${dataDir}  (via ${via})`);
+  console.log(`config home: ${dataDir}  (via ${via})  — credentials + remote; practice folders live anywhere`);
   console.log(`remote:     ${state.remote?.url ?? '(not configured — `practi remote set <url>`)'}`);
-  console.log(`instance:   ${state.instance ? `${state.instance.owner}/${state.instance.name}@${state.instance.branch}` : '(none bound)'}`);
-  console.log(`direct:     ${direct}`);
-  console.log(`indirect:   ${indirect}`);
-  if (ws && ws.parseIssues.length > 0) {
-    console.log(`warnings:   ${ws.parseIssues.length} parse issue(s) — run \`practi ls\` to see them`);
-  }
   return 0;
 }

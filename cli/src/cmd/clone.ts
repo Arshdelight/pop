@@ -1,15 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { defaultDataDir, loadState } from '../state.js';
-import { initDataDir, openWorkspace } from '../workspace.js';
+import { exportSubtree, initWorkspace, loadWorkspace } from '@arshdelight/pop-sdk';
 import { fetchInstanceChain, syncInstanceObjects } from '../sync.js';
-import { chainPathFor, saveChain, type ChainFile } from '../practice.js';
+import { chainHead, saveChain, workingFileFor, type ChainFile, type Repo } from '../practice.js';
 import { shortHash } from '../render.js';
 
 export interface CloneOpts {
   dataDir?: string;
   positional: string[];
-  /** 克隆为独立目录实例（目录即仓库，自带节点池）；缺省=默认工作目录账本登记 */
+  /** 克隆目标目录（实例文件夹位置）；缺省=cwd/<name> */
   dir?: string;
 }
 
@@ -22,10 +22,9 @@ export function parseCloneRef(ref: string): { owner: string; name: string; branc
 }
 
 /**
- * practi clone <owner>/<name>[@branch] [--dir <path>]：把一个实践实例克隆成本地实例仓库。
- * - 全链修订拉入实例节点池（历史=对象），链文件与 hub 链同构落盘（全部盖 pushedAt）
- * - registry 式（缺省）：登记进默认工作目录 practices/<name>/；--dir：目录即仓库
- * - 此后的 push/pull/log/publish 都以 cwd / --dir / --practice 定位到它
+ * practi clone <owner>/<name>[@branch] [--dir <path>]：把一个实践实例克隆成本地
+ * 实例文件夹——<name>.json 工作文件 + .practi/（全链历史，自包含）。此后的
+ * commit/push/pull/log 都以 cwd 定位到它。
  */
 export async function runClone(opts: CloneOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -42,23 +41,22 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   }
   const { owner, name, branch } = parsed;
 
-  const view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
-
-  // 目标实例仓库（registry 式重名守卫）
-  const repoDir = opts.dir ? path.resolve(opts.dir) : dataDir;
-  const chainPath = opts.dir ? path.join(repoDir, 'chain.json') : chainPathFor(dataDir, name);
-  if (fs.existsSync(chainPath)) {
-    console.error(`clone failed: ${opts.dir ? opts.dir : name} already exists locally (chain.json present)`);
+  const dir = path.resolve(opts.dir ?? path.join(process.cwd(), name));
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) {
+    console.error(`clone failed: ${dir} already exists and is not empty`);
     return 1;
   }
-  if (opts.dir) {
-    fs.mkdirSync(repoDir, { recursive: true });
-    initDataDir(repoDir);
+  const poolDir = path.join(dir, '.practi');
+  fs.mkdirSync(poolDir, { recursive: true });
+  try {
+    initWorkspace(poolDir);
+  } catch {
+    // practice.yaml 已在（半途重试）——沿用
   }
 
-  const poolDir = repoDir;
-  const ws = openWorkspace(poolDir);
-  const sync = await syncInstanceObjects(poolDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
+  const view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
+  const ws = loadWorkspace(poolDir);
+  const sync = await syncInstanceObjects(dataDir, poolDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
   if (sync.failed.length > 0) {
     console.error(`clone incomplete: ${sync.failed.length} revision(s) failed to fetch`);
     return 1;
@@ -81,15 +79,21 @@ export async function runClone(opts: CloneOpts): Promise<number> {
       pushedAt: now,
     })),
   };
-  fs.mkdirSync(path.dirname(chainPath), { recursive: true });
-  fs.writeFileSync(chainPath, JSON.stringify(chain, null, 2) + '\n', 'utf8');
-  saveChain({ kind: opts.dir ? 'directory' : 'registry', dataDir: repoDir, chainPath, chain });
+  const repo: Repo = { dir, chain, chainPath: path.join(poolDir, 'chain.json'), filePath: workingFileFor(dir, name), poolDir };
+  saveChain(repo);
+  const head = chainHead(chain);
+  if (head !== null) {
+    const node = loadWorkspace(poolDir).nodes.get(head);
+    if (node) {
+      fs.writeFileSync(repo.filePath, JSON.stringify(exportSubtree(node, ws.nodes), null, 2) + '\n', 'utf8');
+    }
+  }
 
-  console.log(`cloned:  ${owner}/${name} (${view.visibility}, branch ${view.branch}, ${view.revisions.length} revision(s))`);
+  console.log(`cloned:  ${owner}/${name} → ${dir}  (${view.visibility}, branch ${view.branch}, ${view.revisions.length} revision(s))`);
   if (sync.missing > 0) {
     console.log(`note: ${sync.missing} revision(s) missing on the hub (history traces of hard-deleted documents)`);
   }
   console.log(`head:    ${view.head ? shortHash(view.head) : '(empty)'}`);
-  console.log('next:    `practi log` for its history; publish a changed pop with `practi publish <pop> --to ' + name + '`');
+  console.log(`next:    cd ${name} — edit ${name}.json, \`practi commit -m "..."\`, then \`practi push\``);
   return 0;
 }

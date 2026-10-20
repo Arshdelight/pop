@@ -20,13 +20,13 @@ export function printQualityHints(ws: Workspace, root: string): number {
     else list.push(w);
   }
 
-  console.error(`\nquality hints — ${warnings.length} on ${groups.size} node(s). W_* never block: this pop IS registered; they are prompts to go back and fill in content.`);
+  console.error(`\nquality hints — ${warnings.length} on ${groups.size} node(s). W_* never block: the revision is committed; they are prompts to go back and fill in content.`);
   for (const [hash, list] of groups) {
     const n = ws.nodes.get(hash);
     const tag = n === undefined ? '' : n.type === 'practice' ? `practice·${n.op}` : 'action';
     console.error(`  "${list[0].name}"  [${tag}]  ${shortHash(hash)}`);
     for (const w of list) console.error(`      ${w.code.padEnd(15)} ${w.message}`);
   }
-  console.error('  E_* issues refuse a document (stored but not registered); W_* hints never do — pop-spec §6, SKILL.md "Recording quality".');
+  console.error('  E_* issues refuse a commit (the chain rolls back); W_* hints never do — pop-spec §6, SKILL.md "Recording quality".');
   return warnings.length;
 }

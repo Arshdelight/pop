@@ -1,23 +1,21 @@
 import { defaultDataDir, loadState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
 import { fetchRemoteDoc } from '../client.js';
 import { fetchInstanceChain } from '../sync.js';
-import { resolvePractice, saveChain } from '../practice.js';
+import { dirtyGuardMessage, isDirty, openPool, resolveRepo, saveChain, writeWorkingFile } from '../practice.js';
 import { shortHash } from '../render.js';
 
 export interface PullOpts {
   dataDir?: string;
-  positional: string[];
+  /** 定位覆盖：实例文件夹（--dir）；缺省=cwd 向上找 .practi */
   dir?: string;
-  practice?: string;
 }
 
 /**
  * practi pull：把当前实例的远端更新对账进本地（git pull 同构）：
- * - hub 链上本地缺失的修订逐个拉入实例节点池并补进本地链
- * - 远端支头前进且为本地链的延伸 → 支指针快进
- * - 远端头不在本地链（分叉）→ 报错（重写本地链后 --force 推）
- * 实例须已推送过（owner 就位）——本地新实例没有远端可拉。
+ * - hub 链上本地缺失的修订逐个拉入 .practi 池并补进本地链
+ * - 远端支头前进且为本地链的延伸 → 支指针快进，工作文件回写到新头
+ * - 远端头不在本地链（分叉）→ 报错（本地有未推修订时提示 --force 对账）
+ * 实例须已推送过（owner 就位）——本地新实例没有远端可拉。工作文件有未提交改动时拒拉。
  */
 export async function runPull(opts: PullOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
@@ -26,16 +24,18 @@ export async function runPull(opts: PullOpts): Promise<number> {
     console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
-  const repo = resolvePractice({ dataDir, explicitDir: opts.dir, explicitName: opts.practice, verb: 'pull' });
+  const repo = resolveRepo({ dir: opts.dir, verb: 'pull' });
   if (repo === null) return 1;
   const chain = repo.chain;
   if (chain.owner === null) {
     console.error(`error: practice "${chain.name}" has never been pushed — nothing to pull from`);
     return 1;
   }
-  const poolDir = repo.kind === 'directory' ? repo.dataDir : dataDir;
-  const ws = openWorkspace(poolDir);
-  void ws;
+  if (isDirty(repo)) {
+    console.error(`error: ${dirtyGuardMessage(repo)}`);
+    return 1;
+  }
+  openPool(repo); // 池标记就绪检查（practice.yaml/nodes 缺失即在此报）
 
   const view = await fetchInstanceChain(dataDir, state.remote.url, chain.owner, chain.name, chain.current);
 
@@ -47,7 +47,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
     if (rev.missing) continue;
     if (!knownRoots.has(rev.root_hash)) {
       try {
-        await fetchRemoteDoc(poolDir, state.remote.url, chain.owner!, chain.name, rev.root_hash);
+        await fetchRemoteDoc(dataDir, repo.poolDir, state.remote.url, chain.owner, chain.name, rev.root_hash);
         fetched++;
       } catch (e) {
         console.error(`pull failed: ${(e as Error).message}`);
@@ -88,7 +88,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
     console.error(
       `pull: the hub's ${chain.name}@${chain.current} is at ${shortHash(hubHead)}, not in your local chain` +
         (localUnpushed
-          ? ' — and you have unpushed local revisions. Reconcile by hand (history reset / publish), then `practi push --force`'
+          ? ' — and you have unpushed local revisions. Reconcile by hand (history reset), then `practi push --force`'
           : ' — consider `practi push --force` to overwrite the hub')
     );
     return 1;
@@ -104,8 +104,10 @@ export async function runPull(opts: PullOpts): Promise<number> {
     console.log('up to date — nothing new to pull');
     return 0;
   }
+  const head = chain.branches[chain.current];
+  if (head !== null) writeWorkingFile(repo, head);
   console.log(
-    `pulled:  ${fetched} document(s), ${added} chain revision(s) — ${chain.name}@${chain.current} → ${shortHash(chain.branches[chain.current] ?? '')}`
+    `pulled:  ${fetched} document(s), ${added} chain revision(s) — ${chain.name}@${chain.current} → ${shortHash(head ?? '')}  (working file updated)`
   );
   return 0;
 }

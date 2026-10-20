@@ -6,8 +6,7 @@ import {
 } from './credentials.js';
 import { refreshAccessToken } from './oauth.js';
 import { fetchUrl, type FetchUrlResult } from './net.js';
-import { createFromDoc, parseDocument } from '@arshdelight/pop-sdk';
-import { openWorkspace } from './workspace.js';
+import { createFromDoc, loadWorkspace, parseDocument } from '@arshdelight/pop-sdk';
 
 /** refresh 被服务端拒绝（token 端点有应答但 HTTP 报错）——凭据已死，需重新 login */
 export class RefreshRejectedError extends Error {}
@@ -142,18 +141,20 @@ export function normalizeHashRef(ref: string): string | null {
 
 /** GET /api/v1/instances/{owner}/{name}/revisions/{hash} + 入库前验算（内容寻址的客户端责任，
  *  hub 读路径不代验）：纯导入（不落库）算出的根哈希必须等于请求地址——不符即拒绝，防止
- *  「另一身份的文档被悄悄注册进本地库」。pull/fetch 共用。
+ *  「另一身份的文档被悄悄注册进本地库」。pull/clone 共用。
+ *  凭据读 home（配置家），字节落 storeDir（实例的 .practi 池）——文件夹模型下两者分离。
  *  访问带仓库上下文（GitHub blobs 同构，2026-10-19 拍板；全局 /api/v1/pop/:ref 已退役）：
  *  公开实例任何人可拉，私有实例仅 owner/admin。 */
 export async function fetchRemoteDoc(
-  dataDir: string,
+  home: string,
+  storeDir: string,
   remote: string,
   owner: string,
   name: string,
   ref: string
 ): Promise<{ rootHash: string; status: string }> {
   const res = await authedFetch(
-    dataDir,
+    home,
     remote,
     `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/revisions/${encodeURIComponent(ref)}`
   );
@@ -174,7 +175,7 @@ export async function fetchRemoteDoc(
   if (parsed.rootHash !== ref) {
     throw new Error(`${ref} — hash mismatch: content hashes to ${parsed.rootHash}`);
   }
-  const ws = openWorkspace(dataDir);
+  const ws = loadWorkspace(storeDir);
   createFromDoc(ws, body.document);
   return { rootHash: parsed.rootHash, status: body.status ?? 'PRIVATE' };
 }

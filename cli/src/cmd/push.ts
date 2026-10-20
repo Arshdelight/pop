@@ -1,22 +1,20 @@
 import { exportSubtree, resolveNodeRef, createFromDoc } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, type State } from '../state.js';
-import { openWorkspace } from '../workspace.js';
 import { authedFetch } from '../client.js';
 import { shortHash } from '../render.js';
 import {
   chainHead,
-  resolvePractice,
+  openPool,
+  resolveRepo,
   saveChain,
   type ChainCommit,
-  type PracticeRepo,
+  type Repo,
 } from '../practice.js';
 
 export interface PushOpts {
   dataDir?: string;
-  positional: string[];
-  /** 定位覆盖：实例目录（--dir）或账本名（--practice） */
+  /** 定位覆盖：实例文件夹（--dir）；缺省=cwd 向上找 .practi */
   dir?: string;
-  practice?: string;
   /** 强推：本地链覆盖远端支头（hub 清不可达对象）；分叉时必须 */
   force?: boolean;
 }
@@ -49,7 +47,7 @@ function detailOf(body: Record<string, unknown>, status: number): string {
 /** 实例在 hub 侧不存在时创建（首次 push 诞生），回填 owner。
  *  幂等：hub 已有同名实例（换机器重推/上次创建后中断）→ owner=登录账号（实例名
  *  归属于本人命名空间）。 */
-async function ensureHubInstance(repo: PracticeRepo, dataDir: string, remote: string, state: State): Promise<string | null> {
+async function ensureHubInstance(repo: Repo, dataDir: string, remote: string, state: State): Promise<string | null> {
   const res = await authedFetch(dataDir, remote, '/api/v1/instances', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -73,7 +71,7 @@ async function ensureHubInstance(repo: PracticeRepo, dataDir: string, remote: st
       repo.chain.owner = meBody.username;
       return meBody.username;
     }
-    console.error('push failed: an instance with that name already exists and it is not yours — pick another name (`practi practice remove` + `practice new`)');
+    console.error('push failed: an instance with that name already exists and it is not yours — pick another practice name');
     return null;
   }
   console.error(`push failed: creating the instance on the hub — ${detailOf(body, res.status)}`);
@@ -81,10 +79,9 @@ async function ensureHubInstance(repo: PracticeRepo, dataDir: string, remote: st
 }
 
 /** 从实例节点池导出某 root 的完整文档（附件 url 剥离） */
-function exportDoc(repo: PracticeRepo, fallbackDataDir: string, root: string): unknown | null {
-  const poolDir = repo.kind === 'directory' ? repo.dataDir : fallbackDataDir;
+function exportDoc(repo: Repo, root: string): unknown | null {
   try {
-    const ws = openWorkspace(poolDir);
+    const ws = openPool(repo);
     const node = ws.nodes.get(root);
     if (!node) return null;
     return stripAttachmentUrls(exportSubtree(node, ws.nodes));
@@ -100,7 +97,7 @@ function exportDoc(repo: PracticeRepo, fallbackDataDir: string, root: string): u
  * - 分叉：hub 头不在本地链 → 报错（--force 走 force 全链端点，hub 重建+清不可达）
  */
 export async function pushRepo(
-  repo: PracticeRepo,
+  repo: Repo,
   opts: { dataDir: string; remote: string; force?: boolean; verbose?: boolean }
 ): Promise<number> {
   const state = loadState(opts.dataDir);
@@ -188,7 +185,7 @@ export async function pushRepo(
 
   // FF 逐条推（服务端 parent=当前支头自动落链）
   for (const c of path) {
-    const doc = exportDoc(repo, opts.dataDir, c.root);
+    const doc = exportDoc(repo, c.root);
     if (doc === null) {
       console.error(`push failed: node not found in the practice pool: ${c.root}`);
       return 1;
@@ -213,7 +210,7 @@ export async function pushRepo(
 
 /** force：本地全链+缺失文档一次性上传，hub 重建支链并清除不可达对象 */
 async function forcePush(
-  repo: PracticeRepo,
+  repo: Repo,
   ctx: { dataDir: string; remote: string; base: string; branch: string; hubHead: string | null }
 ): Promise<number> {
   const commits = repo.chain.commits.map((c) => ({
@@ -228,7 +225,7 @@ async function forcePush(
   // 只随链上传 hub 可能缺的文档：无法确知，干脆全带（内容寻址，hub 幂等）
   const documents: { root_hash: string; document: unknown }[] = [];
   for (const c of repo.chain.commits) {
-    const doc = exportDoc(repo, ctx.dataDir, c.root);
+    const doc = exportDoc(repo, c.root);
     if (doc !== null) documents.push({ root_hash: c.root, document: doc });
   }
   const res = await authedFetch(ctx.dataDir, ctx.remote, `${ctx.base}/branches/${encodeURIComponent(ctx.branch)}/revisions?force=1`, {
@@ -264,7 +261,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
     console.error('error: no remote configured — run `practi remote set <url>` first');
     return 1;
   }
-  const repo = resolvePractice({ dataDir, explicitDir: opts.dir, explicitName: opts.practice, verb: 'push' });
+  const repo = resolveRepo({ dir: opts.dir, verb: 'push' });
   if (repo === null) return 1;
   const head = chainHead(repo.chain);
   if (head === null) {

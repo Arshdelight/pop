@@ -1,5 +1,3 @@
-import { claimDirect, saveState, type State } from './state.js';
-import { appendCommit, ensureKnownCommit } from './commits.js';
 import { authedFetch, fetchRemoteDoc } from './client.js';
 
 /** 实例在 hub 侧的链上视图（GET /api/v1/instances/{o}/{n}?branch= 的 CLI 侧子集） */
@@ -13,7 +11,7 @@ export interface InstanceChainView {
   revisions: { seq: number; root_hash: string; missing: boolean }[];
 }
 
-/** GET 实例链视图（clone/pull/switch/instance show 共用的口径） */
+/** GET 实例链视图（clone/pull 共用的口径） */
 export async function fetchInstanceChain(
   dataDir: string,
   remote: string,
@@ -63,12 +61,11 @@ export interface SyncResult {
   failed: string[];
 }
 
-/** 把实例链上本地缺失的版本逐个拉进工作区（历史=对象，不动 direct——检出由调用方决定）；
- *  内容读取带仓库上下文（owner/name，实例范围端点）。拉回的修订登记进提交账本
- *  （origin: 'fetched'）——绑定实例后本地就是仓库副本，链上历史的内容节点留在本地，
- *  不会被 edit 的 gc 当孤儿清掉（S2-3） */
+/** 把实例链上本地缺失的版本逐个拉进实例的 .practi 池（历史=对象；检出=调用方回写工作文件）。
+ *  home=配置家（凭据），poolDir=实例池（字节落地）。 */
 export async function syncInstanceObjects(
-  dataDir: string,
+  home: string,
+  poolDir: string,
   remote: string,
   owner: string,
   name: string,
@@ -83,15 +80,9 @@ export async function syncInstanceObjects(
       missing++;
       continue;
     }
-    if (hasObject(rev.root_hash)) {
-      // 内容已在本地但可能没上过账（旧版 CLI 拉回的、push 绑过的）——幂等补登记，
-      // 不补的话下一次 edit 的 gc 仍会把它们当不可达清掉
-      ensureKnownCommit(dataDir, rev.root_hash, `fetched from ${owner}/${name}@${view.branch}`);
-      continue;
-    }
+    if (hasObject(rev.root_hash)) continue;
     try {
-      await fetchRemoteDoc(dataDir, remote, owner, name, rev.root_hash);
-      appendCommit(dataDir, rev.root_hash, null, `fetched from ${owner}/${name}@${view.branch}`, 'fetched');
+      await fetchRemoteDoc(home, poolDir, remote, owner, name, rev.root_hash);
       fetched++;
     } catch (e) {
       console.error(`pull failed: ${(e as Error).message}`);
@@ -99,42 +90,4 @@ export async function syncInstanceObjects(
     }
   }
   return { fetched, missing, head: view.head, failed };
-}
-
-export type CheckoutOutcome =
-  | { kind: 'up-to-date'; head: string }
-  | { kind: 'fast-forward'; from: string; to: string }
-  | { kind: 'checked-out'; head: string }
-  | { kind: 'untouched'; reason: string };
-
-/**
- * 远端 tip 落到本地 direct（git 的 fetch+checkout 收口，clone/pull 共用）：
- * - tip 已是 direct → up to date
- * - direct 恰一者在链上且不是 tip → fast-forward（该 direct 项替换为 tip）
- * - direct 无一在链上 → 检出：claimDirect(tip)（其余 direct 原样保留，提示带 hash 操作）
- * - 多者在链上 → 不动（歧义，交人工）
- */
-export function checkoutTip(state: State, view: InstanceChainView): CheckoutOutcome {
-  const tip = view.head;
-  if (tip === null) return { kind: 'untouched', reason: 'the remote branch has no revisions yet' };
-  if (state.direct.includes(tip)) return { kind: 'up-to-date', head: tip };
-  const chainHashes = new Set(view.revisions.map((r) => r.root_hash));
-  const onChain = state.direct.filter((h) => chainHashes.has(h));
-  if (onChain.length === 1) {
-    const from = onChain[0];
-    state.direct = state.direct.map((h) => (h === from ? tip : h));
-    (state.claims ??= {})[tip] = new Date().toISOString(); // 新 ref 的事件时间（换根=重盖）
-    return { kind: 'fast-forward', from, to: tip };
-  }
-  if (onChain.length > 1) {
-    return { kind: 'untouched', reason: `${onChain.length} local directs are on the remote chain — move to ${tip} by hand (edit/push take an explicit hash)` };
-  }
-  claimDirect(state, tip);
-  return { kind: 'checked-out', head: tip };
-}
-
-/** checkoutTip 有落点时统一写盘 */
-export function persistIfMoved(dataDir: string, state: State, outcome: CheckoutOutcome): void {
-  if (outcome.kind === 'untouched') return;
-  saveState(dataDir, state);
 }

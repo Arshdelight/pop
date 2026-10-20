@@ -1,15 +1,18 @@
+import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { init, pop, tempDataDir, writeDoc } from './helpers.js';
+import { chainOf, init, runIn, tempDataDir, writeDoc, workingFile } from './helpers.js';
 
 /**
- * practi lint：全库记录质量审计。
- * W_* 原本只在 new/edit 那一刻出现一次，历史欠账没有任何命令能列出来。
+ * practi lint：**当前支头**的记录质量审计（文件夹模型下 lint 只看 head 文档，
+ * 不再扫全库）。W_* 原本只在 new/commit 那一刻出现一次，历史欠账没有任何命令
+ * 能列出来——lint 就是那道门；提交一版修好的内容，欠账即从清单上消失。
  */
 describe('practi lint', () => {
-  it('is a clean bill of health for a well-recorded workspace', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    await pop(dir, ['new', writeDoc(dir, {
+  it('is a clean bill of health for a well-recorded head', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'good-p', '--base', writeDoc(parent, 'good.json', {
       name: 'Well recorded practice',
       description: 'what this does, in one line',
       content: 'An opening paragraph that explains the point of this practice.',
@@ -20,19 +23,19 @@ describe('practi lint', () => {
       }],
     })]);
 
-    const r = await pop(dir, ['lint']);
+    const r = await runIn(`${parent}/good-p`, home, ['lint']);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('clean');
     expect(r.stdout).toContain('no W_* hints');
   });
 
-  it('lists the hints a thin practice would have drawn at creation time', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    // 建的时候是被登记的（W_ 不阻断），lint 事后能把这些欠账翻出来
-    await pop(dir, ['new', writeDoc(dir, { name: 'Thin practice', content: 'x' })]);
+  it('lists the hints a thin head would have drawn at commit time', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'thin-p', '--base', writeDoc(parent, 'thin.json', { name: 'Thin practice', content: 'x' })]);
 
-    const r = await pop(dir, ['lint']);
+    const r = await runIn(`${parent}/thin-p`, home, ['lint']);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('W_THIN_CONTENT');
     expect(r.stdout).toContain('W_NO_VERIFY');
@@ -40,52 +43,87 @@ describe('practi lint', () => {
     expect(r.stdout).toContain('by code:');
   });
 
-  it('aggregates by code and ranks the worst nodes first', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    await pop(dir, ['new', writeDoc(dir, { name: 'Only thin', content: 'x' })]);
-    await pop(dir, ['new', writeDoc(dir, {
+  it('audits only the current branch head: a fixed commit clears the list (old revisions stay in the pool)', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'thin-p', '--base', writeDoc(parent, 'thin.json', { name: 'Thin practice', content: 'x' })]);
+    const repo = `${parent}/thin-p`;
+    expect((await runIn(repo, home, ['lint'])).stdout).toContain('W_THIN_CONTENT');
+
+    // 修好并提交 → lint 干净；池里旧节点还在（共 2 个），但审计对象只有新头
+    fs.writeFileSync(workingFile(repo), JSON.stringify({
+      name: 'Thin practice',
+      description: 'now properly described',
+      content: 'An opening paragraph that explains the point of this practice.',
+      outputs: [{ name: 'a verifiable outcome' }],
+    }, null, 2) + '\n', 'utf8');
+    expect((await runIn(repo, home, ['commit', '-m', 'fill in the blanks'])).code).toBe(0);
+    expect(chainOf(repo).commits).toHaveLength(2);
+
+    const r = await runIn(repo, home, ['lint']);
+    expect(r.stdout).toContain('clean');
+    expect(r.stdout).toContain('2 node(s) in the pool'); // 旧节点仍在池里，只是不再被审
+  });
+
+  it('aggregates by code and carries name + hash on every item (--json)', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'vague-p', '--base', writeDoc(parent, 'vague.json', {
       name: 'Worse practice',
       content: 'x',
       children: [{ name: '步骤 1', content: 'y' }, { name: '步骤 2', content: 'z' }],
     })]);
 
-    const body = JSON.parse((await pop(dir, ['lint', '--json'])).stdout);
+    const body = JSON.parse((await runIn(`${parent}/vague-p`, home, ['lint', '--json'])).stdout);
     expect(body.total).toBeGreaterThan(0);
+    expect(body.branch).toBe('main');
     const codes = body.byCode.map((c: { code: string }) => c.code);
     expect(codes).toContain('W_THIN_CONTENT');
     expect(codes).toContain('W_VAGUE_NAME');
     // 每个 item 都带节点名与哈希，机器消费方不必再查一次
     expect(body.items[0]).toHaveProperty('name');
     expect(body.items[0]).toHaveProperty('hash');
-    expect(body.roots).toBe(2);
   });
 
-  it('never blocks: exit code stays 0 however bad the corpus is', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    await pop(dir, ['new', writeDoc(dir, { name: '步骤', content: 'x' })]);
-    const r = await pop(dir, ['lint']);
+  it('never blocks: exit code stays 0 however bad the head is', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'thin-p', '--base', writeDoc(parent, 'thin.json', { name: '步骤', content: 'x' })]);
+    const r = await runIn(`${parent}/thin-p`, home, ['lint']);
     expect(r.code).toBe(0);
   });
 
-  it('says so on an empty workspace instead of pretending to be clean', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    const r = await pop(dir, ['lint']);
+  it('says so on an empty practice instead of pretending to be clean', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'empty-p']);
+    const r = await runIn(`${parent}/empty-p`, home, ['lint']);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain('no direct pops');
+    expect(r.stdout).toContain('(empty) empty-p@main');
   });
 
-  it('--limit caps how many nodes are listed', async () => {
-    const dir = tempDataDir();
-    await init(dir);
-    for (const n of ['A', 'B', 'C']) {
-      await pop(dir, ['new', writeDoc(dir, { name: `Thin ${n}`, content: 'x' })]);
-    }
-    const r = await pop(dir, ['lint', '--limit', '1']);
+  it('lists every hint-carrying head node, worst first', async () => {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    // 头文档带 3 个含提示的子步骤 → 3 组节点欠账
+    await runIn(parent, home, ['new', 'wide-p', '--base', writeDoc(parent, 'wide.json', {
+      name: 'Holder practice',
+      description: 'described so the root itself is not questioned',
+      content: 'A reasonable opening paragraph for the root practice.',
+      children: [
+        { name: 'Thin A', content: 'x' },
+        { name: 'Thin B', content: 'x' },
+        { name: 'Thin C', content: 'x' },
+      ],
+    })]);
+    const r = await runIn(`${parent}/wide-p`, home, ['lint']);
     const listed = (r.stdout.match(/^ {2}"/gm) ?? []).length;
-    expect(listed).toBe(1);
-    expect(r.stdout).toContain('worst 1 of 3');
+    expect(listed).toBe(3);
+    expect(r.stdout).toContain('worst 3 of 3');
   });
 });

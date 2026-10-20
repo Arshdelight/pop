@@ -1,60 +1,15 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import { PracticeError, initWorkspace, loadWorkspace, type Workspace } from '@arshdelight/pop-sdk';
-import { statePath, legacyStatePath, loadState } from './state.js';
+import type { Workspace } from '@arshdelight/pop-sdk';
 
-/** A data dir is initialized when it carries both the CLI state (practi.json,
- *  legacy pop.json counts) and the POP workspace marker */
-export function isInitialized(dataDir: string): boolean {
-  const hasState = fs.existsSync(statePath(dataDir)) || fs.existsSync(legacyStatePath(dataDir));
-  return hasState && fs.existsSync(path.join(dataDir, 'practice.yaml'));
-}
-
-export function requireDataDir(dataDir: string): void {
-  if (!isInitialized(dataDir)) {
-    throw new PracticeError('E_NOT_INITIALIZED', `no practi data directory at ${dataDir}`, {
-      hint: 'run `practi init <path>` first (or pass --data-dir)',
-    });
-  }
-}
-
-export function openWorkspace(dataDir: string): Workspace {
-  requireDataDir(dataDir);
-  return loadWorkspace(dataDir);
-}
-
-/** 节点文件的系统 mtime：这份内容落进本工作区的时刻（new/edit=创建或编辑时刻；
- *  导入时刻，非原创时刻）。repair 用它给老数据补认领戳 */
-export function nodeFileTime(dataDir: string, hash: string): string | null {
-  try {
-    return fs.statSync(path.join(dataDir, 'nodes', `${hash.slice('sha256:'.length)}.md`)).mtime.toISOString();
-  } catch {
-    return null;
-  }
-}
-
-/** Create the data dir (idempotent): workspace + CLI state. Adopts an existing workspace if present.
- *  既有 practi.json 一律保留（remote set 可先于 init 执行、legacy pop.json 迁移）——init 只补
- *  workspace，不动账本；账本缺失时经 loadState 读旧写新落盘（S2-2：覆写会抹掉 remote/instance）。 */
-export function initDataDir(dataDir: string): 'created' | 'exists' {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (isInitialized(dataDir)) return 'exists';
-  try {
-    initWorkspace(dataDir);
-  } catch (e) {
-    // practice.yaml already exists (workspace created by another tool); we still adopt it
-    if (!(e instanceof PracticeError && e.code === 'E_EXISTS')) throw e;
-  }
-  if (!fs.existsSync(statePath(dataDir))) {
-    fs.writeFileSync(statePath(dataDir), JSON.stringify(loadState(dataDir), null, 2) + '\n', 'utf8');
-  }
-  return 'created';
-}
+/**
+ * 实例池工具：文件夹模型下节点池在 <实例>/.practi/（practice.yaml+nodes/+blobs/），
+ * 打开一律走 practice.ts 的 openPool(repo)——本文件只留子树文件集这一个通用件。
+ */
 
 /**
  * 本次操作子树的节点文件集（nodes/<hex>.md，与 sdk validateWorkspace 的 issue.file 同形态）。
- * new/edit 的注册门禁只统计本次子树的校验问题——workspace 里其它文档的历史问题
- * （如 v1.1.0 前写的外链 media 引用、缺字节旧附件）不连坐本次创建/编辑的注册。
+ * commit/new 的门禁只统计本次子树的校验问题——池里其它文档的历史问题
+ * （如 v1.1.0 前写的外链 media 引用、缺字节旧附件）不连坐本次提交。
  */
 export function subtreeFiles(ws: Workspace, root: string): Set<string> {
   const out = new Set<string>();
@@ -70,4 +25,9 @@ export function subtreeFiles(ws: Workspace, root: string): Set<string> {
   };
   walk(root);
   return out;
+}
+
+export const PRACTI_DIRNAME = '.practi';
+export function poolPathFor(dir: string): string {
+  return path.join(dir, '.practi');
 }

@@ -1,34 +1,39 @@
 import { qualityWarnings, type QualityWarning } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, chainHead, resolveRepo } from '../practice.js';
 import { shortHash } from '../render.js';
 
 export interface LintOpts {
-  dataDir?: string;
+  dir?: string;
   json: boolean;
   /** 人类输出里最多列几个节点（按提示数降序） */
-  limit: number;
+  limit?: number;
 }
 
 /**
- * practi lint —— 全库记录质量审计。
+ * practi lint —— 当前实例当前支头的记录质量审计。
  *
- * `W_*` 原本只在 `new`/`edit` 那一刻出现一次，于是历史提示会静静积在语料里：
+ * `W_*` 原本只在创建内容的那一刻出现一次，于是历史提示会静静积在语料里：
  * 你知道「当时该补点什么」，但没有任何命令能把这些欠账列出来。lint 就是那道门：
- * 复用同一份 `qualityWarnings`（口径与创建时完全一致，不另立标准），扫全部 direct 根。
+ * 复用同一份 `qualityWarnings`（口径与创建时完全一致，不另立标准），审当前支的头文档。
  *
  * 纯读、不阻断：退出码恒为 0，它不是门禁，是清单。
  */
 export function runLint(opts: LintOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const ws = openWorkspace(dataDir);
-  const state = loadState(dataDir);
-  const roots = state.direct.filter((h) => ws.nodes.has(h));
-  const warnings = qualityWarnings(roots, ws.nodes);
+  const repo = resolveRepo({ dir: opts.dir, verb: 'lint' });
+  if (repo === null) return 1;
+  const ws = openPool(repo);
+  const head = chainHead(repo.chain);
+  if (head === null) {
+    console.log(`(empty) ${repo.chain.name}@${repo.chain.current}`);
+    return 0;
+  }
+  const warnings = qualityWarnings([head], ws.nodes);
 
   if (opts.json) {
     console.log(JSON.stringify({
-      roots: roots.length,
+      head,
+      practice: repo.chain.owner ? `${repo.chain.owner}/${repo.chain.name}` : repo.chain.name,
+      branch: repo.chain.current,
       nodes: ws.nodes.size,
       total: warnings.length,
       byCode: summarise(warnings),
@@ -37,12 +42,8 @@ export function runLint(opts: LintOpts): number {
     return 0;
   }
 
-  if (roots.length === 0) {
-    console.log('lint: no direct pops in this workspace');
-    return 0;
-  }
   if (warnings.length === 0) {
-    console.log(`lint: clean — ${roots.length} direct pop(s), ${ws.nodes.size} node(s), no W_* hints`);
+    console.log(`lint: clean — ${repo.chain.name}@${repo.chain.current} (${ws.nodes.size} node(s) in the pool), no W_* hints`);
     return 0;
   }
 
@@ -55,19 +56,20 @@ export function runLint(opts: LintOpts): number {
   }
   const ranked = [...groups.entries()].sort((a, b) => (b[1].length - a[1].length) || (a[0] < b[0] ? -1 : 1));
 
-  console.log(`lint: ${warnings.length} hint(s) on ${groups.size} of ${ws.nodes.size} node(s), across ${roots.length} direct pop(s)`);
+  console.log(`lint: ${warnings.length} hint(s) on ${groups.size} of ${ws.nodes.size} node(s), across ${repo.chain.name}@${repo.chain.current}`);
   console.log('\nby code:');
   for (const s of summarise(warnings)) {
     console.log(`  ${s.code.padEnd(15)} ${String(s.count).padStart(4)}  ${s.message}`);
   }
-  console.log(`\nnodes (worst ${Math.min(opts.limit, ranked.length)} of ${ranked.length}):`);
-  for (const [hash, list] of ranked.slice(0, opts.limit)) {
+  const limit = opts.limit ?? 20;
+  console.log(`\nnodes (worst ${Math.min(limit, ranked.length)} of ${ranked.length}):`);
+  for (const [hash, list] of ranked.slice(0, limit)) {
     const n = ws.nodes.get(hash)!;
     const tag = n.type === 'practice' ? `practice·${n.op}` : 'action';
     console.log(`  "${list[0].name}"  [${tag}]  ${shortHash(hash)}`);
     for (const w of list) console.log(`      ${w.code.padEnd(15)} ${w.message}`);
   }
-  console.log('\nhint: these never block anything. Fix them with `practi show <hash> --doc` → edit → `practi edit`.');
+  console.log('\nhint: these never block anything. Fix them with `practi show <hash> --doc` → edit the working file → `practi commit -m "..."`.');
   return 0;
 }
 

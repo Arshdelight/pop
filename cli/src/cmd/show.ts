@@ -5,12 +5,11 @@ import {
   resolveNodeRef,
   type PNode,
 } from '@arshdelight/pop-sdk';
-import { defaultDataDir } from '../state.js';
-import { openWorkspace } from '../workspace.js';
+import { openPool, resolveRepo } from '../practice.js';
 import { renderSteps, viewHeader } from '../render.js';
 
 export interface ShowOpts {
-  dataDir?: string;
+  dir?: string;
   hash: string;
   json: boolean;
   doc: boolean;
@@ -22,8 +21,9 @@ export interface ShowOpts {
  * 不进索引）——show 在「没找到」时先翻损坏记录，把「找到但哈希不正确」和「从未存在」
  * 分开说话。 */
 export function runShow(opts: ShowOpts): number {
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  const ws = openWorkspace(dataDir);
+  const repo = resolveRepo({ dir: opts.dir, verb: 'show' });
+  if (repo === null) return 1;
+  const ws = openPool(repo);
   let hash: string;
   try {
     hash = resolveNodeRef(ws, opts.hash);

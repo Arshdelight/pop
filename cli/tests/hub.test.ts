@@ -3,14 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parseDocument } from '@arshdelight/pop-sdk';
-import { freePort, init, pop, tempDataDir } from './helpers.js';
+import { freePort, init, pop, runIn, tempDataDir, chainOf, workingFile, poolFile, writeDoc } from './helpers.js';
 
 /**
- * hub 桥集成测试（双软件模型，2026-10-20）：本地 mock hub 打桩端点，凭据直写
- * practi.auth.json。覆盖 practice new/list/remove、publish（pop→实例新修订+推 hub）、
- * push（首推创建/FF/up-to-date/分叉报错/--force）、branch/switch（本地链）、
- * merge（FF/指针移动）、history（reword/squash/reset）、log（本地链）、clone/pull、
- * fetch（单拉 POP 入 pops 区）。
+ * 实例文件夹 + hub 桥集成测试（文件夹模型，2026-10-20）：本地 mock hub 打桩端点，
+ * 凭据直写配置家。覆盖 new（--base 诞生）、commit（含 --amend/门禁回滚）、export、
+ * push（首推创建/缺支自动创建/FF/up-to-date/分叉报错/--force）、pull、clone、
+ * branch/switch（dirty 守卫）、merge、history（reword/squash/drop/reset）、log、web。
  */
 
 const DOC = { name: 'Hub bridge doc', content: 'Content that travels to the hub.' };
@@ -26,12 +25,12 @@ interface MockState {
   lastMessage: string | null;
   /** force 端点收到的链（断言用） */
   lastForceCommits: { seq: number; root_hash: string; parent_hash: string | null; message: string }[] | null;
-  /** CLI 对远端缺失的支自动建支的记录（真实 hub：显式未知支名视图 404，建支后重取） */
-  createdBranches: string[];
   remoteDocs: Map<string, unknown>;
   storeCalls: number;
   forceCalls: number;
   createdInstances: { name: string; visibility?: string }[];
+  /** CLI 对远端缺失的支自动建支的记录（真实 hub：显式未知支名视图 404，建支后重取） */
+  createdBranches: string[];
 }
 
 let server: http.Server;
@@ -160,8 +159,8 @@ afterAll(() => {
   server.close();
 });
 
-/** mock hub + 已登录凭据的一次性工作区 */
-async function hubWorkspace(): Promise<string> {
+/** mock hub + 已登录凭据的配置家 */
+async function hubHome(): Promise<string> {
   const dir = tempDataDir();
   await init(dir);
   const rs = await pop(dir, ['remote', 'set', baseUrl]);
@@ -182,356 +181,306 @@ async function hubWorkspace(): Promise<string> {
   return dir;
 }
 
-function chainOf(dir: string, name: string): { branches: Record<string, string | null>; commits: { seq: number; root: string; parent: string | null; message: string; pushedAt?: string }[]; owner: string | null; current: string } {
-  return JSON.parse(fs.readFileSync(path.join(dir, 'practices', name, 'chain.json'), 'utf8'));
+/** 带一篇首版修订的实例文件夹（new --base） */
+async function practiceWithCommit(home: string, parent = tempDataDir()): Promise<{ repo: string; root: string }> {
+  const file = writeDoc(parent, 'seed-doc.json', DOC);
+  const created = await runIn(parent, home, ['new', 'my-practice', '--base', file]);
+  if (created.code !== 0) throw new Error(`new failed: ${created.stdout}\n${created.stderr}`);
+  const repo = path.join(parent, 'my-practice');
+  return { repo, root: chainOf(repo).commits[0]!.root };
 }
 
-describe('practice new / list / remove（本地实例仓库）', () => {
-  it('practice new 登记 registry 实例（chain.json 落盘，main 空支）', async () => {
-    const dir = await hubWorkspace();
-    const out = await pop(dir, ['practice', 'new', 'my-practice']);
-    expect(out.code).toBe(0);
-    expect(out.stdout).toMatch(/created practice: my-practice/);
-    const chain = chainOf(dir, 'my-practice');
+describe('new：实例文件夹诞生', () => {
+  it('new --base：工作文件+链 v1+.practi 池；目录已存在拒绝', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const file = writeDoc(parent, 'doc.json', DOC);
+    const out = await runIn(parent, home, ['new', 'my-practice', '--base', file]);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+    const repo = path.join(parent, 'my-practice');
+    expect(fs.existsSync(workingFile(repo))).toBe(true);
+    const chain = chainOf(repo);
     expect(chain.name).toBe('my-practice');
     expect(chain.owner).toBeNull();
-    expect(chain.branches).toEqual({ main: null });
-    expect(chain.commits).toEqual([]);
-
-    const list = await pop(dir, ['practice', 'list']);
-    expect(list.stdout).toMatch(/my-practice/);
-  });
-
-  it('practice remove 撤本地登记；hub 不被触碰（零网络调用计数不变）', async () => {
-    const dir = await hubWorkspace();
-    await pop(dir, ['practice', 'new', 'gone']);
-    const out = await pop(dir, ['practice', 'remove', 'gone']);
-    expect(out.code).toBe(0);
-    expect(out.stdout).toMatch(/removed practice: gone/);
-    expect(fs.existsSync(path.join(dir, 'practices', 'gone'))).toBe(false);
-    const list = await pop(dir, ['practice', 'list']);
-    expect(list.stdout).toMatch(/no practices/);
-  });
-});
-
-describe('publish：pop → 实例新修订 + 推 hub', () => {
-  it('publish --to 首推：链登记+hub 创建实例+FF 推送+pops 原稿移除', async () => {
-    const dir = await hubWorkspace();
-    const root = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-
-    const out = await pop(dir, ['publish', root, '--to', 'my-practice']);
-    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-    expect(out.stdout).toMatch(new RegExp(`published: Hub bridge doc.*my-practice@main.*v1.*${root.slice(7, 19)}`));
-    // hub：实例创建 + FF 存文档
-    expect(mock.createdInstances).toEqual([{ name: 'my-practice', visibility: 'PRIVATE' }]);
-    expect(mock.storeCalls).toBe(1);
-    // chain.json：owner 回填+提交登记+支头
-    const chain = chainOf(dir, 'my-practice');
-    expect(chain.owner).toBe('tester');
+    expect(chain.branches).toEqual({ main: chain.commits[0]!.root });
     expect(chain.commits).toHaveLength(1);
-    expect(chain.commits[0].root).toBe(root);
-    expect(chain.commits[0].pushedAt).toBeDefined();
-    expect(chain.branches.main).toBe(root);
-    // pops 原稿移除（移入实例后游离副本清掉；pop 文档以实例修订身份存在）
-    const st = JSON.parse(fs.readFileSync(path.join(dir, 'practi.json'), 'utf8'));
-    expect(st.direct).not.toContain(root);
+    expect(fs.existsSync(poolFile(repo, chain.commits[0]!.root))).toBe(true);
+
+    const again = await runIn(parent, home, ['new', 'my-practice']);
+    expect(again.code).toBe(1);
+    expect(again.stderr).toMatch(/already exists/);
   });
 
-  it('publish --keep 保留 pops 原稿', async () => {
-    const dir = await hubWorkspace();
-    const root = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    const out = await pop(dir, ['publish', root, '--to', 'my-practice', '--keep']);
-    expect(out.code).toBe(0);
-    expect(out.stdout).toMatch(/kept:/);
-    const st = JSON.parse(fs.readFileSync(path.join(dir, 'practi.json'), 'utf8'));
-    expect(st.direct).toContain(root);
+  it('new 空仓库：链空支 null，工作文件不存在时 commit 给指引', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'empty-practice']);
+    const repo = path.join(parent, 'empty-practice');
+    expect(chainOf(repo).branches).toEqual({ main: null });
+    const c = await runIn(repo, home, ['commit', '-m', 'x']);
+    expect(c.code).toBe(1);
+    expect(c.stderr).toMatch(/working file empty-practice\.json not found/);
   });
+});
 
-  it('publish 移入后实例链根受 gc 保护——第二次 publish 清 pops 不清历史节点', async () => {
-    const dir = await hubWorkspace();
-    const root1 = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root1, '--to', 'my-practice']);
-    const root2 = (await pop(dir, ['new', '--json', JSON.stringify(DOC2)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root2, '--to', 'my-practice']);
-    // 第二次 publish 的 gc：direct 已空，v1 只被实例链保护——registry 链必须计入根集合
-    expect(fs.existsSync(path.join(dir, 'nodes', root1.slice('sha256:'.length) + '.md'))).toBe(true);
-  });
+describe('commit：快照工作文件（本地）', () => {
+  it('修订追加：链上 v2、工作文件与头一致时 nothing to commit', async () => {
+    const home = await hubHome();
+    const { repo, root } = await practiceWithCommit(home);
+    const wf = workingFile(repo);
+    const edited = JSON.parse(fs.readFileSync(wf, 'utf8')) as { content: string };
+    edited.content = 'Changed content for revision two.';
+    fs.writeFileSync(wf, JSON.stringify(edited, null, 2) + '\n', 'utf8');
 
-  it('publish 文件路径直达：不经 pops，任意目录的 pop 文件发布进实例', async () => {
-    const dir = await hubWorkspace();
-    await pop(dir, ['practice', 'new', 'my-practice']);
-    const file = path.join(dir, 'elsewhere.json');
-    fs.writeFileSync(file, JSON.stringify(DOC2), 'utf8');
-    const before = mock.storeCalls;
-    const out = await pop(dir, ['publish', file, '--to', 'my-practice']);
+    const out = await runIn(repo, home, ['commit', '-m', 'second revision']);
     expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-    expect(out.stdout).toMatch(/published: Second pop/);
-    expect(mock.storeCalls).toBe(before + 1);
-  });
-});
+    const chain = chainOf(repo);
+    expect(chain.commits).toHaveLength(2);
+    expect(chain.commits[1]!.message).toBe('second revision');
+    expect(chain.commits[1]!.parent).toBe(root);
+    expect(chain.branches.main).toBe(chain.commits[1]!.root);
+    expect(chain.owner).toBeNull(); // commit 不碰网络
 
-describe('push：首推创建 / up to date / 分叉与 --force', () => {
-  it('push 首推创建实例并推链；重推=up to date', async () => {
-    const dir = await hubWorkspace();
-    await pop(dir, ['practice', 'new', 'solo']);
-    const root = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    const pub = await pop(dir, ['publish', root, '--to', 'solo', '--keep']);
-    expect(pub.code).toBe(0);
-
-    // 再推：hub 视图反映推后的链 → up to date
-    mock.mainChain = [{ seq: 1, root_hash: root, parent_hash: null }];
-    try {
-      const out = await pop(dir, ['push', '--practice', 'solo']);
-      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-      expect(out.stdout).toMatch(/up to date/);
-    } finally {
-      mock.mainChain = [];
-    }
+    const again = await runIn(repo, home, ['commit', '-m', 'noop']);
+    expect(again.code).toBe(0);
+    expect(again.stdout).toMatch(/nothing to commit/);
+    expect(chainOf(repo).commits).toHaveLength(2);
   });
 
-  it('分叉：hub 头不在本地链 → 报错；--force 走全链端点且报 dropped', async () => {
-    const dir = await hubWorkspace();
-    await pop(dir, ['practice', 'new', 'solo']);
-    const root = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root, '--to', 'solo', '--keep']);
+  it('坏 JSON 拒绝；解析不过的 --base 干净拒绝（不留半截文件夹）', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const repo = path.join(parent, 'my-practice');
 
-    // hub 头在别处（不认识本地链）
-    mock.mainChain = [{ seq: 3, root_hash: 'sha256:' + '9'.repeat(64), parent_hash: null }];
-    try {
-      const rejected = await pop(dir, ['push', '--practice', 'solo']);
-      expect(rejected.code).toBe(1);
-      expect(rejected.stderr).toMatch(/diverged/);
-      expect(rejected.stderr).toMatch(/--force/);
-      expect(mock.forceCalls).toBe(0);
-
-      const forced = await pop(dir, ['push', '--practice', 'solo', '--force']);
-      expect(forced.code, `stdout=${forced.stdout} stderr=${forced.stderr}`).toBe(0);
-      expect(forced.stdout).toMatch(/forced:/);
-      expect(mock.forceCalls).toBe(1);
-      expect(mock.lastForceCommits).toHaveLength(1);
-      expect(mock.lastForceCommits![0].root_hash).toBe(root);
-      // 本地链推后全盖戳
-      expect(chainOf(dir, 'solo').commits[0].pushedAt).toBeDefined();
-    } finally {
-      mock.mainChain = [];
-    }
-  });
-});
-
-describe('branch / switch / merge（本地链）', () => {
-  async function practiceWithCommit(dir: string): Promise<string> {
-    await pop(dir, ['practice', 'new', 'my-practice']);
-    const root = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root, '--to', 'my-practice', '--keep']);
-    return root;
-  }
-
-  it('branch 列表 * 标当前支；建支/删支走本地链', async () => {
-    const dir = await hubWorkspace();
-    const root = await practiceWithCommit(dir);
-    const list = await pop(dir, ['branch']);
-    expect(list.stdout).toMatch(/^\* main/m);
-
-    const create = await pop(dir, ['branch', 'feat']);
-    expect(create.code).toBe(0);
-    expect(create.stdout).toMatch(/created branch: feat/);
-    expect(chainOf(dir, 'my-practice').branches.feat).toBe(root);
-
-    const del = await pop(dir, ['branch', '-d', 'feat']);
-    expect(del.code).toBe(0);
-    expect(chainOf(dir, 'my-practice').branches.feat).toBeUndefined();
-  });
-
-  it('switch 切当前支（写 chain.json）；不存在的支报错', async () => {
-    const dir = await hubWorkspace();
-    await practiceWithCommit(dir);
-    await pop(dir, ['branch', 'feat']);
-    const sw = await pop(dir, ['switch', 'feat']);
-    expect(sw.code).toBe(0);
-    expect(chainOf(dir, 'my-practice').current).toBe('feat');
-
-    const bad = await pop(dir, ['switch', 'nope']);
+    const bad = await runIn(parent, home, ['new', 'my-practice', '--base', writeDoc(parent, 'broken.json', { type: 'practice', name: 'x', content: 'y' })]);
     expect(bad.code).toBe(1);
-    expect(chainOf(dir, 'my-practice').current).toBe('feat');
+    expect(fs.existsSync(repo)).toBe(false); // practice 类型无 children 解析不过 → 不落盘
+
+    const file = writeDoc(parent, 'doc.json', DOC);
+    await runIn(parent, home, ['new', 'my-practice', '--base', file]);
+    const wf = workingFile(repo);
+    const before = chainOf(repo).commits.length;
+
+    fs.writeFileSync(wf, '{ not json', 'utf8');
+    const out = await runIn(repo, home, ['commit', '-m', 'bad']);
+    expect(out.code).toBe(1);
+    expect(out.stderr).toMatch(/E_JSON/);
+    expect(chainOf(repo).commits.length).toBe(before);
   });
 
-  it('merge：FF 纯移指针零新提交；同树分叉=指针移动', async () => {
-    const dir = await hubWorkspace();
-    const root = await practiceWithCommit(dir);
-    mock.createdBranches = []; // 本测试要断言「推本地新支时对 hub 自动建支」
-    await pop(dir, ['branch', 'feat']);
-    // feat 支上发布一篇新 pop
-    const root2 = (await pop(dir, ['new', '--json', JSON.stringify(DOC2)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['switch', 'feat']);
-    const pub = await pop(dir, ['publish', root2, '--keep']);
-    expect(pub.code).toBe(0);
-    expect(chainOf(dir, 'my-practice').branches.feat).toBe(root2);
+  it('--amend 替换支头；message-only amend 即改说明', async () => {
+    const home = await hubHome();
+    const { repo } = await practiceWithCommit(home);
+    const wf = workingFile(repo);
+    const edited = JSON.parse(fs.readFileSync(wf, 'utf8')) as { content: string };
+    edited.content = 'Amended body.';
+    fs.writeFileSync(wf, JSON.stringify(edited, null, 2) + '\n', 'utf8');
+    const out = await runIn(repo, home, ['commit', '--amend', '-m', 'renamed head']);
+    expect(out.code).toBe(0);
+    const chain = chainOf(repo);
+    expect(chain.commits).toHaveLength(1);
+    expect(chain.commits[0]!.message).toBe('renamed head');
+    expect(chain.commits[0]!.pushedAt).toBeUndefined();
 
-    // main ← feat：feat 头的 parent=root(main 头) → FF 纯移指针
-    const before = chainOf(dir, 'my-practice').commits.length;
-    const ff = await pop(dir, ['switch', 'main']);
+    const reword = await runIn(repo, home, ['commit', '--amend', '-m', 'reworded only']);
+    expect(reword.code).toBe(0);
+    expect(chainOf(repo).commits[0]!.message).toBe('reworded only');
+  });
+});
+
+describe('export：修订 → 文档文件', () => {
+  it('头修订 round-trip（stdout 纯 JSON）；-o 落盘', async () => {
+    const home = await hubHome();
+    const { repo, root } = await practiceWithCommit(home);
+    const out = await runIn(repo, home, ['export', root.slice(7, 19)]);
+    expect(out.code).toBe(0);
+    const doc = JSON.parse(out.stdout) as { name: string };
+    expect(doc.name).toBe(DOC.name);
+    const target = path.join(repo, 'exported.json');
+    const o = await runIn(repo, home, ['export', root.slice(7, 19), '-o', target]);
+    expect(o.code).toBe(0);
+    expect((JSON.parse(fs.readFileSync(target, 'utf8')) as { name: string }).name).toBe(DOC.name);
+  });
+});
+
+describe('branch / switch：支指针 + dirty 守卫', () => {
+  it('branch 建删列；* 标当前支；switch 回写工作文件，dirty 拒切', async () => {
+    const home = await hubHome();
+    const { repo, root } = await practiceWithCommit(home);
+    await runIn(repo, home, ['branch', 'feat']);
+    const list1 = await runIn(repo, home, ['branch']);
+    expect(list1.stdout).toMatch(/\* main/);
+    expect(list1.stdout).toMatch(/^  feat/m);
+
+    const sw = await runIn(repo, home, ['switch', 'feat']);
+    expect(sw.code).toBe(0);
+    const list2 = await runIn(repo, home, ['branch']);
+    expect(list2.stdout).toMatch(/\* feat/);
+
+    // dirty：改工作文件后拒切，头不变
+    const wf = workingFile(repo);
+    fs.writeFileSync(wf, JSON.stringify({ ...DOC, content: 'dirty' }, null, 2) + '\n', 'utf8');
+    const refused = await runIn(repo, home, ['switch', 'main']);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/uncommitted changes/);
+    expect(chainOf(repo).current).toBe('feat');
+
+    fs.writeFileSync(wf, JSON.stringify(DOC, null, 2) + '\n', 'utf8');
+    const ok = await runIn(repo, home, ['switch', 'main']);
+    expect(ok.code).toBe(0);
+    expect((JSON.parse(fs.readFileSync(wf, 'utf8')) as { name: string }).name).toBe(DOC.name);
+    void root;
+  });
+
+  it('不存在的支报错', async () => {
+    const home = await hubHome();
+    const { repo } = await practiceWithCommit(home);
+    const bad = await runIn(repo, home, ['switch', 'nope']);
+    expect(bad.code).toBe(1);
+    expect(chainOf(repo).current).toBe('main');
+  });
+});
+
+describe('merge：FF 与指针移动 + dirty 守卫', () => {
+  it('FF 纯移指针零新提交；分叉=指针移动；dirty 拒合并', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const { repo } = await practiceWithCommit(home, parent);
+    await runIn(repo, home, ['branch', 'feat']);
+    await runIn(repo, home, ['switch', 'feat']);
+    // feat 支上提交一版
+    const wf = workingFile(repo);
+    fs.writeFileSync(wf, JSON.stringify(DOC2, null, 2) + '\n', 'utf8');
+    const c = await runIn(repo, home, ['commit', '-m', 'feat revision']);
+    expect(c.code, `stdout=${c.stdout} stderr=${c.stderr}`).toBe(0);
+    const featHead = chainOf(repo).branches.feat!;
+
+    const ff = await runIn(repo, home, ['switch', 'main']).then(() => runIn(repo, home, ['merge', 'feat']));
     expect(ff.code).toBe(0);
-    const merged = await pop(dir, ['merge', 'feat']);
-    expect(merged.code).toBe(0);
-    expect(merged.stdout).toMatch(/fast-forward: main →/);
-    expect(chainOf(dir, 'my-practice').branches.main).toBe(root2);
-    expect(chainOf(dir, 'my-practice').commits.length).toBe(before); // FF 零新提交
+    expect(ff.stdout).toMatch(/fast-forward: main/);
+    const chain = chainOf(repo);
+    expect(chain.branches.main).toBe(featHead);
+    expect(chain.commits).toHaveLength(2); // FF 零新提交
+    expect((JSON.parse(fs.readFileSync(wf, 'utf8')) as { name: string }).name).toBe(DOC2.name); // 工作文件跟头
 
-    // 分叉合并：两支各有独立提交 → 指针移动（同树提交即同一提交，无法带第二 parent）
-    await pop(dir, ['branch', 'topic', '--from', root]);
-    const root3 = (await pop(dir, ['new', '--json', JSON.stringify({ name: 'Topic pop', content: 'topic body' })])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['switch', 'topic']);
-    await pop(dir, ['publish', root3, '--keep']);
-    await pop(dir, ['switch', 'main']);
-    const diverged = await pop(dir, ['merge', 'topic']);
+    // 分叉：topic 从 v1 建支，独立提交 → main 合并 = 指针移动
+    await runIn(repo, home, ['branch', 'topic', '--from', chain.commits[0]!.root]);
+    await runIn(repo, home, ['switch', 'topic']);
+    fs.writeFileSync(wf, JSON.stringify({ name: 'Topic pop', content: 'topic body' }, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '-m', 'topic revision']);
+    await runIn(repo, home, ['switch', 'main']);
+    const diverged = await runIn(repo, home, ['merge', 'topic']);
     expect(diverged.code).toBe(0);
     expect(diverged.stdout).toMatch(/pointer move/);
-    expect(chainOf(dir, 'my-practice').branches.main).toBe(root3);
-    // 两支都是本地诞生、首推时对 hub 自动建支（视图 404 → POST branches → 重取）
-    expect(mock.createdBranches).toEqual(['feat', 'topic']);
+    expect(chainOf(repo).branches.main).toBe(chainOf(repo).branches.topic);
+
+    // dirty 拒合并
+    fs.writeFileSync(wf, JSON.stringify({ ...DOC, content: 'dirty merge' }, null, 2) + '\n', 'utf8');
+    const refused = await runIn(repo, home, ['merge', 'feat']);
+    expect(refused.code).toBe(1);
+    expect(refused.stderr).toMatch(/uncommitted changes/);
   });
 });
 
-describe('history：本地链重写', () => {
-  async function practiceWithTwoCommits(dir: string): Promise<{ root1: string; root2: string }> {
-    await pop(dir, ['practice', 'new', 'my-practice']);
-    const root1 = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root1, '--to', 'my-practice', '--keep']);
-    const root2 = (await pop(dir, ['new', '--json', JSON.stringify(DOC2)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root2, '--to', 'my-practice', '--keep']);
-    return { root1, root2 };
-  }
+describe('push：首推创建/缺支自动创建/FF/分叉/--force', () => {
+  it('首推在 hub 诞生实例（回填 owner）；FF 逐条；再推 up to date', async () => {
+    const home = await hubHome();
+    const { repo, root } = await practiceWithCommit(home);
+    const out = await runIn(repo, home, ['push']);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+    expect(out.stdout).toMatch(new RegExp(`created on the hub: ${ME.username}/my-practice`));
+    expect(mock.createdInstances).toEqual([{ name: 'my-practice', visibility: 'PRIVATE' }]);
+    expect(mock.storeCalls).toBe(1);
+    expect(chainOf(repo).owner).toBe(ME.username);
+    expect(chainOf(repo).commits[0]!.pushedAt).toBeDefined();
 
-  it('reword 改中间条说明（root 不变）；重写后 push 分叉须 --force', async () => {
-    const dir = await hubWorkspace();
-    const { root1 } = await practiceWithTwoCommits(dir);
-    const out = await pop(dir, ['history', 'reword', '1', '-m', '初版：修正说明']);
-    expect(out.code).toBe(0);
-    expect(out.stdout).toMatch(/reworded: v1/);
-    const chain = chainOf(dir, 'my-practice');
-    expect(chain.commits[0].message).toBe('初版：修正说明');
-    expect(chain.commits[0].root).toBe(root1);
-    expect(chain.commits[0].pushedAt).toBeUndefined(); // 重写清戳
-
-    mock.mainChain = [
-      { seq: 2, root_hash: chain.commits[1].root, parent_hash: root1 },
-      { seq: 1, root_hash: root1, parent_hash: null },
-    ];
-    try {
-      const rejected = await pop(dir, ['push', '--practice', 'my-practice']);
-      expect(rejected.code).toBe(1);
-      expect(rejected.stderr).toMatch(/push --force/);
-    } finally {
-      mock.mainChain = [];
-    }
+    mock.mainChain = [{ seq: 1, root_hash: root, parent_hash: null }]; // hub 视角已有这条链
+    const again = await runIn(repo, home, ['push']);
+    expect(again.code).toBe(0);
+    expect(again.stdout).toMatch(/up to date/);
+    expect(mock.storeCalls).toBe(1);
+    mock.mainChain = [];
   });
 
-  it('squash 合并相邻两条（内容取后者，说明拼接，seq 重排）', async () => {
-    const dir = await hubWorkspace();
-    const { root1, root2 } = await practiceWithTwoCommits(dir);
-    const out = await pop(dir, ['history', 'squash', '1']);
-    expect(out.code).toBe(0);
-    const chain = chainOf(dir, 'my-practice');
-    expect(chain.commits).toHaveLength(1);
-    expect(chain.commits[0].seq).toBe(1);
-    expect(chain.commits[0].root).toBe(root2);
-    expect(chain.commits[0].message).toContain('Hub bridge doc');
-    expect(chain.commits[0].message).toContain('Second pop');
-    expect(chain.commits[0].parent).toBeNull();
-    expect(chain.branches.main).toBe(root2);
-    void root1;
+  it('本地新建的支首推时对 hub 自动建支（视图 404 → POST branches → 重取）', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const { repo } = await practiceWithCommit(home, parent);
+    await runIn(repo, home, ['push']);
+    mock.createdBranches = [];
+    await runIn(repo, home, ['branch', 'feat']);
+    await runIn(repo, home, ['switch', 'feat']);
+    const wf = workingFile(repo);
+    fs.writeFileSync(wf, JSON.stringify(DOC2, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '-m', 'feat revision']);
+    const out = await runIn(repo, home, ['push']);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+    expect(out.stdout).toMatch(/branch created on the hub: feat/);
+    expect(mock.createdBranches).toEqual(['feat']);
   });
 
-  it('reset 回退支头：其后提交丢弃', async () => {
-    const dir = await hubWorkspace();
-    await practiceWithTwoCommits(dir);
-    const out = await pop(dir, ['history', 'reset', '1']);
-    expect(out.code).toBe(0);
-    const chain = chainOf(dir, 'my-practice');
-    expect(chain.commits).toHaveLength(1);
-    expect(chain.branches.main).toBe(chain.commits[0].root);
-  });
+  it('分叉报错；--force 全链覆盖（hub dropped 回执透传）', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const { repo, root } = await practiceWithCommit(home, parent);
+    await runIn(repo, home, ['push']);
+    mock.mainChain = [{ seq: 1, root_hash: root, parent_hash: null }];
+    // 本地重写：amend 换内容（root 变）→ 与 hub 真分叉（hub 头不在本地链）
+    fs.writeFileSync(workingFile(repo), JSON.stringify({ ...DOC, content: 'rewritten body' }, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '--amend', '-m', 'rewritten locally']);
+    const rewritten = chainOf(repo).commits[0]!.root;
+    expect(rewritten).not.toBe(root);
+    const rejected = await runIn(repo, home, ['push']);
+    expect(rejected.code).toBe(1);
+    expect(rejected.stderr).toMatch(/push --force/);
 
-  it('reset 丢弃的提交被其它支指着 → 悬空指针沿重写前 parent 链落到存活祖先（不是空支）', async () => {
-    const dir = await hubWorkspace();
-    const { root1 } = await practiceWithTwoCommits(dir);
-    await pop(dir, ['branch', 'feat']); // feat = main 头 = v2
-    await pop(dir, ['history', 'reset', '1']); // main 回 v1，v2 丢弃——feat 悬空
-    const chain = chainOf(dir, 'my-practice');
-    expect(chain.branches.main).toBe(root1);
-    expect(chain.branches.feat).toBe(root1); // v2 的重写前 parent = v1（存活）
+    mock.forceDropped = 1;
+    const forced = await runIn(repo, home, ['push', '--force']);
+    expect(forced.code, `stdout=${forced.stdout} stderr=${forced.stderr}`).toBe(0);
+    expect(forced.stdout).toMatch(/forced:\s+1 revision\(s\)/);
+    expect(forced.stdout).toMatch(/hub dropped 1 unreachable/);
+    expect(mock.lastForceCommits).toEqual([
+      { seq: 1, root_hash: rewritten, parent_hash: null, message: 'rewritten locally' },
+    ]);
+    expect(chainOf(repo).commits[0]!.pushedAt).toBeDefined();
+    mock.mainChain = [];
+    mock.forceDropped = 0;
   });
 });
 
-describe('log / clone / pull / fetch', () => {
-  it('log 列本地链（tip 在前）；--json 出结构', async () => {
-    const dir = await hubWorkspace();
-    await pop(dir, ['practice', 'new', 'my-practice']);
-    const root1 = (await pop(dir, ['new', '--json', JSON.stringify(DOC)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root1, '--to', 'my-practice', '--keep']);
-    const root2 = (await pop(dir, ['new', '--json', JSON.stringify(DOC2)])).stdout.match(/sha256:[0-9a-f]{64}/)?.[0]!;
-    await pop(dir, ['publish', root2, '--to', 'my-practice', '--keep']);
-
-    const out = await pop(dir, ['log', '--practice', 'my-practice']);
-    expect(out.code).toBe(0);
-    expect(out.stdout).toMatch(new RegExp(`v2\\s+${root2.slice(7, 19)}`));
-    expect(out.stdout).toMatch(new RegExp(`v1\\s+${root1.slice(7, 19)}`));
-
-    const j = await pop(dir, ['log', '--practice', 'my-practice', '--json']);
-    const parsed = JSON.parse(j.stdout) as { branch: string; revisions: { seq: number }[] };
-    expect(parsed.branch).toBe('main');
-    expect(parsed.revisions).toHaveLength(2);
-  });
-
-  it('clone 全链落本地实例仓库（chain.json 同构，不再写 direct 绑定）', async () => {
-    const dir = await hubWorkspace();
+describe('pull：对账 + dirty 守卫', () => {
+  it('hub 前进 → 补对象补链+FF+工作文件回写；未推实例拒拉', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
     const root1 = parseDocument(DOC).rootHash;
+    const root2 = parseDocument(DOC2).rootHash;
     mock.remoteDocs.set(root1, DOC);
     mock.mainChain = [{ seq: 1, root_hash: root1, parent_hash: null }];
-    try {
-      const out = await pop(dir, ['clone', 'tester/my-practice']);
-      expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-      expect(out.stdout).toMatch(/cloned:  tester\/my-practice \(PRIVATE, branch main, 1 revision/);
-      const chain = chainOf(dir, 'my-practice');
-      expect(chain.owner).toBe('tester');
-      expect(chain.commits).toHaveLength(1);
-      expect(chain.commits[0].root).toBe(root1);
-      expect(chain.commits[0].pushedAt).toBeDefined();
-      expect(chain.branches.main).toBe(root1);
-      expect(fs.existsSync(path.join(dir, 'nodes', root1.slice('sha256:'.length) + '.md'))).toBe(true);
-    } finally {
-      mock.mainChain = [];
-      mock.remoteDocs.delete(root1);
-    }
-  });
+    const cloned = await runIn(parent, home, ['clone', 'tester/my-practice']);
+    expect(cloned.code, `stdout=${cloned.stdout} stderr=${cloned.stderr}`).toBe(0);
+    const repo = path.join(parent, 'my-practice');
 
-  it('pull：hub 前进 → 补对象补链 + 支指针快进；未推分叉报错', async () => {
-    const dir = await hubWorkspace();
-    const root1 = parseDocument(DOC).rootHash;
-    const CHAIN_V2 = { name: 'Second pop', content: 'v2 body' };
-    const root2 = parseDocument(CHAIN_V2).rootHash;
-    mock.remoteDocs.set(root1, DOC);
-    mock.mainChain = [{ seq: 1, root_hash: root1, parent_hash: null }];
-    await pop(dir, ['clone', 'tester/my-practice']);
-
-    // hub 前进到 v2（parent=v1）
-    mock.remoteDocs.set(root2, CHAIN_V2);
+    mock.remoteDocs.set(root2, DOC2);
     mock.mainChain = [
       { seq: 2, root_hash: root2, parent_hash: root1 },
       { seq: 1, root_hash: root1, parent_hash: null },
     ];
     try {
-      const out = await pop(dir, ['pull']);
+      const out = await runIn(repo, home, ['pull']);
       expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-      const chain = chainOf(dir, 'my-practice');
+      const chain = chainOf(repo);
       expect(chain.commits).toHaveLength(2);
       expect(chain.branches.main).toBe(root2);
-      expect(chain.commits[1].pushedAt).toBeDefined();
+      expect((JSON.parse(fs.readFileSync(workingFile(repo), 'utf8')) as { name: string }).name).toBe(DOC2.name);
 
-      // 再拉：up to date
-      const again = await pop(dir, ['pull']);
-      expect(again.code).toBe(0);
+      const again = await runIn(repo, home, ['pull']);
       expect(again.stdout).toMatch(/up to date/);
+
+      // dirty 拒拉
+      fs.writeFileSync(workingFile(repo), JSON.stringify({ ...DOC, content: 'dirty' }, null, 2) + '\n', 'utf8');
+      const refused = await runIn(repo, home, ['pull']);
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toMatch(/uncommitted changes/);
     } finally {
       mock.mainChain = [];
       mock.remoteDocs.delete(root1);
@@ -539,23 +488,142 @@ describe('log / clone / pull / fetch', () => {
     }
   });
 
-  it('pull 本地新实例（未推）→ 指引先 push；fetch 单拉修订入 pops 区照旧', async () => {
-    const dir = await hubWorkspace();
-    await pop(dir, ['practice', 'new', 'fresh']);
-    const never = await pop(dir, ['pull', '--practice', 'fresh']);
+  it('本地新实例（未推）拒拉', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    await runIn(parent, home, ['new', 'fresh']);
+    const never = await runIn(path.join(parent, 'fresh'), home, ['pull']);
     expect(never.code).toBe(1);
     expect(never.stderr).toMatch(/never been pushed/);
+  });
+});
 
-    const root = parseDocument(DOC).rootHash;
-    mock.remoteDocs.set(root, DOC); // 前面用例的 finally 可能删过 DOC，自给自足
+describe('clone：全链落实例文件夹', () => {
+  it('工作文件+链同构+池对象齐', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const root1 = parseDocument(DOC).rootHash;
+    mock.remoteDocs.set(root1, DOC);
+    mock.mainChain = [{ seq: 1, root_hash: root1, parent_hash: null }];
     try {
-      const out = await pop(dir, ['fetch', 'tester/my-practice', root]);
+      const out = await runIn(parent, home, ['clone', 'tester/my-practice']);
       expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
-      expect(out.stdout).toMatch(new RegExp(`fetched: ${root}`));
-      const st = JSON.parse(fs.readFileSync(path.join(dir, 'practi.json'), 'utf8'));
-      expect(st.direct).toContain(root);
+      const repo = path.join(parent, 'my-practice');
+      const chain = chainOf(repo);
+      expect(chain.owner).toBe('tester');
+      expect(chain.commits).toHaveLength(1);
+      expect(chain.commits[0]!.root).toBe(root1);
+      expect(chain.commits[0]!.pushedAt).toBeDefined();
+      expect((JSON.parse(fs.readFileSync(workingFile(repo), 'utf8')) as { name: string }).name).toBe(DOC.name);
+      expect(fs.existsSync(poolFile(repo, root1))).toBe(true);
     } finally {
-      mock.remoteDocs.delete(root);
+      mock.mainChain = [];
+      mock.remoteDocs.delete(root1);
+    }
+  });
+});
+
+/** 带两版修订的实例文件夹（v1=DOC、v2=DOC2） */
+async function practiceWithTwoCommits(home: string, parent = tempDataDir()): Promise<{ repo: string; root1: string; root2: string }> {
+  const file = writeDoc(parent, 'seed-doc.json', DOC);
+  await runIn(parent, home, ['new', 'my-practice', '--base', file]);
+  const repo = path.join(parent, 'my-practice');
+  const wf = workingFile(repo);
+  fs.writeFileSync(wf, JSON.stringify(DOC2, null, 2) + '\n', 'utf8');
+  const c = await runIn(repo, home, ['commit', '-m', 'second']);
+  if (c.code !== 0) throw new Error(`commit failed: ${c.stderr}`);
+  const chain = chainOf(repo);
+  return { repo, root1: chain.commits[0]!.root, root2: chain.commits[1]!.root };
+}
+
+describe('history：本地链重写', () => {
+  it('reword 改说明（root 不变，清戳）；squash 折叠；drop 删中间条', async () => {
+    const home = await hubHome();
+    const { repo, root1, root2 } = await practiceWithTwoCommits(home);
+    const out = await runIn(repo, home, ['history', 'reword', '1', '-m', '初版：修正说明']);
+    expect(out.code).toBe(0);
+    const chain = chainOf(repo);
+    expect(chain.commits[0]!.message).toBe('初版：修正说明');
+    expect(chain.commits[0]!.root).toBe(root1);
+    expect(chain.commits[0]!.pushedAt).toBeUndefined();
+
+    const sq = await runIn(repo, home, ['history', 'squash', '1']);
+    expect(sq.code).toBe(0);
+    const squashed = chainOf(repo);
+    expect(squashed.commits).toHaveLength(1);
+    expect(squashed.commits[0]!.root).toBe(root2);
+    expect(squashed.commits[0]!.message).toContain('初版：修正说明');
+    expect(squashed.commits[0]!.message).toContain('second');
+
+    // drop 重建两版再删 v1
+    const wf = workingFile(repo);
+    fs.writeFileSync(wf, JSON.stringify({ name: 'Third pop', content: 'third' }, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '-m', 'third']);
+    const dp = await runIn(repo, home, ['history', 'drop', '1']);
+    expect(dp.code).toBe(0);
+    const dropped = chainOf(repo);
+    expect(dropped.commits.map((c) => c.message)).toEqual(['third']);
+    expect(dropped.commits[0]!.parent).toBeNull();
+  });
+
+  it('reset 回退支头（git reset 语义：工作树不动）；丢弃的提交被其它支指着 → 指针落到存活祖先', async () => {
+    const home = await hubHome();
+    const { repo, root1 } = await practiceWithTwoCommits(home);
+    await runIn(repo, home, ['branch', 'feat']); // feat = main 头 = v2
+    const out = await runIn(repo, home, ['history', 'reset', '1']);
+    expect(out.code).toBe(0);
+    const chain = chainOf(repo);
+    expect(chain.commits).toHaveLength(1);
+    expect(chain.branches.main).toBe(root1);
+    expect(chain.branches.feat).toBe(root1); // v2 的重写前 parent = v1（存活）
+    // 工作树不动：文件仍持 v2 内容（相对新头=未提交改动），输出给处置提示
+    expect(JSON.parse(fs.readFileSync(workingFile(repo), 'utf8'))).toEqual(DOC2);
+    expect(out.stdout).toMatch(/working file still holds the pre-rewrite content/);
+
+    // 未提交改动不阻塞 reset——commit 可把它留在新头上
+    const wf = workingFile(repo);
+    fs.writeFileSync(wf, JSON.stringify({ name: 'Uncommitted pop', content: 'kept' }, null, 2) + '\n', 'utf8');
+    const again = await runIn(repo, home, ['commit', '-m', 'kept on top']);
+    expect(again.code).toBe(0);
+    expect(chainOf(repo).commits).toHaveLength(2);
+  });
+});
+
+describe('log：提交历史', () => {
+  it('tip 在前；--json 出结构', async () => {
+    const home = await hubHome();
+    const { repo, root1, root2 } = await practiceWithTwoCommits(home);
+    const out = await runIn(repo, home, ['log']);
+    expect(out.code).toBe(0);
+    expect(out.stdout).toMatch(new RegExp(`v2\\s+${root2.slice(7, 19)}`));
+    expect(out.stdout).toMatch(new RegExp(`v1\\s+${root1.slice(7, 19)}`));
+    const j = await runIn(repo, home, ['log', '--json']);
+    const parsed = JSON.parse(j.stdout) as { branch: string; revisions: { seq: number }[] };
+    expect(parsed.branch).toBe('main');
+    expect(parsed.revisions).toHaveLength(2);
+  });
+});
+
+describe('web：实例浏览器', () => {
+  it('/api/repo 出链与支；/pop/<root>.json 出聚合视图', async () => {
+    const { spawnWeb, untilHealthy } = await import('./helpers.js');
+    const home = await hubHome();
+    const { repo, root } = await practiceWithCommit(home);
+    const port = await freePort();
+    const child = spawnWeb(repo, home, port);
+    try {
+      const base = await untilHealthy(port, child);
+      const repoRes = await fetch(`${base}/api/repo`);
+      const info = (await repoRes.json()) as { name: string; current: string; commits: { root: string }[] };
+      expect(info.name).toBe('my-practice');
+      expect(info.current).toBe('main');
+      expect(info.commits).toHaveLength(1);
+      const view = await fetch(`${base}/pop/${encodeURIComponent(root)}.json`);
+      expect(view.ok).toBe(true);
+      const page = await fetch(base);
+      expect(await page.text()).toContain('chain.js');
+    } finally {
+      child.kill();
     }
   });
 });

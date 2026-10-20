@@ -2,27 +2,26 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { storeBlob } from '@arshdelight/pop-sdk';
-import { defaultDataDir } from '../state.js';
-import { isInitialized } from '../workspace.js';
+import { resolveRepo } from '../practice.js';
 import { fetchUrl } from '../net.js';
 
 export interface BlobOpts {
-  dataDir?: string;
+  dir?: string;
   positional: string[];
   name?: string;
 }
 
 /**
  * Stage an attachment and emit the ready-to-paste attachment entry.
- * - Local file: hashed + stored into the workspace blob channel (when the data
- *   dir is initialized), entry emitted without url.
- * - http(s) URL: fetched once (25MB cap), bytes ALSO stored into the workspace
+ * - Local file: hashed + stored into the instance's blob channel (.practi/blobs),
+ *   entry emitted without url.
+ * - http(s) URL: fetched once (25MB cap), bytes ALSO stored into the instance's
  *   blob channel, entry emitted without url (2026-09-03 本地口径：指针纯 hash，
- *   bytes 一律走 blobs/<2hex>/<64hex> 内容寻址布局——url 只是导入途径，不进指针；
+ *   bytes 一律走 .practi/blobs/<2hex>/<64hex> 内容寻址布局——url 只是导入途径，不进指针；
  *   spec §5 允许 url 字段，practi 不产生也不消费).
  *
  * Attachments are immutable content: the emitted entry goes into the author's
- * document JSON (then `practi new`), never mutated onto an existing node.
+ * document JSON, never mutated onto an existing node.
  */
 /** decodeURIComponent 的 URIError 兜底：a%zz 这类坏转义用原名 */
 function safeDecode(s: string): string {
@@ -35,20 +34,19 @@ export async function runBlobAdd(opts: BlobOpts): Promise<number> {
     console.error('usage: practi blob add <file-or-url> [--name <name>]');
     return 1;
   }
-  const dataDir = opts.dataDir ?? defaultDataDir();
-  if (/^https?:\/\//i.test(target)) return blobFromUrl(target, opts.name, dataDir);
-  return blobFromFile(target, opts.name, dataDir);
+  const repo = resolveRepo({ dir: opts.dir, verb: 'blob add' });
+  if (repo === null) return 1;
+  if (/^https?:\/\//i.test(target)) return blobFromUrl(target, opts.name, repo.poolDir);
+  return blobFromFile(target, opts.name, repo.poolDir);
 }
 
-function blobFromFile(target: string, name: string | undefined, dataDir: string): number {
+function blobFromFile(target: string, name: string | undefined, poolDir: string): number {
   const bytes = fs.readFileSync(target);
   const base = path.basename(target);
   const hash = sha256(bytes);
-  if (isInitialized(dataDir)) {
-    const stored = storeBlob(dataDir, bytes);
-    if (stored !== hash) throw new Error('internal error: stored blob hash mismatch');
-    console.log(`stored:  ${stored}  (in ${dataDir})`);
-  }
+  const stored = storeBlob(poolDir, bytes);
+  if (stored !== hash) throw new Error('internal error: stored blob hash mismatch');
+  console.log(`stored:  ${stored}  (in ${poolDir})`);
   printEntry({
     name: name ?? base,
     hash,
@@ -60,7 +58,7 @@ function blobFromFile(target: string, name: string | undefined, dataDir: string)
 
 const MAX_URL_BYTES = 25 * 1024 * 1024;
 
-async function blobFromUrl(url: string, name: string | undefined, dataDir: string): Promise<number> {
+async function blobFromUrl(url: string, name: string | undefined, poolDir: string): Promise<number> {
   // 走 net.ts 而不是全局 fetch：有系统代理的机器上 fetch 会直接 "fetch failed"
   // （Node 的 undici 不读 Windows 注册表代理）——实测复现过的真实故障
   const res = await fetchUrl(url, { maxBytes: MAX_URL_BYTES });
@@ -75,11 +73,9 @@ async function blobFromUrl(url: string, name: string | undefined, dataDir: strin
   }
   const mimeExt = mimeFromName(base);
   const hash = sha256(bytes);
-  if (isInitialized(dataDir)) {
-    const stored = storeBlob(dataDir, bytes);
-    if (stored !== hash) throw new Error('internal error: stored blob hash mismatch');
-    console.log(`stored:  ${stored}  (in ${dataDir})`);
-  }
+  const stored = storeBlob(poolDir, bytes);
+  if (stored !== hash) throw new Error('internal error: stored blob hash mismatch');
+  console.log(`stored:  ${stored}  (in ${poolDir})`);
   printEntry({
     name: name ?? (base && base !== '/' ? safeDecode(base) : 'attachment'),
     hash,
