@@ -67,8 +67,11 @@ inside a practice folder
   practi embed status|pull|build|prune   optional offline vector model (.practi/models/),
                                    scoped to this practice; without it search is lexical
   practi gc [--apply]           free orphan blobs (dry-run by default)
-  practi web [--port 4317]      browse this practice locally: commit chain, branches, and
-                                   the per-revision reader (wizard / standard view / tree)
+  practi web [--port 4317]      browse practices locally: inside a practice folder it serves
+                                   the commit chain, branches, and the per-revision reader
+                                   (wizard / standard view / tree); anywhere else it serves
+                                   the practices home (default ~/.practi/practices) as a
+                                   directory page — click through to the reader
 
 anywhere
   practi init [path]            create the config home (credentials + remote; default ~/.practi)
