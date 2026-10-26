@@ -1,7 +1,9 @@
 // 实例浏览页：提交链（当前支 tip 在前）+ 支切换。数据窗 /api/repo，只读。
+// 单仓模式挂在 / 下；home 模式挂 /p/<name>/ 下，服务器注入 window.POP_WEB_PREFIX 供拼 API 与链接。
 'use strict';
 
 (function () {
+  var P = window.POP_WEB_PREFIX || '';
   var params = new URLSearchParams(location.search);
   var wantedBranch = params.get('branch');
 
@@ -11,7 +13,7 @@
     });
   }
 
-  fetch('/api/repo' + (wantedBranch ? '?branch=' + encodeURIComponent(wantedBranch) : ''))
+  fetch(P + '/api/repo' + (wantedBranch ? '?branch=' + encodeURIComponent(wantedBranch) : ''))
     .then(function (r) { return r.json(); })
     .then(function (repo) {
       var app = document.getElementById('app');
@@ -33,7 +35,7 @@
         rows = '<ul class="commits">' + repo.commits.map(function (c) {
           return '<li class="commit">'
             + '<span class="seq">v' + c.seq + '</span>'
-            + '<a class="root" href="/pop/' + encodeURIComponent(c.root) + '" title="' + esc(c.root) + '">' + esc(c.root.slice(7, 19)) + '</a>'
+            + '<a class="root" href="' + P + '/pop/' + encodeURIComponent(c.root) + '" title="' + esc(c.root) + '">' + esc(c.root.slice(7, 19)) + '</a>'
             + '<span class="msg">' + esc(c.message) + '</span>'
             + (c.pushedAt ? '' : '<span class="badge">local, unpushed</span>')
             + '</li>';

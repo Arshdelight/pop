@@ -4,6 +4,7 @@
 // loop=条件旁注。数据走 /doc/<hash>.json（文档树，children 递归内联）。
 'use strict';
 
+var P = window.POP_WEB_PREFIX || ''; // home 模式的 /p/<name> 前缀（单仓模式空串），API 与链接拼接用
 var doc = null;
 var path = [];    // 当前节点 = 从根出发的 children 下标路径；[] = 根
 var navStack = []; // 走过的路径栈，Prev 回退用（避开只读全局 window.history）
@@ -411,7 +412,7 @@ function updateNoteCount() {
 }
 
 function postNote(body) {
-  return fetch('/api/notes', {
+  return fetch(P + '/api/notes', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -539,7 +540,8 @@ function mediaMissingCard(fig) {
   var im = fig.querySelector('img');
   var alt = fig.getAttribute('data-cap') || (im && im.getAttribute('alt')) || '';
   var src = (im && im.getAttribute('src')) || '';
-  var hash = src.indexOf('/blobs/') === 0 ? src.slice('/blobs/'.length) : '';
+  var bi = src.indexOf('/blobs/'); // 前缀容忍：home 模式 src 形如 /p/<name>/blobs/…
+  var hash = bi === -1 ? '' : src.slice(bi + '/blobs/'.length);
   var el = document.createElement('div');
   el.className = 'media-missing';
   el.innerHTML =
@@ -715,7 +717,7 @@ function showToast(text) {
   el.__timer = setTimeout(function () { el.classList.remove('show'); }, 1600);
 }
 
-// ── 内容列顶栏（hub 同款）：返回（历史 back，兜底回目录）+ 文档信息弹窗。
+// ── 内容列顶栏（hub 同款）：返回（历史 back，兜底回目录）+ 修订历史链页 + 文档信息弹窗。
 // 本地文档没有状态/上传者/认领/浏览这些 hub 数据，弹窗只列节点数与根哈希 ──
 var FP_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>';
 var INFO_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
@@ -739,7 +741,7 @@ function collectAttachments(node) {
       name: a.name,
       // 本地口径（2026-09-03）：指针纯 hash——字节一律走 workspace blobs（blobs/<2hex>/<64hex>
       // 即 hash 映射表），附件 url 不消费（spec 允许该字段，practi 不产生也不读）
-      href: '/blobs/' + a.hash,
+      href: P + '/blobs/' + a.hash,
       meta: [a.mime, sizeLabel(a.size), a.hash ? shortHash(a.hash) : ''].filter(Boolean).join(' · ')
     });
   }
@@ -754,6 +756,7 @@ function topbarHtml(node) {
   return '<div class="detail-topbar">' +
     '<button type="button" class="topbar-btn" data-top="back">' + BACK_SVG + '<span>' + POP_I18N.t('back') + '</span></button>' +
     '<div class="topbar-right">' + attachBtn +
+    '<a class="topbar-btn" href="' + P + '/">' + escapeHtml(POP_I18N.t('revisions')) + '</a>' +
     '<button type="button" class="topbar-btn topbar-icon" data-top="info" aria-label="' + POP_I18N.t('metaInfo') + '" data-tip="' + escapeHtml(POP_I18N.t('metaInfo')) + '">' + INFO_SVG + '</button></div>' +
     '</div>';
 }
@@ -876,7 +879,7 @@ function mediaUrl(target, node) {
   if (!node || node.type !== 'action' || !node.attachments) return null;
   for (var i = 0; i < node.attachments.length; i++) {
     if (node.attachments[i].name === target) {
-      return '/blobs/' + node.attachments[i].hash;
+      return P + '/blobs/' + node.attachments[i].hash;
     }
   }
   return null;
@@ -1025,7 +1028,7 @@ document.addEventListener('click', function (e) {
     view = tab.getAttribute('data-view');
     if (view === 'sv' && svJson === null) {
       // StandardView 首切拉取一次即缓存；期间先渲染 loading，到了再重绘
-      fetch('/pop/' + encodeURIComponent(HASH) + '.json')
+      fetch(P + '/pop/' + encodeURIComponent(HASH) + '.json')
         .then(function (r) { return r.json(); })
         .then(function (j) { svJson = j; if (view === 'sv') render(); });
     }
@@ -1200,7 +1203,7 @@ function onNotesArrived() {
 }
 
 function loadNotesData() {
-  fetch('/api/notes?ref=' + encodeURIComponent(HASH))
+  fetch(P + '/api/notes?ref=' + encodeURIComponent(HASH))
     .then(function (r) { return r.ok ? r.json() : { notes: [] }; })
     .then(function (j) {
       notesByHash = {};
@@ -1220,7 +1223,7 @@ document.addEventListener('practi:notes', function () {
   loadNotesData();
 });
 
-fetch('/doc/' + encodeURIComponent(HASH) + '.json')
+fetch(P + '/doc/' + encodeURIComponent(HASH) + '.json')
   .then(function (r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();

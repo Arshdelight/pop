@@ -1,6 +1,6 @@
 // practi web 语言层：中英双语（默认中文），偏好存 localStorage（每浏览器各记各的）。
-// 设置入口（header 右上角齿轮 + 固定大小弹窗）由本文件注入，目录页/详情页共用；
-// app.js / detail.js 消费 t() 并用 onChange 注册重渲染。tab 名与 JSON 视图标题是
+// 设置入口（header 右上角齿轮 + 固定大小弹窗）由本文件注入，总览页/链页/详情页共用；
+// home.js / chain.js / detail.js 消费 t() 并用 onChange 注册重渲染。tab 名与 JSON 视图标题是
 // 术语（Wizard/StandardView/Document JSON），不参与翻译。
 'use strict';
 
@@ -13,17 +13,13 @@ var POP_I18N = (function () {
       settings: '设置', language: '语言', done: '完成', copied: '已复制', back: '返回', metaInfo: '文档信息', docAttach: '附件', mediaMissing: '未找到', mediaAttach: '附件', nodeMissing: '节点缺失',
       tabWizard: '步骤', tabSv: '标准视图', tabDoc: '文档树',
       labelDocJson: '文档 JSON', labelSvJson: '标准视图 JSON',
-      // 目录页
+      // 总览页
       pageTitle: '我的实践',
-      secPractices: '实践实例', secPops: 'POP 文档',
-      thPractice: '实例', thBranch: '支', thHead: '头', thCommits: '提交',
-      thDocument: '文档', thNodes: '节点', thAdded: '添加时间',
-      emptyLead: '还没有记录。写下第一手实践经验，成为一份 POP 文档——哈希可验证，永久保存。',
-      emptyHint: '用 <code>practi new</code> 创建',
-      countDocs: function (n) { return n + ' 篇文档'; },
-      pageOf: function (a, b) { return '第 ' + a + ' / ' + b + ' 页'; },
-      pagerPrev: '上一页', pagerNext: '下一页',
-      loadFail: '加载失败（/api/directs）',
+      thPractice: '实例', thCommits: '提交',
+      homeHead: '最近修订', homeUpdated: '最近更新',
+      homeNoRevisions: '还没有修订',
+      homeEmptyLead: '这里还没有实践。',
+      homeEmptyHint: '在终端用 <code>practi new &lt;名字&gt;</code> 诞生一个，或 <code>practi clone &lt;owner&gt;/&lt;名字&gt;</code> 从 hub 克隆。',
       // 详情页
       nodeCount: function (n) { return n + ' 个节点'; },
       loading: '加载中…',
@@ -48,22 +44,19 @@ var POP_I18N = (function () {
       noteEmpty: '这条节点还没有笔记，点上方「新建」写一条。',
       noteServerStale: '服务器像是旧构建（前端新、服务器旧）——重启 practi web 再试',
       docFail: function (s) { return '文档加载失败（' + s + '）'; },
-      backMine: '← 我的实践'
+      backMine: '← 我的实践',
+      revisions: '修订历史'
     },
     en: {
       settings: 'Settings', language: 'Language', done: 'Done', copied: 'Copied', back: 'Back', metaInfo: 'Document info', docAttach: 'Attachments', mediaMissing: 'not found', mediaAttach: 'attachment', nodeMissing: 'node missing',
       tabWizard: 'Todo', tabSv: 'StandardView', tabDoc: 'Document',
       labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',
-      secPractices: 'Practices', secPops: 'POP documents',
-      thPractice: 'Practice', thBranch: 'Branch', thHead: 'Head', thCommits: 'Commits',
-      thDocument: 'Document', thNodes: 'Nodes', thAdded: 'Added',
-      emptyLead: 'Nothing recorded yet. Write first-hand experience as a POP document — verifiable by hash, forever.',
-      emptyHint: 'create one with <code>practi new</code>',
-      countDocs: function (n) { return n + (n === 1 ? ' document' : ' documents'); },
-      pageOf: function (a, b) { return 'page ' + a + ' of ' + b; },
-      pagerPrev: 'Previous', pagerNext: 'Next',
-      loadFail: 'failed to load /api/directs',
+      thPractice: 'Practice', thCommits: 'Commits',
+      homeHead: 'Latest revision', homeUpdated: 'Updated',
+      homeNoRevisions: 'no revisions yet',
+      homeEmptyLead: 'No practices here yet.',
+      homeEmptyHint: 'birth one with <code>practi new &lt;name&gt;</code>, or <code>practi clone &lt;owner&gt;/&lt;name&gt;</code> from your hub.',
       nodeCount: function (n) { return n + (n === 1 ? ' node' : ' nodes'); },
       loading: 'loading…',
       opPar: 'the tasks below run in parallel — order does not matter',
@@ -87,7 +80,8 @@ var POP_I18N = (function () {
       noteEmpty: 'No notes on this node yet — click New above to write one.',
       noteServerStale: 'the server looks like an older build — restart practi web and retry',
       docFail: function (s) { return 'failed to load document (' + s + ')'; },
-      backMine: '← My practices'
+      backMine: '← My practices',
+      revisions: 'Revisions'
     }
   };
 

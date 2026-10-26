@@ -81,7 +81,9 @@ inside a practice folder also:
   practi lint                           quality hints on the current branch head
   practi blob add <file-or-url>         store an attachment's bytes in the pool
   practi gc [--apply]                   free orphan blobs (dry-run by default)
-  practi web [--port 4317]              browse this practice in a local web UI
+  practi web [--port 4317]              browse practices in a local web UI
+                                        (a practice folder serves it; anywhere
+                                        else serves the practices home)
 
 anywhere:
   practi init [path]             create the config home (credentials + remote)
@@ -224,7 +226,7 @@ async function main(argv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi web [--port 4317] [--no-open]   (browse this practice locally)'); return 0; }
+      if (values.help) { console.log('usage: practi web [--port 4317] [--no-open]   (browse a practice — or the practices home — locally)'); return 0; }
       const port = values.port ? Number(values.port) : 4317;
       return runWeb({ dir: str(values.dir), port: Number.isInteger(port) && port > 0 ? port : 4317, open: values['no-open'] !== true });
     }

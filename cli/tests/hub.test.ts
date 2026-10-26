@@ -626,4 +626,59 @@ describe('web：实例浏览器', () => {
       child.kill();
     }
   });
+
+  it('home 模式：目录页列出 practices 家目录，/p/<name>/ 前缀路由可达 wizard；--dir 失败仍硬错', async () => {
+    const { spawnWeb, untilHealthy } = await import('./helpers.js');
+    const home = await hubHome();
+    // 两个实践直接诞生在 <home>/practices/ 下：alpha 有修订、beta 空壳
+    const homePractices = path.join(home, 'practices');
+    fs.mkdirSync(homePractices, { recursive: true });
+    const parent = tempDataDir();
+    const file = writeDoc(parent, 'seed-doc.json', DOC);
+    const mk = await runIn(homePractices, home, ['new', 'alpha', '--base', file]);
+    expect(mk.code, mk.stderr).toBe(0);
+    await runIn(homePractices, home, ['new', 'beta']);
+    const root = chainOf(path.join(homePractices, 'alpha')).commits[0]!.root;
+
+    const port = await freePort();
+    const child = spawnWeb(parent, home, port); // cwd 非实例文件夹 → home 模式
+    try {
+      const base = await untilHealthy(port, child, 15_000, '/api/practices');
+      const page = await fetch(base);
+      expect(page.ok).toBe(true);
+      expect(await page.text()).toContain('home.js');
+
+      const listRes = await fetch(`${base}/api/practices`);
+      const list = (await listRes.json()) as { name: string; commits: number; head: { root: string } | null; updated: string | null }[];
+      expect(list.map((p) => p.name).sort()).toEqual(['alpha', 'beta']);
+      const alpha = list.find((p) => p.name === 'alpha')!;
+      expect(alpha.commits).toBe(1);
+      expect(alpha.head?.root).toBe(root);
+      expect(alpha.updated).toBeTruthy();
+      const beta = list.find((p) => p.name === 'beta')!;
+      expect(beta.commits).toBe(0);
+      expect(beta.head).toBeNull();
+
+      // 前缀路由：wizard 数据窗与链数据窗、页面注入前缀变量
+      const view = await fetch(`${base}/p/alpha/pop/${encodeURIComponent(root)}.json`);
+      expect(view.ok).toBe(true);
+      const repoInfo = (await (await fetch(`${base}/p/alpha/api/repo`)).json()) as { name: string };
+      expect(repoInfo.name).toBe('alpha');
+      const chainPage = await (await fetch(`${base}/p/alpha/`)).text();
+      expect(chainPage).toContain('window.POP_WEB_PREFIX="/p/alpha"');
+      const wizardPage = await fetch(`${base}/p/alpha/pop/${encodeURIComponent(root)}`);
+      expect(await wizardPage.text()).toContain('window.POP_WEB_PREFIX="/p/alpha"');
+      // 空壳实例链页可达；未知实例 404；未前缀的实例路由不外溢
+      expect((await fetch(`${base}/p/beta/`)).ok).toBe(true);
+      expect((await fetch(`${base}/p/missing/`)).status).toBe(404);
+      expect((await fetch(`${base}/api/repo`)).status).toBe(404);
+    } finally {
+      child.kill();
+    }
+
+    // 显式 --dir 指向非实例文件夹仍是硬错误（用户点名了文件夹）
+    const bad = await runIn(parent, home, ['web', '--dir', parent, '--no-open']);
+    expect(bad.code).toBe(1);
+    expect(bad.stderr).toContain('not a practice folder');
+  });
 });

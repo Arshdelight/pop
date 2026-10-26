@@ -168,14 +168,14 @@ export function spawnWeb(repoDir: string, home: string, port: number): ChildProc
   );
 }
 
-export async function untilHealthy(port: number, child: ChildProcess, timeoutMs = 15_000): Promise<string> {
+export async function untilHealthy(port: number, child: ChildProcess, timeoutMs = 15_000, probe = '/api/repo'): Promise<string> {
   const base = `http://127.0.0.1:${port}`;
   const t0 = Date.now();
   for (;;) {
     if (child.exitCode !== null) throw new Error(`web server exited early with code ${child.exitCode}`);
     if (Date.now() - t0 > timeoutMs) throw new Error('web server did not become healthy in time');
     try {
-      const r = await fetch(`${base}/api/repo`);
+      const r = await fetch(`${base}${probe}`);
       if (r.ok) return base;
     } catch { /* not up yet */ }
     await new Promise(r => setTimeout(r, 200));

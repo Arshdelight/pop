@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef } from '@arshdelight/pop-sdk';
-import { openPool, resolveRepo, type Repo } from './practice.js';
+import { chainPathFor, findRepoFromCwd, isRepoDir, loadChain, openPool, practiDirFor, resolveRepo, workingFileFor, type Repo } from './practice.js';
+import { defaultDataDir } from './state.js';
 import { loadNotes, insertNote, updateNote, removeNote } from './notes.js';
 
 export interface WebOpts {
@@ -27,16 +28,38 @@ const STATIC_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-export function runWeb(opts: WebOpts): number {
-  const repo = resolveRepo({ dir: opts.dir, verb: 'web' });
-  if (repo === null) return 1;
-  const url = `http://127.0.0.1:${opts.port}/`;
+/** 服务对象：单仓（cwd 或 --dir 命中实例文件夹）或 practices 家目录总览（回落） */
+type Ctx = { kind: 'repo'; repo: Repo } | { kind: 'home'; homeDir: string };
 
+/** practices 家目录：配置家下的 practices/（migrate 时代即此布局，实例文件夹聚居地） */
+function practicesHome(): string {
+  return path.join(defaultDataDir(), 'practices');
+}
+
+export function runWeb(opts: WebOpts): number {
+  if (opts.dir) {
+    // 显式 --dir 定位失败是硬错误（用户点名了一个文件夹）
+    const repo = resolveRepo({ dir: opts.dir, verb: 'web' });
+    if (repo === null) return 1;
+    return serve({ kind: 'repo', repo }, opts);
+  }
+  const fromCwd = findRepoFromCwd(process.cwd());
+  if (fromCwd) return serve({ kind: 'repo', repo: fromCwd }, opts);
+  // cwd 不在任何实例文件夹里 → practices 总览（家目录缺/空也照开，页面给空态）
+  return serve({ kind: 'home', homeDir: practicesHome() }, opts);
+}
+
+function serve(ctx: Ctx, opts: WebOpts): number {
+  const url = `http://127.0.0.1:${opts.port}/`;
   const server = http.createServer((req, res) => {
-    void handle(req, res, repo);
+    void handle(req, res, ctx);
   });
   server.listen(opts.port, '127.0.0.1', () => {
-    console.log(`practi web — ${repo.chain.name}@${repo.chain.current}  →  ${url}`);
+    if (ctx.kind === 'repo') {
+      console.log(`practi web — ${ctx.repo.chain.name}@${ctx.repo.chain.current}  →  ${url}`);
+    } else {
+      console.log(`practi web — practices home ${ctx.homeDir}  →  ${url}`);
+    }
     console.log('Ctrl+C to stop');
     if (opts.open) openBrowser(url);
   });
@@ -56,8 +79,54 @@ export function openBrowser(url: string): void {
   }
 }
 
-async function handle(req: http.IncomingMessage, res: http.ServerResponse, repo: Repo): Promise<void> {
+async function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: Ctx): Promise<void> {
   const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+  try {
+    if (ctx.kind === 'repo') {
+      await handleRepo(req, res, ctx.repo, pathname);
+      return;
+    }
+    // ── home 模式：/ 总览页、/api/practices 清单、/p/<name>/… 实例前缀路由 ──
+    if (pathname === '/' || pathname === '/index.html') {
+      servePage(res, 'home.html');
+      return;
+    }
+    if (pathname === '/api/practices') {
+      send(res, 200, 'application/json; charset=utf-8', JSON.stringify(listPractices(ctx.homeDir), null, 2));
+      return;
+    }
+    const m = pathname.match(/^\/p\/([^/]+)(\/.*)?$/);
+    if (m) {
+      const name = m[1];
+      const prefix = `/p/${name}`;
+      if (name === '.' || name === '..' || name.includes('\\')) {
+        send(res, 404, 'text/plain; charset=utf-8', 'not found');
+        return;
+      }
+      const dir = path.join(ctx.homeDir, name);
+      const chain = isRepoDir(dir) ? loadChain(chainPathFor(dir)) : null;
+      if (!chain) {
+        send(res, 404, 'text/plain; charset=utf-8', 'practice not found');
+        return;
+      }
+      const repo: Repo = { dir, chain, chainPath: chainPathFor(dir), filePath: workingFileFor(dir, chain.name), poolDir: practiDirFor(dir) };
+      const rest = m[2] ?? '/';
+      if (rest === '/' || rest === '/index.html' || /^\/(api|pop|doc|blobs)\//.test(rest)) {
+        await handleRepo(req, res, repo, rest, prefix);
+        return;
+      }
+      send(res, 404, 'text/plain; charset=utf-8', 'not found');
+      return;
+    }
+    if (serveStatic(res, pathname.slice(1))) return;
+    send(res, 404, 'text/plain; charset=utf-8', 'not found');
+  } catch (e) {
+    send(res, 500, 'text/plain; charset=utf-8', e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** 单实例路由（pathname 已剥前缀）：单仓模式 prefix 为空串，home 模式传 /p/<name> 供页面注入 */
+async function handleRepo(req: http.IncomingMessage, res: http.ServerResponse, repo: Repo, pathname: string, prefix = ''): Promise<void> {
   try {
     if (pathname === '/api/repo') {
       const branch = new URL(req.url ?? '/', 'http://x').searchParams.get('branch') ?? repo.chain.current;
@@ -98,7 +167,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse, repo:
       return;
     }
     if (pathname === '/' || pathname === '/index.html') {
-      serveStatic(res, 'chain.html');
+      servePage(res, 'chain.html', prefix);
       return;
     }
     const pop = pathname.match(/^\/pop\/(.+)$/);
@@ -111,7 +180,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse, repo:
         send(res, 200, 'application/json; charset=utf-8', JSON.stringify(view, null, 2));
         return;
       }
-      serveStatic(res, 'detail.html');
+      servePage(res, 'detail.html', prefix);
       return;
     }
     const doc = pathname.match(/^\/doc\/(.+)$/);
@@ -226,6 +295,60 @@ function serveStatic(res: http.ServerResponse, rel: string): boolean {
   const type = STATIC_TYPES[path.extname(file)] ?? 'application/octet-stream';
   sendBytes(res, type, fs.readFileSync(file));
   return true;
+}
+
+/** 页面文件（html）：prefix 非空时注入 window.POP_WEB_PREFIX，前端据此拼 API/链接 */
+function servePage(res: http.ServerResponse, file: string, prefix = ''): void {
+  const fp = path.join(DEFAULT_WEB_DIR, file);
+  if (!fp.startsWith(DEFAULT_WEB_DIR) || !fs.existsSync(fp) || !fs.statSync(fp).isFile()) {
+    send(res, 404, 'text/plain; charset=utf-8', 'not found');
+    return;
+  }
+  let html = fs.readFileSync(fp, 'utf8');
+  if (prefix) html = html.replace(/<\/head>/i, `<script>window.POP_WEB_PREFIX=${JSON.stringify(prefix)};</script></head>`);
+  send(res, 200, 'text/html; charset=utf-8', html);
+}
+
+export interface PracticeEntry {
+  /** 文件夹名（=路由身份；链内 name 与它不一致时以文件夹为准） */
+  name: string;
+  current: string;
+  commits: number;
+  head: { seq: number; root: string; message: string } | null;
+  /** 链文件 mtime——提交/切支都会碰它，作「最近活动」口径 */
+  updated: string | null;
+}
+
+/** 家目录扫描（每请求现扫：另一终端 new/clone 后刷新即见）。子目录含 .practi/chain.json 即收录 */
+function listPractices(homeDir: string): PracticeEntry[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(homeDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+  const out: PracticeEntry[] = [];
+  for (const name of names) {
+    const chainPath = chainPathFor(path.join(homeDir, name));
+    const chain = loadChain(chainPath);
+    if (!chain) continue;
+    let updated: string | null = null;
+    try {
+      updated = fs.statSync(chainPath).mtime.toISOString();
+    } catch { /* 无从考据就不显示 */ }
+    const tip = chain.commits[chain.commits.length - 1] ?? null;
+    out.push({
+      name,
+      current: chain.current,
+      commits: chain.commits.length,
+      head: tip ? { seq: tip.seq, root: tip.root, message: tip.message } : null,
+      updated,
+    });
+  }
+  out.sort((a, b) => (b.updated ?? '').localeCompare(a.updated ?? '') || a.name.localeCompare(b.name));
+  return out;
 }
 
 function mimeFor(bytes: Buffer): string {

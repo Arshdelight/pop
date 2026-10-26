@@ -293,7 +293,7 @@ body.detail-page > header { flex: none; }
 
 /* ── 内容列顶栏（hub 同款）：返回居左、Info 居右；.detail > * 规则天然把它限宽居中 ── */
 .detail-topbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 18px; }
-.topbar-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e7eb; background: #fff; color: rgba(0, 51, 102, .6); border-radius: 8px; height: 32px; padding: 0 12px; font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.topbar-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e7eb; background: #fff; color: rgba(0, 51, 102, .6); border-radius: 8px; height: 32px; padding: 0 12px; font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer; text-decoration: none; transition: color .15s, border-color .15s, background .15s; }
 .topbar-btn:hover { color: var(--brand); border-color: #d1d5db; background: #f9fafb; }
 .topbar-icon { width: 32px; padding: 0; justify-content: center; }
 /* 文档信息弹窗（hub InfoDialog 同构：白卡、居中、遮罩） */
