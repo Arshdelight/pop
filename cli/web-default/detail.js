@@ -277,7 +277,7 @@ function markSide() {
   }
 }
 
-// 顶部区已撤：返回职责归 header 左上角 brand-link（回仓库根），定位职责归左侧大纲
+// 顶部区已撤：返回职责归 header 左上角 brand-link（回首页），定位职责归左侧大纲
 
 function nodeHtml(node) {
   // 标题层级对齐 hub：根 h1（22px）/ 子节点 h2（20px）——语义与视觉层级一致
@@ -1222,10 +1222,10 @@ function loadNotesData() {
     .catch(function () { /* 笔记是锦上添花：拉取失败静默，文档照常显示 */ });
 }
 
-// header 接线：brand-link 回仓库根（home 模式=链页 /p/<name>/，单仓=/）；
-// 面包屑待文档到货填 practice 名（不可点弱化段）
+// header 接线：brand-link 回首页（practices 总览）；修订历史走内容列顶栏按钮。
+// 单仓模式无独立首页，/ 即本仓链页
 var brandLink = document.querySelector('.brand-link');
-if (brandLink) brandLink.setAttribute('href', P ? P + '/' : '/');
+if (brandLink) brandLink.setAttribute('href', '/');
 
 fetch(P + '/doc/' + encodeURIComponent(HASH) + '.json')
   .then(function (r) {
