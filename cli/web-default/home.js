@@ -36,7 +36,8 @@
       + '</a>';
   }
 
-  var EMPTY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>';
+  // 空态图标=hub GitBranch（lucide v1.24 重设计版，与 hub 同形）
+  var EMPTY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6a9 9 0 0 0-9 9V3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></svg>';
 
   function emptyHtml() {
     return '<div class="empty">' + EMPTY_ICON
@@ -71,7 +72,7 @@
   function practicesHtml() {
     if (!all.length) return emptyHtml();
     var html = '<div class="pr-toolbar"><div class="find-box">'
-      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>'
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg>'
       + '<input type="text" id="find-input" autocomplete="off" spellcheck="false" value="' + esc(query) + '" placeholder="' + esc(POP_I18N.t('findPlaceholder')) + '" aria-label="' + esc(POP_I18N.t('findPlaceholder')) + '">'
       + '</div></div>'
       + '<div id="plist">';
