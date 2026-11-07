@@ -15,6 +15,8 @@ var POP_I18N = (function () {
       labelDocJson: '文档 JSON', labelSvJson: '标准视图 JSON',
       // 总览页
       pageTitle: '我的实践',
+      tabOverview: '总览', tabPractices: '实践', viewAll: '查看全部',
+      findPlaceholder: '查找',
       commitCount: function (n) { return n + ' 次提交'; },
       homeNoRevisions: '还没有修订',
       homeEmptyLead: '这里还没有实践。',
@@ -58,6 +60,8 @@ var POP_I18N = (function () {
       tabWizard: 'Todo', tabSv: 'StandardView', tabDoc: 'Document',
       labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',
+      tabOverview: 'Overview', tabPractices: 'Practices', viewAll: 'View all',
+      findPlaceholder: 'Find',
       commitCount: function (n) { return n + (n === 1 ? ' commit' : ' commits'); },
       homeNoRevisions: 'no revisions yet',
       homeEmptyLead: 'No practices here yet.',
