@@ -277,7 +277,7 @@ function markSide() {
   }
 }
 
-// 顶部区已撤：返回职责归 header 左上角 brand-link（回目录），定位职责归左侧大纲
+// 顶部区已撤：返回职责归 header 左上角 brand-link（回仓库根），定位职责归左侧大纲
 
 function nodeHtml(node) {
   // 标题层级对齐 hub：根 h1（22px）/ 子节点 h2（20px）——语义与视觉层级一致
@@ -351,7 +351,7 @@ function renderNoteSide() {
 
 /** 面板渲染=把 DOM 对齐到服务端笔记。笔记本体是常驻可编辑的 textarea（无边框、
  *  自动长高，观感与正文一致）——没有「进入编辑态」这个动作，点了就有光标，失焦即存。
- *  重建时保留未落库的改动与聚焦位（SSE 重拉/语言切换/导航不打断打字） */
+ *  重建时保留未落库的改动与聚焦位（重拉/语言切换/导航不打断打字） */
 function reconcileNoteSide() {
   var panel = document.getElementById('note-side');
   if (!panel) return;
@@ -1140,9 +1140,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!ta.value.trim()) { ta.value = n.content; autoGrow(ta); return; } // 清空=还原原文
       var content = ta.value;
       queueNoteOp(function () {
-        return postNote({ op: 'edit', id: id, content: content }).then(function (j) {
+        // 契约=服务端 handleNoteWrite：update{id,text}；成功只回 {ok:true}，本地直接改内存
+        return postNote({ op: 'update', id: id, text: content }).then(function () {
           n.content = content;
-          if (j.note && j.note.updatedAt) n.updatedAt = j.note.updatedAt;
         }).catch(function (err) { noteFail(err); });
       });
     } else {
@@ -1157,13 +1157,11 @@ document.addEventListener('DOMContentLoaded', function () {
       draftByHash[hash] = ta.value;                                      // 先记着：POST 在途时重渲染不丢
       var content2 = ta.value;
       queueNoteOp(function () {
-        return postNote({ op: 'add', hash: hash, content: content2 }).then(function (j) {
-          var note = j.note;
-          if (note) (notesByHash[hash] = notesByHash[hash] || []).push(note);
+        // 契约=服务端 handleNoteWrite：add{hash,text}；成功只回 {ok:true}（新条目的 id/时间
+        // 以服务端为准）——重拉本文档笔记，右栏与侧栏徽标一并重建
+        return postNote({ op: 'add', hash: hash, text: content2 }).then(function () {
           delete draftByHash[hash];
-          ta.setAttribute('data-id', note.id);
-          document.getElementById('side').innerHTML = sideHtml();        // 徽标 0→N
-          updateNoteCount();
+          loadNotesData();
         }).catch(function (err) { noteFail(err); });
       });
     }
@@ -1204,24 +1202,30 @@ function onNotesArrived() {
 
 function loadNotesData() {
   fetch(P + '/api/notes?ref=' + encodeURIComponent(HASH))
-    .then(function (r) { return r.ok ? r.json() : { notes: [] }; })
+    .then(function (r) { return r.ok ? r.json() : {}; })
     .then(function (j) {
+      // 数据窗=哈希分组的 map（{ "<hash>": [note…] }，web.ts notesRoute 口径）；非对象形状按空处理
       notesByHash = {};
-      (j.notes || []).forEach(function (n) {
-        (notesByHash[n.hash] = notesByHash[n.hash] || []).push(n);
-      });
+      if (j && typeof j === 'object') {
+        Object.keys(j).forEach(function (h) {
+          var arr = Array.isArray(j[h]) ? j[h] : [];
+          arr.forEach(function (n) {
+            (notesByHash[n.hash] = notesByHash[n.hash] || []).push(n);
+          });
+        });
+      }
+      var total = Object.keys(notesByHash).reduce(function (s, h) { return s + notesByHash[h].length; }, 0);
       // 默认折叠；首载本文档有笔记则自动展开（用户手动开合过就不再自动介入）
-      if (!notesTouched && (j.notes || []).length) notesOpen = true;
+      if (!notesTouched && total) notesOpen = true;
       onNotesArrived();
     })
     .catch(function () { /* 笔记是锦上添花：拉取失败静默，文档照常显示 */ });
 }
 
-// 另一终端写笔记（CLI/别的页面）→ 服务器发 notes 轻事件 → 只重拉笔记，绝不整刷。
-// reconcile 会保留未落库改动与聚焦位，编辑中收到推送也不丢字
-document.addEventListener('practi:notes', function () {
-  loadNotesData();
-});
+// header 接线：brand-link 回仓库根（home 模式=链页 /p/<name>/，单仓=/）；
+// 面包屑待文档到货填 practice 名（不可点弱化段）
+var brandLink = document.querySelector('.brand-link');
+if (brandLink) brandLink.setAttribute('href', P ? P + '/' : '/');
 
 fetch(P + '/doc/' + encodeURIComponent(HASH) + '.json')
   .then(function (r) {
@@ -1234,6 +1238,8 @@ fetch(P + '/doc/' + encodeURIComponent(HASH) + '.json')
     nodeIndex = d.nodeIndex || null;
     buildHashByPath();
     document.title = doc.name + ' — practi';
+    var crumbs = document.getElementById('crumbs');
+    if (crumbs) crumbs.innerHTML = '<span class="crumb muted">' + escapeHtml(doc.name) + '</span>';
     document.getElementById('side').innerHTML = sideHtml();
     render();
     loadNotesData();
