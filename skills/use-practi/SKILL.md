@@ -153,8 +153,10 @@ practi similar <hash>          # content neighbours within this practice (litera
                                 # similarity, not semantics)
 practi note add|list|edit|delete   # learning notes pinned to node hashes (.practi/notes.json)
 practi gc [--apply]            # free orphan blobs (dry-run by default)
-practi web                     # browse this practice locally: chain, branches, per-revision
-                                # reader (wizard / standard view / document tree)
+practi web                     # browse practices locally — inside a practice folder: chain,
+                                # branches, per-revision reader (wizard / standard view / doc
+                                # tree); anywhere else: the practices home directory page
+                                # (default ~/.practi/practices), rows click through to the reader
 practi embed status|pull|build|prune   # optional vector model (.practi/models/), scoped to
                                 # this practice; without it search is lexical-only
 ```
