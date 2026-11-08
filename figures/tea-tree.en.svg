@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 285" font-family="ui-sans-serif,system-ui,'Segoe UI',Helvetica,Arial,sans-serif">
+  <g stroke="#94A3B8" stroke-width="1.8">
+    <line x1="90" y1="150" x2="400" y2="70"/>
+    <line x1="90" y1="150" x2="400" y2="150"/>
+    <line x1="90" y1="150" x2="400" y2="230"/>
+  </g>
+  <g stroke-width="2.5">
+    <circle cx="90" cy="150" r="40" fill="#DBEAFE" stroke="#2563EB"/>
+    <circle cx="400" cy="70" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="400" cy="150" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="400" cy="230" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+  </g>
+  <g text-anchor="middle" fill="#1E3A8A" font-size="13" font-weight="600">
+    <text x="90" y="155">Make tea</text>
+  </g>
+  <g text-anchor="middle" fill="#14532D" font-size="13">
+    <text x="400" y="75">Boil water</text>
+    <text x="400" y="155">Add leaves</text>
+    <text x="400" y="235">Pour</text>
+  </g>
+</svg>

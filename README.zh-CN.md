@@ -8,6 +8,24 @@
 
 **协议本体：[`pop-spec.md`](pop-spec.md)**——唯一规范性定义，版本 2.1.0。spec 只管协议本身；其余一切都在本仓库。
 
+## 图解 POP
+
+一份 POP 就是一个 JSON 树。叶子是**动作**——原子步骤；其余是**实践**——组合节点。两类节点的全部字段：
+
+<img src="figures/node-model.zh.svg" width="560" alt="POP 节点模型：动作节点与实践节点的全部字段">
+
+组合是子节点上的算子——`op` ∈ {`seq`, `par`, `choice`, `loop`, `set`}。"泡茶"就是三个动作的 `seq`：
+
+<img src="figures/tea-tree.zh.svg" width="520" alt="一个实践组合三个动作">
+
+实践可以嵌套实践——"泡奶茶"把"泡茶"整个当作其中一步：
+
+<img src="figures/tea-nested.zh.svg" width="620" alt="实践嵌套实践，嵌套的实践带着自己的步骤">
+
+节点没有 id：节点唯一的地址是它的内容哈希，根哈希是整棵树的 Merkle 根——哈希相同即内容相同，后代也包括在内（spec §3）：
+
+<img src="figures/merkle.zh.svg" width="520" alt="每个节点按内容哈希寻址，根哈希覆盖整棵树">
+
 ## 快速开始
 
 ```bash

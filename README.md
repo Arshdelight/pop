@@ -8,6 +8,24 @@ A protocol that defines practice knowledge — "how to do a thing" — as open d
 
 **The protocol: [`pop-spec.md`](pop-spec.md)** — the sole normative definition, version 2.1.0. The spec covers only the protocol; everything else lives here.
 
+## POP at a glance
+
+A POP document is one JSON tree. Leaves are **actions** — atomic steps; interior nodes are **practices** — compositions. Every field of both node types:
+
+<img src="figures/node-model.en.svg" width="560" alt="POP node model: every field of the action and the practice node">
+
+Composition is an operator on children — `op` ∈ {`seq`, `par`, `choice`, `loop`, `set`}. "Make tea" is a `seq` of three actions:
+
+<img src="figures/tea-tree.en.svg" width="520" alt="A practice composing three actions">
+
+Practices nest practices — "Make milk tea" uses the whole "Make tea" practice as one of its steps:
+
+<img src="figures/tea-nested.en.svg" width="620" alt="A practice nesting another practice, with its own steps">
+
+Nodes carry no ids: a node's content hash is its only address, and the root hash is a Merkle root over the whole tree — same hash ⇒ same content, descendants included (§3 of the spec):
+
+<img src="figures/merkle.en.svg" width="520" alt="Every node is addressed by its content hash; the root hash covers the whole tree">
+
 ## Quick start
 
 ```bash

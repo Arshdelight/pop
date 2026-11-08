@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 330" font-family="ui-sans-serif,system-ui,'Segoe UI',Helvetica,Arial,sans-serif">
+  <g stroke="#94A3B8" stroke-width="1.8">
+    <line x1="80" y1="160" x2="300" y2="80"/>
+    <line x1="80" y1="160" x2="300" y2="180"/>
+    <line x1="80" y1="160" x2="300" y2="280"/>
+    <line x1="300" y1="80" x2="520" y2="45"/>
+    <line x1="300" y1="80" x2="520" y2="130"/>
+    <line x1="300" y1="80" x2="520" y2="215"/>
+  </g>
+  <g stroke-width="2.5">
+    <circle cx="80" cy="160" r="40" fill="#DBEAFE" stroke="#2563EB"/>
+    <circle cx="300" cy="80" r="40" fill="#DBEAFE" stroke="#2563EB"/>
+    <circle cx="300" cy="180" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="300" cy="280" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="520" cy="45" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="520" cy="130" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="520" cy="215" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+  </g>
+  <g text-anchor="middle" fill="#1E3A8A" font-size="13" font-weight="600">
+    <text x="80" y="155">Make</text>
+    <text x="80" y="171">milk tea</text>
+    <text x="300" y="85">Make tea</text>
+  </g>
+  <g text-anchor="middle" fill="#14532D" font-size="13">
+    <text x="300" y="185">Add milk</text>
+    <text x="300" y="285">Stir</text>
+    <text x="520" y="50">Boil water</text>
+    <text x="520" y="135">Add leaves</text>
+    <text x="520" y="220">Pour</text>
+  </g>
+</svg>

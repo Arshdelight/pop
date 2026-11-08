@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 620" font-family="ui-sans-serif,system-ui,'Segoe UI',Helvetica,Arial,sans-serif">
+  <g>
+    <circle cx="90" cy="155" r="40" fill="#DCFCE7" stroke="#16A34A" stroke-width="2.5"/>
+    <text x="90" y="160" text-anchor="middle" fill="#14532D" font-size="15" font-weight="600">Action</text>
+    <g font-family="ui-monospace,Consolas,monospace" font-size="14" text-anchor="middle">
+      <rect x="180" y="40" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="280" y="61" fill="#57534E">attachments</text>
+      <rect x="410" y="40" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="510" y="61" fill="#78350F">content*</text>
+      <rect x="180" y="92" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="280" y="113" fill="#57534E">description</text>
+      <rect x="410" y="92" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="510" y="113" fill="#57534E">inputs</text>
+      <rect x="180" y="144" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="280" y="165" fill="#57534E">license</text>
+      <rect x="410" y="144" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="510" y="165" fill="#57534E">metadata</text>
+      <rect x="180" y="196" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="280" y="217" fill="#78350F">name*</text>
+      <rect x="410" y="196" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="510" y="217" fill="#57534E">outputs</text>
+      <rect x="180" y="248" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="280" y="269" fill="#78350F">type*</text>
+    </g>
+    <text x="620" y="300" text-anchor="end" fill="#64748B" font-size="12">* = required</text>
+  </g>
+  <g transform="translate(0,315)">
+    <circle cx="90" cy="155" r="40" fill="#DBEAFE" stroke="#2563EB" stroke-width="2.5"/>
+    <text x="90" y="160" text-anchor="middle" fill="#1E3A8A" font-size="15" font-weight="600">Practice</text>
+    <g font-family="ui-monospace,Consolas,monospace" font-size="14" text-anchor="middle">
+      <rect x="180" y="40" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="280" y="61" fill="#78350F">children*</text>
+      <rect x="410" y="40" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="510" y="61" fill="#78350F">content*</text>
+      <rect x="180" y="92" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="280" y="113" fill="#57534E">description</text>
+      <rect x="410" y="92" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="510" y="113" fill="#57534E">license</text>
+      <rect x="180" y="144" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="280" y="165" fill="#57534E">loop</text>
+      <rect x="410" y="144" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="510" y="165" fill="#57534E">metadata</text>
+      <rect x="180" y="196" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="280" y="217" fill="#78350F">name*</text>
+      <rect x="410" y="196" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="510" y="217" fill="#78350F">op*</text>
+      <rect x="180" y="248" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="280" y="269" fill="#78350F">type*</text>
+    </g>
+    <text x="620" y="300" text-anchor="end" fill="#64748B" font-size="12">* = required</text>
+  </g>
+</svg>

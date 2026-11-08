@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 346" font-family="'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif">
+  <g stroke="#94A3B8" stroke-width="1.8">
+    <line x1="90" y1="150" x2="400" y2="48"/>
+    <line x1="90" y1="150" x2="400" y2="162"/>
+    <line x1="90" y1="150" x2="400" y2="276"/>
+  </g>
+  <g stroke-width="2.5">
+    <circle cx="90" cy="150" r="40" fill="#DBEAFE" stroke="#2563EB"/>
+    <circle cx="400" cy="48" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="400" cy="162" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+    <circle cx="400" cy="276" r="40" fill="#DCFCE7" stroke="#16A34A"/>
+  </g>
+  <g text-anchor="middle" fill="#1E3A8A" font-size="16" font-weight="600">
+    <text x="90" y="156">泡茶</text>
+  </g>
+  <g text-anchor="middle" fill="#14532D" font-size="16">
+    <text x="400" y="54">烧水</text>
+    <text x="400" y="168">放茶叶</text>
+    <text x="400" y="282">倒热水</text>
+  </g>
+  <g font-family="ui-monospace,Consolas,monospace" font-size="11" text-anchor="middle">
+    <rect x="310" y="91" width="180" height="20" rx="10" fill="#FEFCE8" stroke="#D6D3D1"/>
+    <text x="400" y="105" fill="#57534E">sha256:38bef5c0…39fa</text>
+    <rect x="310" y="205" width="180" height="20" rx="10" fill="#FEFCE8" stroke="#D6D3D1"/>
+    <text x="400" y="219" fill="#57534E">sha256:e7137958…b16d</text>
+    <rect x="310" y="319" width="180" height="20" rx="10" fill="#FEFCE8" stroke="#D6D3D1"/>
+    <text x="400" y="333" fill="#57534E">sha256:2a61117a…4909</text>
+    <rect x="10" y="193" width="160" height="20" rx="10" fill="#FCD34D" stroke="#B45309"/>
+    <text x="90" y="207" fill="#78350F">sha256:6d7c1e17…31d2</text>
+  </g>
+</svg>
