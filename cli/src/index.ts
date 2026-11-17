@@ -15,7 +15,6 @@ import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 import { runSearch } from './cmd/search.js';
 import { runSimilar } from './cmd/similar.js';
-import { runEmbed } from './cmd/embed.js';
 import { runNote } from './cmd/note.js';
 import { runSkill } from './cmd/skill.js';
 import { runFix } from './cmd/fix.js';
@@ -447,13 +446,12 @@ async function main(rawArgv: string[]): Promise<number> {
           limit: { type: 'string' as const },
           json: { type: 'boolean' as const },
           notes: { type: 'boolean' as const },
-          semantic: { type: 'boolean' as const },
           dir: { type: 'string' as const },
         },
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi search [query...] [--limit N] [--json] [--notes] [--semantic]   (search this practice\'s revisions)');
+        console.log('usage: practi search [query...] [--limit N] [--json] [--notes]   (search this practice\'s revisions)');
         return 0;
       }
       const limit = values.limit ? Number(values.limit) : 20;
@@ -462,7 +460,6 @@ async function main(rawArgv: string[]): Promise<number> {
         limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 50) : 20,
         json: values.json === true,
         notes: values.notes === true,
-        semantic: values.semantic === true,
         dir: values.dir,
       });
     }
@@ -512,23 +509,6 @@ async function main(rawArgv: string[]): Promise<number> {
         positional: positionals,
         message: values.message,
         json: values.json === true,
-        dir: values.dir,
-      });
-    }
-    case 'embed': {
-      const { values, positionals } = parseArgs({
-        args: rest,
-        options: { ...COMMON, json: { type: 'boolean' as const }, notes: { type: 'boolean' as const }, dir: { type: 'string' as const } },
-        allowPositionals: true,
-      });
-      if (values.help) {
-        console.log('usage: practi embed status|pull|build|prune [--json] [--notes]   (optional offline vector model, scoped to this practice)');
-        return 0;
-      }
-      return await runEmbed({
-        positional: positionals,
-        json: values.json === true,
-        notes: values.notes === true,
         dir: values.dir,
       });
     }

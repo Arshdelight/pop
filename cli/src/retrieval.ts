@@ -549,33 +549,6 @@ export function searchDocs(docs: DocEntry[], query: Query, opts: SearchOptions):
   return { hits: [], mode: 'and' };
 }
 
-/* ───────────────────────── 融合排序 ───────────────────────── */
-
-/**
- * 倒数排名融合（RRF）：每个榜单按名次贡献 1/(k+rank)，k=60（文献里的常用值）。
- *
- * 用**名次**而不是分数，是因为 BM25 与余弦的量纲根本不可比：任何线性加权都要先
- * 各自归一化，而归一化会引入各自的偏差（BM25 的分布随查询词数变化，余弦的分布
- * 随模型变化）。RRF 只用名次，天然免疫，也没有需要调的权重。
- *
- * 全序：融合分降序 → 单榜最好名次升序 → hash 升序。
- */
-export function fuseRankings(lists: readonly (readonly string[])[], k = 60): string[] {
-  const score = new Map<string, number>();
-  const best = new Map<string, number>();
-  for (const list of lists) {
-    list.forEach((hash, i) => {
-      score.set(hash, (score.get(hash) ?? 0) + 1 / (k + i + 1));
-      const b = best.get(hash);
-      if (b === undefined || i < b) best.set(hash, i);
-    });
-  }
-  return [...score.keys()].sort((a, b) =>
-    (score.get(b)! - score.get(a)!)
-    || ((best.get(a) ?? 0) - (best.get(b) ?? 0))
-    || (a < b ? -1 : a > b ? 1 : 0));
-}
-
 /* ───────────────────────── 近邻（similar） ───────────────────────── */
 
 /**

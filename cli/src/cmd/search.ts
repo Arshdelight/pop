@@ -1,12 +1,7 @@
 import { openPool, chainHead, resolveRepo, type Repo } from '../practice.js';
 import { shortHash } from '../render.js';
 import { notesByNode } from '../notes.js';
-import { loadOnnxEmbedder } from '../embed/model.js';
-import { rankByVector, readVectorIndex } from '../embed/cache.js';
-import { attemptSemantic } from '../embed/optional.js';
-import { semanticReadiness } from '../embed/ready.js';
 import {
-  fuseRankings,
   nodeIndexFields,
   parseQuery,
   searchDocs,
@@ -21,8 +16,6 @@ export interface SearchOpts {
   json: boolean;
   /** 把本地笔记（.practi/notes.json）一并纳入索引文本；默认关，避免改变既有命中集合 */
   notes: boolean;
-  /** 语义召回（RRF 融合词法榜与向量榜）；默认关，且需要先 embed pull/build */
-  semantic: boolean;
 }
 
 interface LocalHit {
@@ -30,14 +23,10 @@ interface LocalHit {
   type: string;
   op?: string;
   name: string;
-  /** 检索期派生的相关度（不写回节点）；纯语义命中没有 */
+  /** 检索期派生的相关度（不写回节点） */
   score?: number;
-  /** 命中字段；纯语义命中没有 */
+  /** 命中字段 */
   matchedIn?: FieldName[];
-  /** 余弦相似度（仅在 --semantic 下且该节点有向量时） */
-  vectorScore?: number;
-  /** 词法榜没收录、只靠向量进榜 */
-  semanticOnly?: boolean;
 }
 
 /**
@@ -47,20 +36,19 @@ interface LocalHit {
  *   纯 hex 查询词（≥4 位）额外按哈希前缀匹配（索引为检索期派生，不进节点哈希）；
  * - 多词 = AND，支持 field: 限定；结果按 title-first 打分排序并标注命中字段；
  * - 空查询 = 列出当前支头文档。
+ * - （--semantic 本地向量召回已随 2026-11-17 早期精简移除；hub 侧语义检索同轮拆除）
  */
 export async function runSearch(opts: SearchOpts): Promise<number> {
   const repo = resolveRepo({ dir: opts.dir, verb: 'search' });
   if (repo === null) return 1;
   const query = parseQuery(opts.positional);
 
-  const { hits, nodesCount, mode, semanticNote } = await collectLocal(repo, opts.positional, opts.notes, opts.semantic);
+  const { hits, nodesCount, mode } = collectLocal(repo, opts.positional, opts.notes);
   const shown = hits.slice(0, opts.limit);
   if (opts.json) {
     console.log(JSON.stringify({ query: query.raw, mode, results: shown, total: hits.length }, null, 2));
-    if (semanticNote !== undefined) console.error(`note: ${semanticNote}`);
     return 0;
   }
-  if (semanticNote !== undefined) console.error(`note: ${semanticNote}`);
   if (hits.length === 0) {
     if (query.raw === '') {
       console.log(`(empty) ${repo.chain.name}@${repo.chain.current}`);
@@ -73,7 +61,6 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
     console.log('  this search is literal (character bigram) — a paraphrase sharing no wording cannot match.');
     console.log('  next:');
     console.log(`    practi search ${opts.positional.join(' ')} --notes   # your notes use your own words`);
-    console.log(`    practi search ${opts.positional.join(' ')} --semantic   # vector recall, if you pulled the model`);
     console.log('    practi similar <hash>              # start from a node you do have, find what is like it');
     return 0;
   }
@@ -84,9 +71,8 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
   }
   for (const hit of shown) printLocalHit(hit, mode === 'or');
   const relaxed = mode === 'or' ? '  (relaxed: partial match — not every term was required)' : '';
-  const semantic = hits.some(h => h.vectorScore !== undefined) ? '  (fused with vector recall)' : '';
   const more = hits.length > shown.length ? ` of ${hits.length}` : '';
-  console.log(`\n${shown.length}${more} matched (instance pool)${relaxed}${semantic} — inspect with \`practi show <hash>\``);
+  console.log(`\n${shown.length}${more} matched (instance pool)${relaxed} — inspect with \`practi show <hash>\``);
   return 0;
 }
 
@@ -99,25 +85,23 @@ function printLocalHit(hit: LocalHit, partial: boolean): void {
   const tag = hit.type === 'practice' ? `[practice·${hit.op}]` : '[action]';
   const why = hit.matchedIn !== undefined && hit.matchedIn.length > 0
     ? hit.matchedIn.join(', ')
-    : (hit.semanticOnly === true ? 'semantic' : '—');
+    : '—';
   // 放宽出来的一行必须自己带上「这不是全中」的标记：分数与标题命中看起来一样权威，
   // 不标就会被当成答案（实测过：OR 档把完全无关的实践排到第一）
   const mark = partial ? 'partial match — only part of the query hit' : '';
-  const cos = hit.vectorScore !== undefined ? `  ·  cos ${hit.vectorScore.toFixed(3)}` : '';
   const score = hit.score !== undefined ? `  ·  score ${hit.score}` : '';
   console.log(`  ${shortHash(hit.hash)}  ${tag}  ${hit.name}`);
-  console.log(`    ← ${why}${mark === '' ? '' : `  ·  ${mark}`}${cos}${score}`);
+  console.log(`    ← ${why}${mark === '' ? '' : `  ·  ${mark}`}${score}`);
 }
 
 /**
  * 本地命中计算：遍历池内全量节点打分（哈希升序 → 结果与索引都确定）。
  */
-async function collectLocal(
+function collectLocal(
   repo: Repo,
   positional: string[],
   withNotes: boolean,
-  semantic: boolean,
-): Promise<{ hits: LocalHit[]; nodesCount: number; mode: 'browse' | 'and' | 'or'; semanticNote?: string }> {
+): { hits: LocalHit[]; nodesCount: number; mode: 'browse' | 'and' | 'or' } {
   const ws = openPool(repo);
 
   const decorate = (hash: string, extra: { score?: number; matchedIn?: FieldName[] } = {}): LocalHit => {
@@ -151,79 +135,5 @@ async function collectLocal(
     directSet: new Set<string>(),
     depthOf: new Map<string, number>(),
   });
-  const lexicalHits = scored.map(s => decorate(s.hash, { score: s.score, matchedIn: s.matchedIn }));
-  if (!semantic) return { hits: lexicalHits, nodesCount: ws.nodes.size, mode };
-
-  // ── 语义召回（可选层）：只加不减 —— 词法榜原样保留，向量榜并进来做 RRF 融合
-  const sem = await semanticRanking(repo.poolDir, positional, docs);
-  if (!sem.ready) {
-    return { hits: lexicalHits, nodesCount: ws.nodes.size, mode, semanticNote: `--semantic ignored: ${sem.reason}` };
-  }
-  const lexicalOrder = lexicalHits.map(h => h.hash);
-  const fused = fuseRankings([lexicalOrder, sem.order], 60);
-  const byHash = new Map(lexicalHits.map(h => [h.hash, h]));
-  const cos = new Map(sem.order.map((h, i) => [h, sem.scores[i]]));
-  const hits = fused.map((hash) => {
-    const lexical = byHash.get(hash);
-    const vectorScore = cos.get(hash);
-    if (lexical !== undefined) return { ...lexical, ...(vectorScore !== undefined ? { vectorScore } : {}) };
-    return {
-      ...decorate(hash, {}),
-      ...(vectorScore !== undefined ? { vectorScore } : {}),
-      semanticOnly: true,
-    };
-  });
-  return {
-    hits,
-    nodesCount: ws.nodes.size,
-    // 融合后「放宽」不再描述结果集：向量榜本来就允许部分命中
-    mode: hits.length > 0 && lexicalHits.length === 0 ? 'and' : mode,
-    ...(sem.covered < ws.nodes.size
-      ? { semanticNote: `vector index covers ${sem.covered}/${ws.nodes.size} node(s) — run \`practi embed build\` to refresh` }
-      : {}),
-  };
-}
-
-/**
- * 语义榜：把查询向量与全库向量比一遍，返回**降序的哈希表 + 对应余弦**。
- *
- * 返回缺口而不是抛错：语义是可选层，缺模型时词法结果照常给出，只是附一句
- * 「--semantic 被忽略了，因为……」，绝不悄悄少召回（少召回而无声是这类功能最坏的失败模式）。
- * 模型在、但运行时跑不起来（onyxruntime-node 没装、原生二进制不兼容、ONNX 会话建不起来）
- * 也走同一条降级路——可选功能的故障不该让命令失败。
- */
-async function semanticRanking(
-  baseDir: string,
-  positional: readonly string[],
-  docs: readonly DocEntry[],
-): Promise<{ ready: true; order: string[]; scores: number[]; covered: number } | { ready: false; reason: string }> {
-  const readiness = semanticReadiness(baseDir);
-  if (!readiness.ready) return { ready: false, reason: readiness.reason };
-  const index = readVectorIndex(baseDir, readiness.fingerprint);
-  if (index === null) return { ready: false, reason: 'vector index missing (run `practi embed build`)' };
-
-  const known = new Set(docs.map(d => d.hash));
-  // 覆盖率看索引里有多少节点还在工作区（不是「这次排了多少名」）
-  const covered = index.hashes.reduce((n, h) => n + (known.has(h) ? 1 : 0), 0);
-
-  const attempt = await attemptSemantic(
-    () => loadOnnxEmbedder(baseDir),
-    async (embedder) => {
-      const [qv] = await embedder.embed([embedder.queryPrefix + positional.join(' ').trim()]);
-      const ranked = rankByVector(index, qv);
-      const order: string[] = [];
-      const scores: number[] = [];
-      for (const r of ranked) {
-        if (!known.has(r.hash)) continue; // 索引里有、工作区已删：不进榜
-        order.push(r.hash);
-        scores.push(r.score);
-        if (order.length >= 200) break; // 只让前 200 参与融合，避免长尾把 RRF 摊平
-      }
-      return { order, scores };
-    },
-  );
-  if (!attempt.ok) {
-    return { ready: false, reason: `vector recall unavailable (${attempt.reason})` };
-  }
-  return { ready: true, ...attempt.value, covered };
+  return { hits: scored.map(s => decorate(s.hash, { score: s.score, matchedIn: s.matchedIn })), nodesCount: ws.nodes.size, mode };
 }

@@ -154,7 +154,7 @@ practi export <hash> [-o f]    # write any revision back out (the current one IS
 practi log [--branch <b>] [--json]   # commit history, tip first; (local, unpushed) marked
 practi lint                    # quality hints on the current branch head
 practi show <hash> [--json] [--doc]   # inspect one revision node (hash prefix OK)
-practi search <q> [--notes] [--semantic]   # search this practice's revisions
+practi search <q> [--notes]      # search this practice's revisions (literal BM25, title-first)
 practi similar <hash>          # content neighbours within this practice (literal bigram
                                 # similarity, not semantics)
 practi note add|list|edit|delete   # learning notes pinned to node hashes (.practi/notes.json)
@@ -163,8 +163,6 @@ practi web                     # browse practices locally — inside a practice 
                                 # branches, per-revision reader (wizard / standard view / doc
                                 # tree); anywhere else: the practices home directory page
                                 # (default ~/.practi/practices), rows click through to the reader
-practi embed status|pull|build|prune   # optional vector model (.practi/models/), scoped to
-                                # this practice; without it search is lexical-only
 ```
 
 - The **working file is the write door**, `export` is the read-back door. `commit` when the file equals the head says `nothing to commit`.
@@ -216,26 +214,11 @@ practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
 - **Multiple words are ANDed, and may match in different fields.** `practi search listary 编码` needs both words somewhere in the same node — not adjacent in the text. Quote a phrase to require it whole.
 - **`field:value` scopes one word** — `name:`, `desc:`, `content:`, `flow:` (declared inputs/outputs), `loop:`, `op:`, `hash:`. `practi search name:yt-dlp` hits only nodes whose *name* says it.
 - **Chinese is matched by character bigram, not by word** — no dictionary needed. A query word matches only when *all* of its bigrams are present, so word order matters; when strict matching finds nothing the command retries with a strict-majority-of-terms rule and labels every row `partial match`. **A partial-match row is a hint, not an answer** — never present one as the found practice without reading it.
-- **A literal search is not a semantic one, and that is deliberate.** Queries that share no wording with the record return *nothing*. So when `practi search` reports no matches, it prints the next move — retry with `--notes`, try `--semantic` if the vector model is installed, or start from a node you already have with `practi similar`. Take that step instead of rephrasing the same query repeatedly.
+- **A literal search is not a semantic one, and that is deliberate.** Queries that share no wording with the record return *nothing*. So when `practi search` reports no matches, it prints the next move — retry with `--notes`, or start from a node you already have with `practi similar`. Take that step instead of rephrasing the same query repeatedly. (The optional `--semantic` vector layer was removed in the 2026-11-17 early-stage simplification; search is lexical-only.)
 - **`--notes` also searches your local notes** (off by default, so the plain result set stays stable). Notes are where the most conversational keywords end up — when a search comes up empty, retry it with `--notes` before giving up.
 - **Results are ranked title-first and each says why it matched.** Trust the explanation over the number.
 - **`practi similar <hash>` answers the other question** — not "where did I write X" but "what else is about X". Literal: a paraphrase sharing no wording will not surface.
 - Across practices, `practi ls` is the one-glance overview — branch, head, revision count and **unpushed** count for every practice in the home (unpushed also counts history rewrites that cleared push stamps). Browse folders in your file manager for anything richer — a practice folder *is* its own listing.
-
-## Semantic recall (optional, off by default)
-
-Literal search cannot find a paraphrase. When that matters, practi can add a real vector layer, scoped to the practice. It is **optional and never automatic**:
-
-```bash
-practi embed pull          # download the model once (~24MB int8 ONNX) into .practi/models/
-practi embed build         # embed every stored node (incremental: only new hashes are embedded)
-practi embed status        # is the model present? how many nodes are covered?
-practi search <q> --semantic   # fuse vector recall with the lexical ranking (RRF)
-```
-
-- **Nothing here is required.** Without a model `practi search` is lexical-only; `--semantic` then says what is missing on stderr and answers from the lexical index anyway.
-- **It costs one build.** After that only new nodes are embedded, so day-to-day use is incremental. Model bytes and vectors live under `.practi/` as **derived** sidecars — never written into a node, never part of a hash.
-- **The vector layer can never break a command.** `--semantic` degrades to lexical with the reason on stderr if anything is missing; only `practi embed pull|build` — explicit requests — fail loudly.
 
 ## Local notes
 

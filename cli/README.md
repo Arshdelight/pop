@@ -54,8 +54,7 @@ inside a practice folder
   practi search [query...] [--json]     search this practice's revisions (BM25, title-first,
                                    multi-word AND across fields, field: scoping, hash
                                    prefixes, labeled partial-match tier; --notes includes
-                                   local notes; --semantic fuses vector recall when the
-                                   optional model is installed)
+                                   local notes)
   practi similar <hash>         content neighbours within this practice (literal bigram
                                    similarity — a paraphrase will not surface)
   practi lint                   quality hints on the current branch head (read-only, always
@@ -64,8 +63,6 @@ inside a practice folder
                                    never uploaded; the notes sidebar in `practi web` writes
                                    the same file)
   practi blob add <file-or-url> [--name <name>]   store attachment bytes (.practi/blobs/)
-  practi embed status|pull|build|prune   optional offline vector model (.practi/models/),
-                                   scoped to this practice; without it search is lexical
   practi gc [--apply]           free orphan blobs (dry-run by default)
   practi web [--port 4317]      browse practices locally: inside a practice folder it serves
                                    the commit chain, branches, and the per-revision reader

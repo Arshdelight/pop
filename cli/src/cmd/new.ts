@@ -4,8 +4,6 @@ import { createRepo, saveChain } from '../practice.js';
 import { printQualityHints } from '../quality.js';
 import { shortHash } from '../render.js';
 import { subtreeFiles } from '../workspace.js';
-import { describeRefresh, refreshVectors } from '../embed/optional.js';
-import { nodeIndexFields } from '../retrieval.js';
 
 export interface NewOpts {
   positional: string[];
@@ -64,15 +62,7 @@ export async function runNew(opts: NewOpts): Promise<number> {
     }
     console.log(`first revision: v1  ${shortHash(root)}  ${repo.chain.commits[0]!.message}`);
     printQualityHints(loaded, root);
-    const note = describeRefresh(await refreshVectors(repo.poolDir, [...loaded.nodes.keys()].sort(), (h) => indexTextOf(h, loaded)));
-    if (note !== null) console.error(note);
   }
   console.log(`next:    cd ${name} — edit ${name}.json, \`practi commit -m "..."\`, then \`practi push\``);
   return 0;
-}
-
-/** 与 search 同一口径的索引文本（全字段拼接） */
-function indexTextOf(hash: string, ws: ReturnType<typeof loadWorkspace>): string {
-  const e = nodeIndexFields(hash, ws.nodes.get(hash)!);
-  return Object.values(e.fields).filter((v): v is string => typeof v === 'string').join('\n');
 }

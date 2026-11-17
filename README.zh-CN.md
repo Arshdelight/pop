@@ -82,13 +82,6 @@ practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；换根�
 practi fix <file> | <hash> | --all  把 POP 1.x 文档迁移到 2.0：剥除已删除的历史字段（revisions/refines），
                                   重新校验并报告新哈希。<hash> 重存工作区节点并重绑 direct/claims；
                                   --all 扫全部 direct；--dry-run 预览
-practi embed status                报告模型就绪状态与索引覆盖（--json）
-practi embed pull                  把离线向量模型取到 <data-dir>/models/
-practi embed build [--notes]       构建/刷新向量索引，增量进行——只处理尚未缓存的哈希；
-                                   --notes 连本地笔记一起向量化
-practi embed prune                 清掉旧模型指纹遗留的向量桶。整层可选：没有模型时 practi
-                                   退化为纯词法检索，`search --semantic` 会说明缺什么，
-                                   而不是悄悄少召回
 practi fetch <hash>               从 hub 单拉一份 POP 进本地 registry（direct；须完整 sha256
                                   哈希——不猜前缀）。与实例无关——对象直接进你的 pop 库
 practi gc [--apply]                释放孤儿 blob——没有节点引用的附件字节（默认 dry-run；--apply 才删）
@@ -130,8 +123,7 @@ practi search [query...]          搜索全部已存节点——direct、indirec
                                   content: flow: loop: op: hash:），多词 AND 可跨字段命中。
                                   命中结果标注命中的字段；严格匹配无果时放宽到多数词命中
                                   （标注为 relaxed）。--limit N；--json；--notes 连本地笔记
-                                  一起进索引（默认关）；--semantic 用向量召回与词法排序融合
-                                  （需先 embed pull + build；否则说明缺什么并被忽略）。
+                                  一起进索引（默认关）。
                                   空查询 = 浏览 direct 根
 practi show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可；--json 的 steps 带正文——一次读完的复现视图）
 practi similar <hash> [--limit N] [--json]

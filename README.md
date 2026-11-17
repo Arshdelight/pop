@@ -86,14 +86,6 @@ practi edit <hash> <file.json>    replace a direct POP (new hash; swap recorded 
                                 log commits.json; GC of unreachable nodes)
 practi fix <file> | <hash> | --all  migrate POP 1.x documents to 2.0: strip the removed history
                                 fields (revisions/refines), re-validate, report the new hash
-practi embed status                report model readiness and index coverage (--json)
-practi embed pull                  fetch the offline vector model into <data-dir>/models/
-practi embed build [--notes]       build/refresh the vector index, incrementally — only hashes
-                                  not already cached; --notes embeds your local notes too
-practi embed prune                 drop vector buckets left behind by an older model fingerprint
-                                  The whole layer is optional: no model means practi is
-                                  lexical-only, and `search --semantic` says what is missing
-                                  instead of quietly recalling less
 practi fetch <hash>               pull a single POP from the hub into your local registry (direct;
                                   full sha256 hash — no prefix guessing). No instance involved —
                                   the object goes straight into your pop library
@@ -144,9 +136,7 @@ practi search [query...]          search every stored node — direct, indirect 
                                   that may match across fields. Hits name the field that matched,
                                   and a relax tier covers a strict majority of terms when strict
                                   matching finds nothing (labeled as relaxed). --limit N; --json;
-                                  --notes also indexes your local notes (off by default);
-                                  --semantic fuses vector recall with the lexical ranking (needs
-                                  embed pull + build; otherwise it says so and is ignored).
+                                  --notes also indexes your local notes (off by default).
                                   Empty query = browse direct roots
 practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK; --json steps carry content — the reproduction view)
 practi similar <hash> [--limit N] [--json]
