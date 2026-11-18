@@ -45,12 +45,12 @@
       + '<p class="hint">' + POP_I18N.t('homeEmptyHint') + '</p></div>';
   }
 
-  // ── 总览档：标题行（我的实践 + 截后计数 + 查看全部）+ 前 6 张双列网格（hub OverviewGrid）──
+  // ── 总览档：标题行（我的实践 + 全量计数 + 查看全部）+ 前 6 张双列网格（hub OverviewGrid）──
   function overviewHtml() {
     var list = all.slice(0, 6);
     if (!list.length) return emptyHtml();
     return '<div class="sec-head"><h2 class="sec-title">' + esc(POP_I18N.t('pageTitle'))
-      + '<span class="sec-count">' + list.length + '</span></h2>'
+      + '<span class="sec-count">' + all.length + '</span></h2>'
       + '<button type="button" class="view-all" data-act="view-all">' + esc(POP_I18N.t('viewAll')) + '</button></div>'
       + '<div class="ov-grid">' + list.map(card).join('') + '</div>';
   }
