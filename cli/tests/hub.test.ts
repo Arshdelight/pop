@@ -446,6 +446,32 @@ describe('push：首推创建/缺支自动创建/FF/分叉/--force', () => {
     mock.mainChain = [];
     mock.forceDropped = 0;
   });
+
+  it('reword 同头（root 不变只改 message）：无 force 拒；--force 走 force 端点同步链元数据', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const { repo, root } = await practiceWithCommit(home, parent);
+    await runIn(repo, home, ['push']);
+    mock.mainChain = [{ seq: 1, root_hash: root, parent_hash: null }];
+    // 消息级重写：root 不变、pushedAt 清戳（dirtyChain 分支）
+    const reworded = await runIn(repo, home, ['history', 'reword', '1', '-m', 'better message']);
+    expect(reworded.code, `stdout=${reworded.stdout} stderr=${reworded.stderr}`).toBe(0);
+    expect(chainOf(repo).commits[0]!.root).toBe(root);
+    expect(chainOf(repo).commits[0]!.pushedAt).toBeUndefined();
+
+    const rejected = await runIn(repo, home, ['push']);
+    expect(rejected.code).toBe(1);
+    expect(rejected.stderr).toMatch(/push --force/);
+
+    const forced = await runIn(repo, home, ['push', '--force']);
+    expect(forced.code, `stdout=${forced.stdout} stderr=${forced.stderr}`).toBe(0);
+    expect(forced.stdout).toMatch(/forced:\s+1 revision\(s\)/);
+    expect(mock.lastForceCommits).toEqual([
+      { seq: 1, root_hash: root, parent_hash: null, message: 'better message' },
+    ]);
+    expect(chainOf(repo).commits[0]!.pushedAt).toBeDefined();
+    mock.mainChain = [];
+  });
 });
 
 describe('pull：对账 + dirty 守卫', () => {

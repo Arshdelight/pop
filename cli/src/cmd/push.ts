@@ -167,12 +167,16 @@ export async function pushRepo(
   if (hubHead === head) {
     const dirtyChain = repo.chain.commits.some((c) => c.pushedAt === undefined);
     if (dirtyChain) {
-      // 头相同但本地链元数据被重写过（reword/squash 后清戳）——FF 推不上去，须 force 同步链
-      console.error(
-        `push rejected: the head matches the hub, but your local chain was rewritten (history edit) —` +
-          ` \`practi push --force\` to sync the chain metadata (the hub drops unreachable objects)`
-      );
-      return 1;
+      // 头相同但本地链元数据被重写过（reword/squash 后清戳）——FF 推不上去；
+      // --force 走 force 端点同步链元数据（root_hash 未变的内容幂等保留，只落新 message）
+      if (opts.force !== true) {
+        console.error(
+          `push rejected: the head matches the hub, but your local chain was rewritten (history edit) —` +
+            ` \`practi push --force\` to sync the chain metadata (the hub drops unreachable objects)`
+        );
+        return 1;
+      }
+      return forcePush(repo, { dataDir: opts.dataDir, remote: opts.remote, base, branch, hubHead });
     }
     console.log(`up to date — ${name}@${branch} → ${shortHash(head ?? '')}`);
     return 0;
