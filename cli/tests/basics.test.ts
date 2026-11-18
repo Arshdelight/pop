@@ -31,7 +31,8 @@ describe('practi basics: version, help, unknown commands', () => {
   });
 
   it('retired commands exit 1 and say where the work went', async () => {
-    for (const cmd of ['ls', 'edit', 'publish', 'migrate', 'instance']) {
+    // ls 已复活（2026-11-18 新语义：家目录跨实践概览，见 ls.test.ts），不在退役名单
+    for (const cmd of ['edit', 'publish', 'migrate', 'instance']) {
       const r = await pop(tempDataDir(), [cmd]);
       expect(r.code, cmd).toBe(1);
       expect(r.stderr).toContain(`\`practi ${cmd}\` was retired`);

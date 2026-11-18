@@ -79,6 +79,8 @@ anywhere
   practi login [--no-open] [--reauth]   OAuth sign-in (PKCE, browser consent); logout revokes
   practi me                     show the signed-in account and scopes
   practi config                 show config home and remote
+  practi ls [--json]            cross-practice overview from the practices home
+                                (branch / head / revisions / unpushed per practice)
   practi fix <file.json> [--dry-run]  migrate a POP 1.x document file to 2.0
   practi skill install | update | uninstall | import <dir> | export <ref>
   practi spec                   print the bundled pop-spec.md (no network)
@@ -86,7 +88,7 @@ anywhere
   practi version | --version    show CLI + pop-spec versions
 ```
 
-Retired with the pops registry (2026-10-20): `edit` `ls` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` — each prints where it went. The config home (`~/.practi`) only holds `practi.json` (remote) and `practi.auth.json` (credentials); practices are plain folders wherever you keep your documents.
+Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview) — each prints where it went. The config home (`~/.practi`) only holds `practi.json` (remote) and `practi.auth.json` (credentials); practices are plain folders wherever you keep your documents.
 
 ### Editing
 

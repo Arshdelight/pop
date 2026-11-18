@@ -43,6 +43,8 @@ The config home (default `~/.practi`) only holds credentials and the remote — 
 npm install -g @arshdelight/practi
 practi init          # create the config home (credentials + remote)
 practi config        # show config home and remote
+practi ls [--json]   # anywhere: cross-practice overview from the practices
+                     # home — branch / head / revisions / unpushed per practice
 ```
 
 The local workflow is fully offline. Optionally a practice syncs with practihub (the reference hub) — see **Hub workflow** below.
@@ -215,7 +217,7 @@ practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
 - **`--notes` also searches your local notes** (off by default, so the plain result set stays stable). Notes are where the most conversational keywords end up — when a search comes up empty, retry it with `--notes` before giving up.
 - **Results are ranked title-first and each says why it matched.** Trust the explanation over the number.
 - **`practi similar <hash>` answers the other question** — not "where did I write X" but "what else is about X". Literal: a paraphrase sharing no wording will not surface.
-- Across practices, browse folders in your file manager — a practice folder *is* its own listing.
+- Across practices, `practi ls` is the one-glance overview — branch, head, revision count and **unpushed** count for every practice in the home (unpushed also counts history rewrites that cleared push stamps). Browse folders in your file manager for anything richer — a practice folder *is* its own listing.
 
 ## Semantic recall (optional, off by default)
 

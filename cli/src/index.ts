@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { PracticeError } from '@arshdelight/pop-sdk';
 import { runInit } from './cmd/init.js';
 import { runConfig } from './cmd/config.js';
+import { runLs } from './cmd/ls.js';
 import { runLint } from './cmd/lint.js';
 import { runNew } from './cmd/new.js';
 import { runCommit } from './cmd/commit.js';
@@ -90,6 +91,8 @@ anywhere:
   practi login [--no-open]       OAuth sign-in to the hub (browser consent)
   practi logout | me | remote set <url> | remove
   practi config                  show config home and remote
+  practi ls [--json]             cross-practice overview from the practices home
+                                 (branch / head / revisions / unpushed per practice)
   practi fix <file.json> [--dry-run]   migrate a POP 1.x document file to 2.0
   practi spec                    print pop-spec.md (bundled with the SDK)
   practi skill install | update | uninstall | import <dir> | export <ref>
@@ -117,8 +120,7 @@ function str(v: string | undefined): string {
 function retired(cmd: string): number {
   const pointers: Record<string, string> = {
     edit: 'the working file IS the edit — open <name>.json with any editor, then `practi commit -m "..."`',
-    ls: 'practices are folders — use your file manager; `practi log` shows a practice\'s revisions',
-    list: 'practices are folders — browse them in your file manager',
+    list: 'practices are folders — browse them in your file manager, or `practi ls` for the overview',
     remove: 'a practice folder is self-contained — deleting the folder removes the practice (the hub copy stays)',
     claim: 'the pops registry retired — content lives in practice folders now',
     unclaim: 'the pops registry retired — content lives in practice folders now',
@@ -160,6 +162,15 @@ async function main(argv: string[]): Promise<number> {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi config'); return 0; }
       return runConfig({ dataDir: str(values['data-dir']) });
+    }
+    case 'ls': {
+      const { values } = parseArgs({
+        args: rest,
+        options: { ...COMMON, json: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) { console.log('usage: practi ls [--json]   (cross-practice overview from the practices home)'); return 0; }
+      return runLs({ dataDir: str(values['data-dir']), json: values.json === true });
     }
     case 'lint': {
       const { values } = parseArgs({
@@ -516,7 +527,6 @@ async function main(argv: string[]): Promise<number> {
       console.log(USAGE);
       return 0;
     case 'edit':
-    case 'ls':
     case 'list':
     case 'remove':
     case 'claim':
