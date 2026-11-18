@@ -6,7 +6,7 @@ import {
 } from './credentials.js';
 import { refreshAccessToken } from './oauth.js';
 import { fetchUrl, type FetchUrlResult } from './net.js';
-import { createFromDoc, loadWorkspace, parseDocument } from '@arshdelight/pop-sdk';
+import { createFromDoc, loadWorkspace, parseDocument, readBlob, storeBlob } from '@arshdelight/pop-sdk';
 
 /** refresh 被服务端拒绝（token 端点有应答但 HTTP 报错）——凭据已死，需重新 login */
 export class RefreshRejectedError extends Error {}
@@ -88,7 +88,7 @@ export async function validAccessToken(dataDir: string, remote: string): Promise
 export interface AuthedRequest {
   method?: string;
   headers?: Record<string, string>;
-  body?: string;
+  body?: string | Uint8Array;
 }
 
 /** 向 remote 发带 Bearer 的请求；401 时刷新一次并重试 */
@@ -177,5 +177,68 @@ export async function fetchRemoteDoc(
   }
   const ws = loadWorkspace(storeDir);
   createFromDoc(ws, body.document);
+  await fetchDocBlobs(storeDir, remote, body.document);
   return { rootHash: parsed.rootHash, status: body.status ?? 'PRIVATE' };
+}
+
+// ── blob 通道（hub 扩展端点 /api/v1/blobs/{hash}，spec §5/§8；hub 2026-11-18 正门） ──
+
+/** 递归收集文档树全部附件 hash（action-only，practice 无附件表；ChildRef 子树的字节
+ *  随其自身 push 已在 hub，不在此列） */
+export function collectAttachmentHashes(node: unknown, out: Set<string> = new Set()): Set<string> {
+  if (node === null || typeof node !== 'object') return out;
+  const n = node as { attachments?: { hash?: unknown }[]; children?: unknown[] };
+  for (const a of n.attachments ?? []) {
+    if (typeof a.hash === 'string' && a.hash !== '') out.add(a.hash);
+  }
+  for (const c of n.children ?? []) collectAttachmentHashes(c, out);
+  return out;
+}
+
+/** PUT 字节到 hub（登录 + practice:write；服务端 sha256 验真、Green 图片机审、幂等去重）。
+ *  返回 null = 成功；字符串 = 给用户看的失败原因 */
+export async function uploadBlob(
+  home: string,
+  remote: string,
+  hash: string,
+  bytes: Buffer
+): Promise<string | null> {
+  const res = await authedFetch(home, remote, `/api/v1/blobs/${encodeURIComponent(hash)}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/octet-stream' },
+    body: new Uint8Array(bytes),
+  });
+  if (res.ok) return null;
+  const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+  const detail =
+    typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : `HTTP ${res.status}`;
+  return `upload ${hash.slice(0, 13)}… failed: ${detail}`;
+}
+
+/** GET 302 探在架（无鉴权——字节公开可拉）；200=在架（redirect 已跟随），404=缺 */
+export async function blobOnHub(remote: string, hash: string): Promise<boolean> {
+  const res = await fetchUrl(`${remote}/api/v1/blobs/${encodeURIComponent(hash)}`);
+  return res.status === 200;
+}
+
+/** 拉取文档后补齐本地 blob 池：对树内引用而本地缺字节的 hash 逐个下载落池。
+ *  best-effort：单个失败（如存量文档字节本就未上传）只警告不阻断——文档本体已验算入库 */
+async function fetchDocBlobs(storeDir: string, remote: string, doc: unknown): Promise<void> {
+  for (const hash of collectAttachmentHashes(doc)) {
+    if (readBlob(storeDir, hash) !== null) continue;
+    try {
+      const res = await fetchUrl(`${remote}/api/v1/blobs/${encodeURIComponent(hash)}`);
+      if (res.status !== 200) {
+        console.warn(`warning: blob ${hash.slice(0, 13)}… not on the hub (legacy doc without bytes?) — media renders as placeholder`);
+        continue;
+      }
+      const stored = storeBlob(storeDir, res.bytes);
+      if (stored !== hash) {
+        // 服务端字节与地址不符（理论不可达——上传时已验真）；不落池，警告
+        console.warn(`warning: blob ${hash.slice(0, 13)}… hash mismatch from hub, skipped`);
+      }
+    } catch (e) {
+      console.warn(`warning: blob ${hash.slice(0, 13)}… download failed (${(e as Error).message}) — retry the pull later`);
+    }
+  }
 }

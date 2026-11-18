@@ -114,6 +114,7 @@ practi blob add <file-or-url> [--name <name>]   # inside the practice folder; by
 ```
 
 - **Local file** — hashed and stored into the practice's blob channel; emits the entry without `url`. Validation later reports `E_BLOB_MISSING` if the bytes are absent.
+- **Hub sync is automatic** — `practi push` uploads referenced blob bytes to the hub (image-only gate, 10MB per action node) before the document lands; `pull`/`clone` fetch missing bytes back into the local pool.
 - **http(s) URL** — fetched once (25 MB limit); the bytes are ALSO stored and the entry is emitted **without** `url` (practi pointers are pure hash — the url is just the import channel; spec §5 still allows the field).
 
 The command prints a ready-to-paste object. Put it on the **action's** `attachments`, then reference it from `content`:

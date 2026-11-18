@@ -1,6 +1,6 @@
-import { exportSubtree, resolveNodeRef, createFromDoc } from '@arshdelight/pop-sdk';
+import { exportSubtree, resolveNodeRef, createFromDoc, readBlob } from '@arshdelight/pop-sdk';
 import { defaultDataDir, loadState, type State } from '../state.js';
-import { authedFetch } from '../client.js';
+import { authedFetch, collectAttachmentHashes, uploadBlob, blobOnHub } from '../client.js';
 import { shortHash } from '../render.js';
 import {
   chainHead,
@@ -42,6 +42,32 @@ function detailOf(body: Record<string, unknown>, status: number): string {
     : typeof body.error === 'string'
       ? body.error
       : `HTTP ${status}`;
+}
+
+/** hub E_BLOB_MISSING 应答里的缺失 hash 列表（body.missing；非该错误/无数组 → null） */
+function missingBlobsOf(body: Record<string, unknown>): string[] | null {
+  if (body.code !== 'E_BLOB_MISSING' || !Array.isArray(body.missing)) return null;
+  const hashes = body.missing.filter((h): h is string => typeof h === 'string' && h !== '');
+  return hashes.length > 0 ? hashes : null;
+}
+
+/** 把本地池里的缺失 blob 逐个 PUT 上 hub（blob 正门，2026-11-18）。
+ *  返回 null = 全部就绪；字符串 = 给用户看的失败原因（本地无字节/上传被拒）。 */
+async function ensureRemoteBlobs(
+  hashes: string[],
+  repo: Repo,
+  ctx: { dataDir: string; remote: string; verbose?: boolean }
+): Promise<string | null> {
+  for (const hash of hashes) {
+    const bytes = readBlob(repo.poolDir, hash);
+    if (bytes === null) {
+      return `blob ${hash.slice(0, 13)}… is referenced by the document but has no local bytes — re-add it with \`practi blob add <file>\``;
+    }
+    const err = await uploadBlob(ctx.dataDir, ctx.remote, hash, bytes);
+    if (err !== null) return err;
+    if (ctx.verbose) console.log(`  blob ${shortHash(hash)} uploaded`);
+  }
+  return null;
 }
 
 /** 实例在 hub 侧不存在时创建（首次 push 诞生），回填 owner。
@@ -183,19 +209,32 @@ export async function pushRepo(
     return 0;
   }
 
-  // FF 逐条推（服务端 parent=当前支头自动落链）
+  // FF 逐条推（服务端 parent=当前支头自动落链）。附件字节缺失（E_BLOB_MISSING）时
+  // 自动从本地池补传后重推一次——正常路径零额外请求，blob 已在 hub 的重复推送无感
   for (const c of path) {
     const doc = exportDoc(repo, c.root);
     if (doc === null) {
       console.error(`push failed: node not found in the practice pool: ${c.root}`);
       return 1;
     }
-    const res = await authedFetch(opts.dataDir, opts.remote, `${base}/branches/${encodeURIComponent(branch)}/revisions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(c.message !== '' ? { document: doc, message: c.message } : { document: doc }),
-    });
-    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const post = () =>
+      authedFetch(opts.dataDir, opts.remote, `${base}/branches/${encodeURIComponent(branch)}/revisions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(c.message !== '' ? { document: doc, message: c.message } : { document: doc }),
+      });
+    let res = await post();
+    let body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const missing = res.ok ? null : missingBlobsOf(body);
+    if (missing !== null) {
+      const err = await ensureRemoteBlobs(missing, repo, opts);
+      if (err !== null) {
+        console.error(`push failed at v${c.seq} (${shortHash(c.root)}): ${err}`);
+        return 1;
+      }
+      res = await post();
+      body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    }
     if (!res.ok) {
       console.error(`push failed at v${c.seq} (${shortHash(c.root)}): ${detailOf(body, res.status)}`);
       return 1;
@@ -227,6 +266,26 @@ async function forcePush(
   for (const c of repo.chain.commits) {
     const doc = exportDoc(repo, c.root);
     if (doc !== null) documents.push({ root_hash: c.root, document: doc });
+  }
+  // blob 预检（批量首缺失即整单拒收，逐批重试太贵）：全链附件 hash 逐个探在架，
+  // 缺的从本地池补传后再整批推
+  const allHashes = new Set<string>();
+  for (const d of documents) collectAttachmentHashes(d.document, allHashes);
+  const missing: string[] = [];
+  for (const hash of allHashes) {
+    try {
+      if (!(await blobOnHub(ctx.remote, hash))) missing.push(hash);
+    } catch (e) {
+      console.error(`force push failed: probing blob ${shortHash(hash)} — ${(e as Error).message}`);
+      return 1;
+    }
+  }
+  if (missing.length > 0) {
+    const err = await ensureRemoteBlobs(missing, repo, { dataDir: ctx.dataDir, remote: ctx.remote, verbose: true });
+    if (err !== null) {
+      console.error(`force push failed: ${err}`);
+      return 1;
+    }
   }
   const res = await authedFetch(ctx.dataDir, ctx.remote, `${ctx.base}/branches/${encodeURIComponent(ctx.branch)}/revisions?force=1`, {
     method: 'POST',
