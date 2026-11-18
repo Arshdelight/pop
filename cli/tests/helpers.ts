@@ -80,7 +80,7 @@ export async function runIn(dir: string, home: string, args: string[], opts: Pop
       ['--import', TSX_LOADER, CLI_ENTRY, ...args],
       {
         cwd: dir,
-        env: { ...process.env, PRACTI_HOME: home, ...opts.env },
+        env: { ...process.env, PRACTI_HOME: home, PRACTI_NO_VERSION_CHECK: '1', ...opts.env }, // 测试统一禁版本注入（真联网会污染 stderr 断言）
         windowsHide: true,
         timeout: 60_000,
         killSignal: 'SIGKILL',
@@ -163,7 +163,7 @@ export function spawnWeb(repoDir: string, home: string, port: number): ChildProc
   return execFile(
     process.execPath,
     ['--import', TSX_LOADER, CLI_ENTRY, 'web', '--port', String(port), '--no-open'],
-    { cwd: repoDir, env: { ...process.env, PRACTI_HOME: home }, windowsHide: true },
+    { cwd: repoDir, env: { ...process.env, PRACTI_HOME: home, PRACTI_NO_VERSION_CHECK: '1' }, windowsHide: true },
     () => {},
   );
 }

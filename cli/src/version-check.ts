@@ -89,9 +89,11 @@ function notify(cache: VersionCheckCache, force: boolean): void {
   }
 }
 
-/** index.ts 命令分发前注入；force = --checkversion / --check-version */
+/** index.ts 命令分发前注入；force = --checkversion / --check-version。
+ *  PRACTI_NO_VERSION_CHECK=1 整体禁用（脚本/CI/测试要纯净输出时用）。 */
 export async function versionCheckNotify(opts: { dataDir?: string; force?: boolean } = {}): Promise<void> {
   try {
+    if (process.env.PRACTI_NO_VERSION_CHECK === '1') return;
     const dataDir = opts.dataDir ?? defaultDataDir();
     const cached = readCache(dataDir);
     if (opts.force !== true && cached && isFresh(cached)) {
