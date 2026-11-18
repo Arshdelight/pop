@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { CLI_VERSION } from '../version.js';
+import { defaultDataDir } from '../state.js';
 
 export const PKG = '@arshdelight/practi';
 
@@ -53,7 +54,20 @@ export function cmpSemver(a: string, b: string): number {
  * shim（句柄开着），原地 npm 重写必失败；后台进程等本命令链退出后落盘，
  * 输出追加到临时目录日志（detached 进程不再共享 console，时序也不可靠）。
  */
-export async function runUpdate(_opts: UpdateOpts): Promise<number> {
+
+/** version-check.json 缓存路径（缓存生命周期归 update 管——version-check 依赖本模块，反向 import 会成环） */
+export function versionCheckCachePath(dataDir: string): string {
+  return path.join(dataDir, 'version-check.json');
+}
+
+/** 清掉版本检测缓存：update 落地后旧缓存里的 latest 已 ≤ 新当前版，不清会提示「0.23.0 → 0.23.0」 */
+export function clearVersionCheckCache(dataDir?: string): void {
+  try {
+    fs.rmSync(versionCheckCachePath(dataDir ?? defaultDataDir()), { force: true });
+  } catch { /* 清不掉只影响下次多测一次，不阻塞 */ }
+}
+
+export async function runUpdate(opts: UpdateOpts): Promise<number> {
   const registry = npmOut(['config', 'get', 'registry']) || 'https://registry.npmjs.org';
   console.log(`checking ${registry} for ${PKG} …`);
   const res = await fetch(`${registry.replace(/\/+$/, '')}/${PKG.replace('/', '%2F')}`);
@@ -69,6 +83,7 @@ export async function runUpdate(_opts: UpdateOpts): Promise<number> {
   }
   if (cmpSemver(latest, CLI_VERSION) <= 0) {
     console.log(`already up to date: ${CLI_VERSION} (registry latest ${latest})`);
+    clearVersionCheckCache(opts.dataDir); // 顺手清残留缓存（可能还挂着旧 update 态）
     return 0;
   }
 
@@ -94,6 +109,7 @@ export async function runUpdate(_opts: UpdateOpts): Promise<number> {
       return 1;
     }
     fs.closeSync(out);
+    clearVersionCheckCache(opts.dataDir); // 新版即将落地，旧检测缓存作废
     console.log(`installing ${latest} in the background — log: ${log}`);
     console.log(`verify with: practi --version`);
     return 0;
@@ -104,6 +120,7 @@ export async function runUpdate(_opts: UpdateOpts): Promise<number> {
     console.error(`  npm install -g ${PKG}@${latest}`);
     return 1;
   }
+  clearVersionCheckCache(opts.dataDir); // 新版即将落地，旧检测缓存作废
   console.log(`updated to ${latest} (takes effect on the next run)`);
   return 0;
 }

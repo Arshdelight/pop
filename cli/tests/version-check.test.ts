@@ -91,6 +91,15 @@ describe('versionCheckNotify：TTL 缓存与三态提示', () => {
     expect(err).toHaveBeenCalledTimes(1);
   });
 
+  it('陈旧 update 缓存（latest<=current，update 后残留）→ 清缓存静默，不再出现「0.23.0 → 0.23.0」', async () => {
+    const { CLI_VERSION } = await import('../src/version.js');
+    seedCache({ checkedAt: new Date().toISOString(), status: 'update', latest: CLI_VERSION });
+    await versionCheckNotify({ dataDir: home });
+    expect(mockFetch).not.toHaveBeenCalled(); // 不重检：守卫直接失效旧缓存
+    expect(err).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(home, 'version-check.json'))).toBe(false);
+  });
+
   it('缓存过期（>10 分钟）→ 重新检测', async () => {
     const { CLI_VERSION } = await import('../src/version.js');
     seedCache({ checkedAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(), status: 'error', reason: 'stale failure' });

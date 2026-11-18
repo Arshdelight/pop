@@ -19,6 +19,7 @@ import { runNote } from './cmd/note.js';
 import { runSkill } from './cmd/skill.js';
 import { runFix } from './cmd/fix.js';
 import { runUpdate } from './cmd/update.js';
+import { runNotifications } from './cmd/notifications.js';
 import { runSpec } from './cmd/spec.js';
 import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runRemote } from './cmd/remote.js';
@@ -93,6 +94,9 @@ anywhere:
   practi config                  show config home and remote
   practi ls [--json]             cross-practice overview from the practices home
                                  (branch / head / revisions / unpushed per practice)
+  practi notifications [-n N] [--since D] [--until D] [--json]
+                                 mailbox from the hub (recent N, or a since/until
+                                 range; YYYY-MM-DD or ISO datetime)
   practi fix <file.json> [--dry-run]   migrate a POP 1.x document file to 2.0
   practi spec                    print pop-spec.md (bundled with the SDK)
   practi skill install | update | uninstall | import <dir> | export <ref>
@@ -146,8 +150,9 @@ async function main(rawArgv: string[]): Promise<number> {
   const cmd = argv[0] ?? 'help';
   const rest = argv.slice(1);
 
-  // 命令前注入的版本检测（缓存 10 分钟；失败也缓存不重复触发；输出全走 stderr）
-  if (cmd !== 'help') await versionCheckNotify({ force: forceCheck });
+  // 命令前注入的版本检测（缓存 10 分钟；失败也缓存不重复触发；输出全走 stderr）。
+  // update 跳过——它本身就是更新动作，runUpdate 内自带实时 registry 检测，再提示一次纯属噪音
+  if (cmd !== 'help' && cmd !== 'update') await versionCheckNotify({ force: forceCheck });
 
   if (cmd === 'version' || argv.includes('--version') || argv.includes('-v')) {
     return printVersion();
@@ -294,7 +299,36 @@ async function main(rawArgv: string[]): Promise<number> {
     case 'update': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
       if (values.help) { console.log('usage: practi update   (self-update via npm; checks the registry\'s latest)'); return 0; }
-      return await runUpdate({});
+      return await runUpdate({ dataDir: str(values['data-dir']) });
+    }
+    case 'notifications': {
+      const { values } = parseArgs({
+        args: rest,
+        options: {
+          ...COMMON,
+          limit: { type: 'string' as const, short: 'n' },
+          since: { type: 'string' as const },
+          until: { type: 'string' as const },
+          json: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi notifications [-n <limit>] [--since YYYY-MM-DD|ISO] [--until YYYY-MM-DD|ISO] [--json]   (mailbox from the hub)');
+        return 0;
+      }
+      const limit = values.limit !== undefined ? Number(values.limit) : undefined;
+      if (limit !== undefined && !Number.isFinite(limit)) {
+        console.error('error: --limit/-n expects a number');
+        return 1;
+      }
+      return await runNotifications({
+        dataDir: str(values['data-dir']),
+        limit,
+        since: values.since,
+        until: values.until,
+        json: values.json === true,
+      });
     }
     case 'login': {
       const { values } = parseArgs({

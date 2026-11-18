@@ -192,6 +192,10 @@ practi pull                               # fetch missing revisions, fast-forwar
                                            # update the working file (refuses when dirty)
 practi clone <owner>/<name>[@branch] [--dir <path>]   # a hub practice → a local folder
                                            # (full chain + working file; git clone)
+practi notifications [-n N] [--since D] [--until D] [--json]
+                                           # mailbox from the hub: recent N or a since/until
+                                           # range (YYYY-MM-DD or ISO datetime); read-only —
+                                           # marking read happens on the hub web inbox
 practi branch [name] [--from <hash>] | -d <name>   # list (* = current) / create / delete
 practi switch <branch>                    # switch branches; the working file follows the
                                            # head (refuses when dirty — commit first)

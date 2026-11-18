@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { fetchUrl } from './net.js';
 import { defaultDataDir } from './state.js';
 import { CLI_VERSION } from './version.js';
-import { cmpSemver, npmOut, PKG } from './cmd/update.js';
+import { cmpSemver, clearVersionCheckCache, npmOut, PKG, versionCheckCachePath } from './cmd/update.js';
 
 /**
  * 命令前注入的自动版本检测（2026-11-18 需求）：
@@ -31,7 +30,7 @@ export interface VersionCheckCache {
 }
 
 function cachePath(dataDir: string): string {
-  return path.join(dataDir, 'version-check.json');
+  return versionCheckCachePath(dataDir);
 }
 
 function readCache(dataDir: string): VersionCheckCache | null {
@@ -79,7 +78,13 @@ async function checkOnce(): Promise<VersionCheckCache> {
   }
 }
 
-function notify(cache: VersionCheckCache, force: boolean): void {
+function notify(cache: VersionCheckCache, force: boolean, dataDir: string): void {
+  // 陈旧 update 缓存守卫：update 命令落地新版后，TTL 内残留缓存的 latest 已 ≤ 当前版
+  // （典型如「update available: 0.23.0 → 0.23.0」）——失效清缓存并静默
+  if (cache.status === 'update' && cache.latest && cmpSemver(cache.latest, CLI_VERSION) <= 0) {
+    clearVersionCheckCache(dataDir);
+    return;
+  }
   if (cache.status === 'update') {
     console.error(`update available: ${CLI_VERSION} → ${cache.latest} — run \`practi update\``);
   } else if (cache.status === 'error') {
@@ -97,11 +102,11 @@ export async function versionCheckNotify(opts: { dataDir?: string; force?: boole
     const dataDir = opts.dataDir ?? defaultDataDir();
     const cached = readCache(dataDir);
     if (opts.force !== true && cached && isFresh(cached)) {
-      notify(cached, false);
+      notify(cached, false, dataDir);
       return;
     }
     const result = await checkOnce();
     writeCache(dataDir, result);
-    notify(result, opts.force === true);
+    notify(result, opts.force === true, dataDir);
   } catch { /* 双保险：检测链路任何意外都不影响命令执行 */ }
 }
