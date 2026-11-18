@@ -4,6 +4,7 @@ import { PracticeError } from '@arshdelight/pop-sdk';
 import { runInit } from './cmd/init.js';
 import { runConfig } from './cmd/config.js';
 import { runLs } from './cmd/ls.js';
+import { versionCheckNotify } from './version-check.js';
 import { runLint } from './cmd/lint.js';
 import { runNew } from './cmd/new.js';
 import { runCommit } from './cmd/commit.js';
@@ -101,6 +102,9 @@ anywhere:
 
 options:
   --dir <path>                   target a practice folder from outside it
+  --checkversion | --check-version   force a version check right now (refreshes
+                                 the 10-min cache; a newer release is announced
+                                 before every command until you update)
 
 the config home (default ~/.practi) keeps practi.json (remote) and
 practi.auth.json (OAuth credentials) — practices themselves are plain
@@ -135,9 +139,16 @@ function retired(cmd: string): number {
   return 1;
 }
 
-async function main(argv: string[]): Promise<number> {
+async function main(rawArgv: string[]): Promise<number> {
+  // 全局 flag：--checkversion / --check-version 强制版本检测（任何命令可搭；正常态
+  // 也可单独用来主动查更新）。剥掉再分发——各命令 parseArgs 不认识全局 flag。
+  const forceCheck = rawArgv.includes('--checkversion') || rawArgv.includes('--check-version');
+  const argv = rawArgv.filter((a) => a !== '--checkversion' && a !== '--check-version');
   const cmd = argv[0] ?? 'help';
   const rest = argv.slice(1);
+
+  // 命令前注入的版本检测（缓存 10 分钟；失败也缓存不重复触发；输出全走 stderr）
+  if (cmd !== 'help') await versionCheckNotify({ force: forceCheck });
 
   if (cmd === 'version' || argv.includes('--version') || argv.includes('-v')) {
     return printVersion();

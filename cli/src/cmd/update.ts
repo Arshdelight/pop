@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { CLI_VERSION } from '../version.js';
 
-const PKG = '@arshdelight/practi';
+export const PKG = '@arshdelight/practi';
 
 export interface UpdateOpts {
   dataDir?: string;
@@ -29,14 +29,14 @@ export function npmInvocation(): { cmd: string; prefixArgs: string[]; shell: boo
   return { cmd: NPM, prefixArgs: [], shell: false };
 }
 
-function npmOut(args: string[]): string {
+export function npmOut(args: string[]): string {
   const { cmd, prefixArgs, shell } = npmInvocation();
   const r = spawnSync(cmd, [...prefixArgs, ...args], { encoding: 'utf8', shell });
   return (r.stdout ?? '').trim();
 }
 
 /** 点分数值比较：a>b 返回 1，a<b 返回 -1，相等返回 0 */
-function cmpSemver(a: string, b: string): number {
+export function cmpSemver(a: string, b: string): number {
   const pa = a.split('.').map(Number);
   const pb = b.split('.').map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {

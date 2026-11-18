@@ -43,6 +43,9 @@ The config home (default `~/.practi`) only holds credentials and the remote — 
 npm install -g @arshdelight/practi
 practi init          # create the config home (credentials + remote)
 practi config        # show config home and remote
+practi --checkversion   # force a version check now (otherwise every command
+                     # quietly checks the registry once per 10 min — cached,
+                     # failures included)
 practi ls [--json]   # anywhere: cross-practice overview from the practices
                      # home — branch / head / revisions / unpushed per practice
 ```

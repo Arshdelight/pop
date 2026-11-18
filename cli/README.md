@@ -85,6 +85,9 @@ anywhere
   practi skill install | update | uninstall | import <dir> | export <ref>
   practi spec                   print the bundled pop-spec.md (no network)
   practi update                 self-update via npm
+                                (every command quietly checks the registry once per
+                                10 min — cached, failures included; add
+                                --checkversion to any command to force a re-check)
   practi version | --version    show CLI + pop-spec versions
 ```
 
