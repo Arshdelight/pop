@@ -196,6 +196,16 @@ practi notifications [-n N] [--since D] [--until D] [--json]
                                            # mailbox from the hub: recent N or a since/until
                                            # range (YYYY-MM-DD or ISO datetime); read-only —
                                            # marking read happens on the hub web inbox
+practi appeal submit <owner>/<name> --root <hash> --reason <text>
+                                           # file a review appeal for a rejected version (≤2000
+                                           # chars); the hub targets the offending pop server-side
+                                           # (direct or inherited rejection) — outcome arrives
+                                           # as a hub notification
+practi appeal list <owner>/<name> [--json] # your appeals for this instance + head review state
+practi visibility <owner>/<name> public|private
+                                           # request publication (enters hub review,
+                                           # PUBLIC_REVIEWING — verdict via notifications) or
+                                           # revert to private
 practi branch [name] [--from <hash>] | -d <name>   # list (* = current) / create / delete
 practi switch <branch>                    # switch branches; the working file follows the
                                            # head (refuses when dirty — commit first)

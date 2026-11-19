@@ -20,6 +20,8 @@ import { runSkill } from './cmd/skill.js';
 import { runFix } from './cmd/fix.js';
 import { runUpdate } from './cmd/update.js';
 import { runNotifications } from './cmd/notifications.js';
+import { runAppeal } from './cmd/appeal.js';
+import { runVisibility } from './cmd/visibility.js';
 import { runSpec } from './cmd/spec.js';
 import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runRemote } from './cmd/remote.js';
@@ -97,6 +99,13 @@ anywhere:
   practi notifications [-n N] [--since D] [--until D] [--json]
                                  mailbox from the hub (recent N, or a since/until
                                  range; YYYY-MM-DD or ISO datetime)
+  practi appeal submit <owner>/<name> --root <hash> --reason <text>
+                                 file a review appeal for a rejected version (the
+                                 hub targets the offending pop server-side)
+  practi appeal list <owner>/<name> [--json]
+                                 your appeals for this instance + head review state
+  practi visibility <owner>/<name> public|private
+                                 request publication (enters hub review) or revert to private
   practi fix <file.json> [--dry-run]   migrate a POP 1.x document file to 2.0
   practi spec                    print pop-spec.md (bundled with the SDK)
   practi skill install | update | uninstall | import <dir> | export <ref>
@@ -545,6 +554,50 @@ async function main(rawArgv: string[]): Promise<number> {
         json: values.json === true,
         dir: values.dir,
       });
+    }
+    case 'appeal': {
+      const sub = rest[0];
+      const { values, positionals } = parseArgs({
+        args: rest.slice(1),
+        options: {
+          ...COMMON,
+          root: { type: 'string' },
+          reason: { type: 'string' },
+          json: { type: 'boolean' as const },
+        },
+        allowPositionals: true,
+      });
+      const known = ['submit', 'list'] as const;
+      const action = known.find((k) => k === sub);
+      if (values.help) {
+        console.log('usage: practi appeal submit <owner>/<name> --root <hash> --reason <text>   (review appeal; hub targets the offending pop)');
+        console.log('       practi appeal list <owner>/<name> [--json]   (your appeals + head review state)');
+        return 0;
+      }
+      if (action === undefined) {
+        console.error('usage: practi appeal submit <owner>/<name> --root <hash> --reason <text> | practi appeal list <owner>/<name>');
+        return 1;
+      }
+      return await runAppeal({
+        dataDir: str(values['data-dir']),
+        action,
+        positional: positionals,
+        root: values.root,
+        reason: values.reason,
+        json: values.json === true,
+      });
+    }
+    case 'visibility': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, json: { type: 'boolean' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi visibility <owner>/<name> public|private   (request publication or revert; public enters hub review)');
+        return 0;
+      }
+      return runVisibility({ dataDir: str(values['data-dir']), positional: positionals, json: values.json === true });
     }
     case 'help':
     case '--help':
