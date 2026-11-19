@@ -133,6 +133,7 @@ export async function pushRepo(
     if (owner === null) return 1;
     saveChain(repo);
     console.log(`created on the hub: ${owner}/${repo.chain.name}  (PRIVATE)`);
+    console.log(`  invisible to others — request publication with: practi visibility ${owner}/${repo.chain.name} public`);
   }
   const { owner: bindOwner, name } = repo.chain;
   const base = `/api/v1/instances/${encodeURIComponent(bindOwner ?? '')}/${encodeURIComponent(name)}`;
