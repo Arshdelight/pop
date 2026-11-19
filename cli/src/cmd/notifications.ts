@@ -25,6 +25,9 @@ const KIND_LABELS: Record<string, string> = {
   issue_created: 'issue opened',
   issue_comment: 'issue reply',
   issue_hidden: 'hidden by review',
+  appeal_overridden: 'appeal accepted',
+  appeal_upheld: 'appeal upheld',
+  feedback_replied: 'feedback replied',
 };
 
 function label(kind: string): string {
