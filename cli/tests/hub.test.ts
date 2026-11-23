@@ -15,6 +15,8 @@ import { freePort, init, pop, runIn, tempDataDir, chainOf, workingFile, poolFile
 const DOC = { name: 'Hub bridge doc', content: 'Content that travels to the hub.' };
 const DOC2 = { name: 'Second pop', content: 'Another pop for the practice.' };
 const ME = { username: 'tester' };
+/** 站点图标引用（pop#3）：三页同一行，指向单一静态文件 web-default/favicon.svg */
+const ICON_LINK = '<link rel="icon" type="image/svg+xml" href="/favicon.svg">';
 
 interface MockState {
   /** GET 实例视图的 main 链覆盖（[0] 视为 tip；[] = 空实例） */
@@ -647,7 +649,13 @@ describe('web：实例浏览器', () => {
       const view = await fetch(`${base}/pop/${encodeURIComponent(root)}.json`);
       expect(view.ok).toBe(true);
       const page = await fetch(base);
-      expect(await page.text()).toContain('chain.js');
+      const pageHtml = await page.text();
+      expect(pageHtml).toContain('chain.js');
+      // 站点图标（pop#3）：页面只留对 /favicon.svg 的引用，不再内嵌手抄副本
+      expect(pageHtml).toContain(ICON_LINK);
+      const icon = await fetch(`${base}/favicon.svg`);
+      expect(icon.headers.get('content-type')).toBe('image/svg+xml');
+      expect(await icon.text()).toContain('viewBox="67.5 75 459 459"');
     } finally {
       child.kill();
     }
@@ -672,10 +680,20 @@ describe('web：实例浏览器', () => {
       const base = await untilHealthy(port, child, 15_000, '/api/practices');
       const page = await fetch(base);
       expect(page.ok).toBe(true);
-      expect(await page.text()).toContain('home.js');
+      const homeHtml = await page.text();
+      expect(homeHtml).toContain('home.js');
+      expect(homeHtml).toContain(ICON_LINK);
 
       const listRes = await fetch(`${base}/api/practices`);
-      const list = (await listRes.json()) as { name: string; commits: number; head: { root: string } | null; updated: string | null }[];
+      const list = (await listRes.json()) as {
+        name: string;
+        title: string | null;
+        description: string | null;
+        owner: string | null;
+        commits: number;
+        head: { root: string } | null;
+        updated: string | null;
+      }[];
       expect(list.map((p) => p.name).sort()).toEqual(['alpha', 'beta']);
       const alpha = list.find((p) => p.name === 'alpha')!;
       expect(alpha.commits).toBe(1);
@@ -685,15 +703,39 @@ describe('web：实例浏览器', () => {
       expect(beta.commits).toBe(0);
       expect(beta.head).toBeNull();
 
-      // 前缀路由：wizard 数据窗与链数据窗、页面注入前缀变量
+      // 实践卡字段（pop#2，hub 实践卡同口径）：标题/摘录取自工作文件根节点，owner 取链。
+      // 清单每请求现读——补上 description、把文件改成坏 JSON、链回填 owner，刷新即见；
+      // 坏文件只让这一张卡退回「文件夹名+空摘录」，链与修订信息不受影响
+      const alphaDir = path.join(homePractices, 'alpha');
+      const wf = workingFile(alphaDir);
+      const original = fs.readFileSync(wf, 'utf8');
+      const listed = async (): Promise<(typeof list)[number] | undefined> =>
+        ((await (await fetch(`${base}/api/practices`)).json()) as typeof list).find((p) => p.name === 'alpha');
+      expect(alpha).toMatchObject({ title: DOC.name, description: null, owner: null });
+      expect(beta).toMatchObject({ title: null, description: null, owner: null });
+      const doc = JSON.parse(original) as Record<string, unknown>;
+      fs.writeFileSync(wf, JSON.stringify({ ...doc, description: 'Alpha card excerpt' }, null, 2), 'utf8');
+      expect(await listed()).toMatchObject({ title: DOC.name, description: 'Alpha card excerpt' });
+      fs.writeFileSync(wf, '{ not json', 'utf8');
+      expect(await listed()).toMatchObject({ title: null, description: null, commits: 1 });
+      fs.writeFileSync(wf, original, 'utf8');
+      const chainFile = path.join(alphaDir, '.practi', 'chain.json');
+      fs.writeFileSync(chainFile, JSON.stringify({ ...chainOf(alphaDir), owner: 'tester' }, null, 2), 'utf8');
+      expect(await listed()).toMatchObject({ owner: 'tester' });
+
+      // 前缀路由：wizard 数据窗与链数据窗、页面注入前缀变量；带前缀的页面图标仍走根路径，
+      // 由总览层的静态兜底路由供给
       const view = await fetch(`${base}/p/alpha/pop/${encodeURIComponent(root)}.json`);
       expect(view.ok).toBe(true);
       const repoInfo = (await (await fetch(`${base}/p/alpha/api/repo`)).json()) as { name: string };
       expect(repoInfo.name).toBe('alpha');
       const chainPage = await (await fetch(`${base}/p/alpha/`)).text();
       expect(chainPage).toContain('window.POP_WEB_PREFIX="/p/alpha"');
-      const wizardPage = await fetch(`${base}/p/alpha/pop/${encodeURIComponent(root)}`);
-      expect(await wizardPage.text()).toContain('window.POP_WEB_PREFIX="/p/alpha"');
+      expect(chainPage).toContain(ICON_LINK);
+      const wizardPage = await (await fetch(`${base}/p/alpha/pop/${encodeURIComponent(root)}`)).text();
+      expect(wizardPage).toContain('window.POP_WEB_PREFIX="/p/alpha"');
+      expect(wizardPage).toContain(ICON_LINK);
+      expect((await fetch(`${base}/favicon.svg`)).status).toBe(200);
       // 空壳实例链页可达；未知实例 404；未前缀的实例路由不外溢
       expect((await fetch(`${base}/p/beta/`)).ok).toBe(true);
       expect((await fetch(`${base}/p/missing/`)).status).toBe(404);

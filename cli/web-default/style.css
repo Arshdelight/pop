@@ -141,9 +141,10 @@ main.u-main { padding: 24px 24px 48px; }
 .view-all { border: none; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--primary); cursor: pointer; user-select: none; }
 .view-all:hover { text-decoration: underline; }
 
-/* 总览双列卡网格（hub OverviewGrid：GitHub Popular repositories 同款，截前 6 张） */
+/* 总览双列卡网格（hub OverviewGrid：GitHub Popular repositories 同款，截前 6 张）。
+   minmax(0,1fr)=hub grid-cols-2 口径：列宽等分、不随内容撑开，超长标题在卡内省略号截断 */
 .ov-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
-@media (min-width: 640px) { .ov-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 640px) { .ov-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 
 /* 查找框（hub MyInstances 工具栏）：图标区在盒外左缘，focus-within 描边+ring */
 .find-box { display: flex; align-items: center; height: 32px; width: 176px; border: 1px solid var(--ink-300); border-radius: var(--radius); background: #fff; transition: border-color .15s, box-shadow .15s; }
@@ -158,13 +159,17 @@ main.u-main { padding: 24px 24px 48px; }
 /* 实践档堆叠列表（hub：GitHub 仓库列表同款，独立描边卡片间距分隔） */
 .stack-list { display: flex; flex-direction: column; gap: 12px; margin-top: 32px; }
 
-/* 实践卡（hub InstanceCard 解剖逐条对齐）：标题行 / 14px 摘录 line-clamp-2 / meta 沉底，
-   无头像与可见性徽章（本地无此数据） */
+/* 实践卡（hub InstanceCard 解剖逐条对齐）：标题行 / 14px 摘录 line-clamp-2 / 页脚 owner/文件夹名
+   / meta 沉底，无头像与可见性徽章（本地无此数据） */
 .card { display: block; border: 1px solid var(--ink-200); border-radius: var(--radius); background: #fff; padding: 16px; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
 .card:hover { border-color: var(--ink-300); box-shadow: 0 1px 2px rgba(0, 0, 0, .05); text-decoration: none; }
-.card-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 标题单行省略号（hub 标题 truncate）：text-overflow 只作用于块级容器的行内内容——不能用
+   flex（flex 容器里的匿名文本项不参与省略，只会被硬裁） */
+.card-title { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-excerpt { font-size: 14px; color: var(--ink-a60); margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-excerpt .none { color: var(--ink-a40); }
+/* 页脚行（hub InstanceCard 页脚：mt-2 text-sm ink/60 truncate）；本地无头像，只出 owner/文件夹名 */
+.card-foot { font-size: 14px; color: var(--ink-a60); margin: 8px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { font-size: 12px; color: var(--ink-a40); margin: 8px 0 0; font-variant-numeric: tabular-nums; }
 /* 查找无结果的弱化空态（hub 同款：dashed 盒内回显查询词） */
 .find-empty { margin-top: 32px; padding: 56px 24px; text-align: center; border: 1px dashed var(--ink-200); border-radius: var(--radius); font-size: 14px; color: var(--ink-a40); overflow-wrap: break-word; }

@@ -25,13 +25,19 @@
       : '/p/' + encodeURIComponent(p.name) + '/';
   }
 
-  // 实践卡（hub InstanceCard 解剖：标题 / 摘录 line-clamp-2 / meta 沉底；无头像与徽章）
+  // 实践卡（hub InstanceCard 解剖逐条对齐）：标题=根 POP name（清单读不到时回退文件夹名）；
+  // 摘录=根 description（hub 同口径：只取 description——正文≠描述，不拿 content 或提交说明
+  // 顶替；没有就不出这一行，无修订的空壳出「还没有修订」）；页脚=owner/文件夹名（未推送无
+  // owner 则只出文件夹名）；meta 沉底。无头像与可见性徽章（本地无此数据）
   function card(p) {
-    var excerpt = p.head ? esc(p.head.message) : '<span class="none">' + esc(POP_I18N.t('homeNoRevisions')) + '</span>';
+    var excerpt = '';
+    if (p.description) excerpt = '<p class="card-excerpt">' + esc(p.description) + '</p>';
+    else if (!p.head) excerpt = '<p class="card-excerpt"><span class="none">' + esc(POP_I18N.t('homeNoRevisions')) + '</span></p>';
     var date = p.updated ? esc(p.updated.slice(0, 10)) : '';
     return '<a class="card" href="' + target(p) + '">'
-      + '<p class="card-title">' + esc(p.name) + '</p>'
-      + '<p class="card-excerpt">' + excerpt + '</p>'
+      + '<p class="card-title">' + esc(p.title || p.name) + '</p>'
+      + excerpt
+      + '<p class="card-foot">' + esc((p.owner ? p.owner + '/' : '') + p.name) + '</p>'
       + '<p class="card-meta">' + esc(POP_I18N.t('commitCount', p.commits)) + (date ? ' · ' + date : '') + '</p>'
       + '</a>';
   }
@@ -55,13 +61,14 @@
       + '<div class="ov-grid">' + list.map(card).join('') + '</div>';
   }
 
-  // ── 实践档：查找框工具行 + 全量堆叠列表（hub MyInstances；过滤命中 name/head message）──
+  // ── 实践档：查找框工具行 + 全量堆叠列表（hub MyInstances；纯前端过滤，大小写不敏感）。
+  // 命中卡面可见的文字：文件夹名/根 name/description（hub 同口径：实例名/头标题/描述）──
   function filtered() {
     var q = query.trim().toLowerCase();
     if (!q) return all;
+    function has(s) { return typeof s === 'string' && s.toLowerCase().indexOf(q) !== -1; }
     return all.filter(function (p) {
-      return p.name.toLowerCase().indexOf(q) !== -1
-        || (p.head && p.head.message ? p.head.message.toLowerCase().indexOf(q) !== -1 : false);
+      return has(p.name) || has(p.title) || has(p.description);
     });
   }
 

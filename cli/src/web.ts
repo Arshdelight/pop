@@ -312,11 +312,36 @@ function servePage(res: http.ServerResponse, file: string, prefix = ''): void {
 export interface PracticeEntry {
   /** 文件夹名（=路由身份；链内 name 与它不一致时以文件夹为准） */
   name: string;
+  /** 工作文件根节点的 name——卡面标题（hub 实践卡同口径：标题=POP 标题）。只供展示不参与
+   *  身份；工作文件缺失/坏 JSON/字段缺失=null，卡面回退文件夹名 */
+  title: string | null;
+  /** 工作文件根节点的 description——卡面摘录（hub 同口径：只取根 description，不回退 content
+   *  与提交说明——正文≠描述）；null=不出摘录行 */
+  description: string | null;
+  /** hub 身份（首次 push 成功后回填；未推=null）——卡面 owner/<文件夹名> 页脚 */
+  owner: string | null;
   current: string;
   commits: number;
   head: { seq: number; root: string; message: string } | null;
   /** 链文件 mtime——提交/切支都会碰它，作「最近活动」口径 */
   updated: string | null;
+}
+
+/** 工作文件根节点的人读字段（卡面标题/摘录的来源）。读取宽容——只供展示不参与身份：
+ *  文件缺失/坏 JSON/字段类型不对一律按「读不到」回 null（卡面退回文件夹名与空摘录），
+ *  不让一个编辑到一半的实例拖垮整张清单 */
+function workingDocMeta(dir: string, name: string): { title: string | null; description: string | null } {
+  const none = { title: null, description: null };
+  let root: unknown;
+  try {
+    root = JSON.parse(fs.readFileSync(workingFileFor(dir, name), 'utf8'));
+  } catch {
+    return none;
+  }
+  if (typeof root !== 'object' || root === null || Array.isArray(root)) return none;
+  const rec = root as Record<string, unknown>;
+  const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+  return { title: text(rec.name), description: text(rec.description) };
 }
 
 /** 家目录扫描（每请求现扫：另一终端 new/clone 后刷新即见）。子目录含 .practi/chain.json 即收录 */
@@ -331,7 +356,8 @@ function listPractices(homeDir: string): PracticeEntry[] {
   }
   const out: PracticeEntry[] = [];
   for (const name of names) {
-    const chainPath = chainPathFor(path.join(homeDir, name));
+    const dir = path.join(homeDir, name);
+    const chainPath = chainPathFor(dir);
     const chain = loadChain(chainPath);
     if (!chain) continue;
     let updated: string | null = null;
@@ -339,8 +365,12 @@ function listPractices(homeDir: string): PracticeEntry[] {
       updated = fs.statSync(chainPath).mtime.toISOString();
     } catch { /* 无从考据就不显示 */ }
     const tip = chain.commits[chain.commits.length - 1] ?? null;
+    const meta = workingDocMeta(dir, chain.name);
     out.push({
       name,
+      title: meta.title,
+      description: meta.description,
+      owner: chain.owner,
       current: chain.current,
       commits: chain.commits.length,
       head: tip ? { seq: tip.seq, root: tip.root, message: tip.message } : null,
