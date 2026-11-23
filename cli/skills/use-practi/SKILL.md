@@ -104,7 +104,7 @@ A practice is read by someone who was not there, on a page you do not control. E
 
 1. **The card** — the root `name` and `description`. That is all a stranger has before deciding to open it.
 2. **The root page** — `description`, then two lists the SDK **derives from the steps' `inputs` and `outputs`**: *what you need* (inputs no step supplies) and *what you get* (outputs no step consumes). After them: optional `content`, then a **table of contents** — one card per step, showing each child's `name` and its one-line `description`. Last of all, the optional `notice`: a notice always sits at the bottom of its node.
-3. **Each step** — `description`, `inputs`, the `content` (how), `outputs`, and last the optional `notice`.
+3. **Each step** — `description`, *what you get* (its `outputs`), *what you need* (its `inputs`), the `content` (how), and last the optional `notice`.
 4. **The end** — the last step's output says what "done" looks like.
 
 Write for that surface. The two lists are computed, so you never write them — a tool a step uses but does not declare is simply missing from *what you need*. A step without a `description` is a blank line in the table of contents.
