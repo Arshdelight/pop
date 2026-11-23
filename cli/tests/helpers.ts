@@ -56,6 +56,9 @@ export async function pop(dataDir: string | null, args: string[], opts: PopOptio
         env: {
           ...process.env,
           ...(dataDir === null ? {} : { PRACTI_HOME: dataDir }),
+          // 与 runIn 同款禁版本注入：裸跑（dataDir=null）解析到的是真实配置家，不关就会
+          // 真联网并写用户的 ~/.practi/version-check.json（测试不联网、不碰真实工作区）
+          PRACTI_NO_VERSION_CHECK: '1',
           ...opts.env,
         },
         windowsHide: true,
