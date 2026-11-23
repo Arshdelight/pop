@@ -492,6 +492,9 @@ function enhanceCodeBlocks(root) {
     var pre = el.tagName === 'PRE' ? el : el.parentElement;
     if (!pre || pre.parentElement && pre.parentElement.classList.contains('codeblock')) continue;
     if (el.tagName !== 'CODE') {
+      // marked 路径的 <pre> 里已经带着 <code class="language-*">：语言标记在它身上，交给 code 那次
+      // 迭代——这里抢先包一层新 code 会把标记冲掉（围栏语言全丢，只能靠自动探测，rsync 被判成 javascript）
+      if (el.querySelector('code')) continue;
       // proseLite 回落路径：<pre> 直接包文本——包一层 code 再走同一条路
       var codeEl = document.createElement('code');
       codeEl.textContent = pre.textContent;
