@@ -10,6 +10,8 @@ export interface StepItem {
   note?: string;
   /** --full only: the action's content (human-readable details) */
   content?: string;
+  /** The action's caveats and pitfalls (POP 2.2.0 `notice`) — always carried: a skeleton read without the warnings is not the practice */
+  notice?: string;
   /** set directory entries only: the child practice's description */
   description?: string;
   /** The referenced node file is absent from this workspace — the entry is a placeholder (read tolerance; creation refuses dangling pins) */
@@ -67,12 +69,22 @@ export interface StandardView {
   metadata?: Record<string, unknown>;
   /** The root node's content (human narrative) */
   content?: string;
+  /** The root node's caveats and pitfalls (POP 2.2.0 `notice`) */
+  notice?: string;
   steps: StepItem[];
   attachments: AttachmentView[];
   flow: FlowEdge[];
   /** Declared needs/productions aggregated from the subtree (§7), with provenance */
   inputs: FlowDeclarationView[];
   outputs: FlowDeclarationView[];
+  /**
+   * 派生的「对外清单」（§7，由 inputs/outputs 与 flow 边算出，不另存）：
+   * - externalInputs：没有任何 flow 边供给的 declared input——实践之外要备好的东西（「需要准备」）
+   * - finalOutputs：没有任何 flow 边消费的 declared output——实践最终交出的东西（「你会得到」）
+   * 中间产物（被下游步骤消费的 output）与中间需求（由上游供给的 input）都不在其中。
+   */
+  externalInputs: FlowDeclarationView[];
+  finalOutputs: FlowDeclarationView[];
   /** Child pins whose node files are absent (read tolerance: the view still renders; creation-time import remains strict) */
   missing?: MissingRef[];
 }
@@ -127,9 +139,26 @@ export function aggregateView(rootHash: string, nodes: Map<string, PNode>, opts?
     flow: acc.flow,
     inputs: acc.inputs,
     outputs: acc.outputs,
+    externalInputs: [],
+    finalOutputs: [],
   };
+  if (root.notice !== undefined) view.notice = root.notice;
   if (root.type === 'practice') view.op = root.op;
   if (acc.missing.length > 0) view.missing = acc.missing;
+  // 对外清单：拿 flow 边对声明求差。边的 name 取自消费方的 input 名，而协议允许 input 名
+  // 与它消费的 output 名不同（靠 from 的哈希连接，见 Appendix A2：boiling water → hot water）——
+  // 所以先按名匹配；连线的一端只声明了一个流时，按哈希直接对应，名字不同也不会误判
+  const declaredBy = (list: FlowDeclarationView[], hash: string): string[] => list.filter((d) => d.refHash === hash).map((d) => d.name);
+  const supplied = new Set<string>();
+  const consumed = new Set<string>();
+  for (const e of acc.flow) {
+    const inNames = declaredBy(acc.inputs, e.toHash);
+    for (const name of inNames.length === 1 ? inNames : [e.name]) supplied.add(`${e.toHash}\u0000${name}`);
+    const outNames = declaredBy(acc.outputs, e.fromHash);
+    for (const name of outNames.length === 1 ? outNames : [e.name]) consumed.add(`${e.fromHash}\u0000${name}`);
+  }
+  view.externalInputs = acc.inputs.filter((d) => !supplied.has(`${d.refHash}\u0000${d.name}`));
+  view.finalOutputs = acc.outputs.filter((d) => !consumed.has(`${d.refHash}\u0000${d.name}`));
   return view;
 }
 
@@ -147,7 +176,7 @@ function buildAcc(node: PNode, nodes: Map<string, PNode>, depth: number, full = 
         toName: node.name,
       }));
     return {
-      steps: [{ refHash: nodeHash, name: node.name, depth, ...(full ? { content: node.content } : {}) }],
+      steps: [{ refHash: nodeHash, name: node.name, depth, ...(node.notice !== undefined ? { notice: node.notice } : {}), ...(full ? { content: node.content } : {}) }],
       attachments: (node.attachments ?? []).map(a => ({ ...a, refHash: nodeHash })),
       flow,
       inputs: (node.inputs ?? []).map(({ name, spec }) => ({ name, ...(spec !== undefined ? { spec } : {}), refHash: nodeHash })),

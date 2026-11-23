@@ -146,4 +146,10 @@ describe('Appendix A vectors (pop-spec.md, byte-for-byte)', () => {
     expect(h8).not.toBe(H3);
     expect(h8).toBe('sha256:1974200356cf6d553ff2fce2305460c3c20d6f6e46155180070eb0fc5e62488f');
   });
+
+  it('A9 notice (2.2.0): the field participates; whitespace-only hashes as A1', () => {
+    const h9 = computeNodeHash({ ...A1, notice: 'Do not overfill the kettle.' });
+    expect(h9).toBe('sha256:25d75b54fd0f28bcacb61644c325cb12c4c2df665e389d89d0410b9949455a41');
+    expect(computeNodeHash({ ...A1, notice: '  ' })).toBe(H1);
+  });
 });

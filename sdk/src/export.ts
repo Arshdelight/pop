@@ -63,6 +63,7 @@ function exportNode(
     content: node.content,
   };
   if (node.description !== undefined) doc.description = node.description;
+  if (node.notice !== undefined) doc.notice = node.notice;
   if (node.license !== undefined) doc.license = node.license;
   if (node.metadata !== undefined && Object.keys(node.metadata).length > 0) doc.metadata = node.metadata;
   if (node.type === 'action') {

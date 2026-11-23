@@ -53,6 +53,9 @@ export interface ActionNode {
   /** Human-readable label — also the only name a node has; renaming changes identity (name is content) */
   name: string;
   description?: string;
+  /** 注意事项与踩坑（可选，POP 2.2.0）：该节点上容易出问题的地方与规避做法。与 content 同为散文，
+   *  但角色独立——读者与渲染方可以单独把它提出来；空串 ≡ 缺省（不参与哈希） */
+  notice?: string;
   content: string;
   /** Reuse terms: license name or a bundled license file reference */
   license?: string;
@@ -67,6 +70,8 @@ export interface PracticeNode {
   type: 'practice';
   name: string;
   description?: string;
+  /** 注意事项与踩坑（可选，POP 2.2.0）：作用于整棵子树的提醒，语义同 action */
+  notice?: string;
   content: string;
   license?: string;
   metadata?: Record<string, unknown>;
@@ -313,7 +318,7 @@ function parseMetadata(v: unknown, fmText?: string): Record<string, unknown> | u
 }
 
 const NODE_FIELDS = [
-  'type', 'name', 'description', 'license', 'metadata',
+  'type', 'name', 'description', 'notice', 'license', 'metadata',
   'attachments', 'inputs', 'outputs', 'op', 'children', 'loop',
 ] as const;
 
@@ -327,6 +332,7 @@ export function parseNodeFromMatter(data: Record<string, unknown>, content: stri
   rejectUnknownKeys(data, NODE_FIELDS, 'node');
   const name = requireString(data.name, 'name');
   const description = presentString(data.description, 'description');
+  const notice = presentString(data.notice, 'notice');
   const license = presentString(data.license, 'license');
   const metadata = parseMetadata(data.metadata, fmText);
 
@@ -342,6 +348,8 @@ export function parseNodeFromMatter(data: Record<string, unknown>, content: stri
       description,
       content,
     };
+    // 可选字段从不物化（§1 规则 2）：有值才落键
+    if (notice !== undefined) node.notice = notice;
     if (license !== undefined) node.license = license;
     if (metadata !== undefined && Object.keys(metadata).length > 0) node.metadata = metadata;
     if (inputs.length > 0) node.inputs = inputs;
@@ -377,6 +385,7 @@ export function parseNodeFromMatter(data: Record<string, unknown>, content: stri
       children: parseChildren(data.children, fmText),
       loop: parseLoop(data.loop, fmText),
     };
+    if (notice !== undefined) node.notice = notice;
     if (license !== undefined) node.license = license;
     if (metadata !== undefined && Object.keys(metadata).length > 0) node.metadata = metadata;
     return node;

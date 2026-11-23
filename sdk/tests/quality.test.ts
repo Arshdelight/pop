@@ -23,6 +23,7 @@ interface Spec {
   name: string;
   content?: string;
   description?: string;
+  notice?: string;
   op?: 'seq' | 'par' | 'choice' | 'loop' | 'set';
   outputs?: FlowItem[];
   attachments?: Attachment[];
@@ -42,6 +43,7 @@ function build(specs: Spec[]): { nodes: Map<string, PNode>; roots: string[] } {
         outputs: s.outputs ?? [{ name: 'a verifiable result' }],
       };
       if (s.description !== undefined) n.description = s.description;
+      if (s.notice !== undefined) n.notice = s.notice;
       if (s.attachments !== undefined) n.attachments = s.attachments;
       nodes.set(computeNodeHash(n), n);
       return n;
@@ -55,6 +57,7 @@ function build(specs: Spec[]): { nodes: Map<string, PNode>; roots: string[] } {
       children: kids.map(k => ({ hash: computeNodeHash(k) })),
     };
     if (s.description !== undefined) n.description = s.description;
+    if (s.notice !== undefined) n.notice = s.notice;
     nodes.set(computeNodeHash(n), n);
     return n;
   };
@@ -92,6 +95,19 @@ describe('W_THIN_CONTENT', () => {
   it('honours a threshold override (thresholds are implementation policy)', () => {
     expect(only([action('Ten chars.', { content: '0123456789' })], 'W_THIN_CONTENT', { minContentChars: 5 })).toEqual([]);
     expect(only([action('Ten chars.', { content: '0123456789' })], 'W_THIN_CONTENT', { minContentChars: 80 })).toHaveLength(1);
+  });
+
+  it("counts a node's notice as readable content (2.2.0): a one-line how plus a one-line warning is not thin", () => {
+    const how = '盖上锡纸，松松地盖住，放 5–10 分钟再切。';
+    const warning = '刚出锅就切，肉汁会全部流走，切面会发灰。';
+    expect(how.length).toBeLessThan(40);
+    expect(warning.length).toBeLessThan(40);
+    expect(how.length + warning.length).toBeGreaterThanOrEqual(40);
+    expect(warning.length).toBeLessThan(40);
+    expect(only([action('静置', { content: how })], 'W_THIN_CONTENT')).toHaveLength(1);
+    expect(only([action('静置', { content: how, notice: warning })], 'W_THIN_CONTENT')).toEqual([]);
+    // 空白提醒不算数
+    expect(only([action('静置', { content: 'x', notice: `  ${'\n'.repeat(10)} ` })], 'W_THIN_CONTENT')).toHaveLength(1);
   });
 });
 

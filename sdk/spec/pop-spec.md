@@ -1,6 +1,6 @@
 # POP — Protocol of Practice
 
-> This document normatively defines POP, **version 2.1.0**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
+> This document normatively defines POP, **version 2.2.0**. Versioning, tooling and history: see the [README](README.md). The SDK ships this file (`readSpec()`) so consumers render the exact spec they implement — no network fetch.
 
 ## 1. Writing POP
 
@@ -59,6 +59,7 @@ Principles, binding for every implementation:
 | `type` | `"action"` | yes | |
 | `name` | string | yes | Human-readable label (**display text**; it is content — renaming changes the node's hash like any edit) |
 | `description` | string | no | One-line description — what the skill does, for discovery/selection |
+| `notice` | string | no | Caveats and pitfalls attached to this node: what tends to go wrong here, and what to do instead. Prose like `content`, with a role of its own so readers and renderers can surface it apart from the instructions. Omit it when there is nothing to warn about; whitespace-only ≡ absent |
 | `content` | string | yes (defaults to `""` in document form) | Body: details, narrative |
 | `license` | string | no | Reuse terms — a license name or a bundled license file reference; empty ≡ absent |
 | `metadata` | `{ [k: string]: JSON value }` | no | Extension bag: vendor-specific properties; keys should be `x-<vendor>-<name>`; values are arbitrary JSON participating in the hash as-is; empty ≡ absent |
@@ -83,7 +84,7 @@ Attachment = { name: string; hash: string; mime?: string; size?: integer ≥0; u
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `type` / `name` / `description` / `content` / `license` / `metadata` | as action | | |
+| `type` / `name` / `description` / `notice` / `content` / `license` / `metadata` | as action | | |
 | `op` | `Op` | yes (defaults to `"seq"` in document form) | Composition operator |
 | `children` | `ChildRef[]` | yes, ≥1 | Containment pins |
 | `loop` | `LoopConfig` | no | Only with op=loop |
@@ -130,6 +131,7 @@ payload:
     type, name,
     content: trim(content),          // the only rewritten field: leading/trailing whitespace stripped
     description? — if present and non-empty
+    notice?      — if present and non-empty (either node type)
     license?     — if present and non-empty
     metadata?    — if present and non-empty (values participate as-is)
     action:
@@ -220,7 +222,7 @@ Then pour along the wall.
 
 | Code | Trigger |
 |---|---|
-| `E_SCHEMA` | Type/constraint violation (derived fields on a practice; op/children/loop on an action; malformed license/metadata; invalid attachment hash/size; duplicate attachment names in a node; a ChildRef carrying any field beyond `hash`; a from-label naming no inline node of the document, several distinct nodes, or closing a dataflow loop, §1 rule 4; an **unknown field anywhere** — §8: unrecognized fields are rejected, never dropped; v1 history fields `revisions` / `refines` are unknown since 2.0.0 — strip them before importing, e.g. with `practi fix`) |
+| `E_SCHEMA` | Type/constraint violation (a `notice` that is not a string; derived fields on a practice; op/children/loop on an action; malformed license/metadata; invalid attachment hash/size; duplicate attachment names in a node; a ChildRef carrying any field beyond `hash`; a from-label naming no inline node of the document, several distinct nodes, or closing a dataflow loop, §1 rule 4; an **unknown field anywhere** — §8: unrecognized fields are rejected, never dropped; v1 history fields `revisions` / `refines` are unknown since 2.0.0 — strip them before importing, e.g. with `practi fix`) |
 | `E_DANGLING` | a children pin or ChildRef names a hash absent from the node library / not stored on the hub (§9) |
 | `E_FLOW_FROM` | inputs.from carries a hash that names no node in scope (the only flow field validated for dangling) |
 | `E_OP` / `E_LOOP` | `E_OP`: an op value outside {seq, par, choice, loop, set}. `E_LOOP`: a loop config that is malformed, or carried on a non-loop op |
@@ -241,7 +243,7 @@ A hash-form `from` may name a node that contains an earlier version of the wirin
 
 | Code | Advisory trigger |
 |---|---|
-| `W_THIN_CONTENT` | an action's `content` is near-empty and it carries no attachments |
+| `W_THIN_CONTENT` | an action's `content` (plus its `notice`) is near-empty and it carries no attachments |
 | `W_CONTENT_LONG` | a node's `content` is long enough that it is probably several steps sharing one node — splitting is the fix, not trimming (a proxy for "this node carries too many steps"; code blocks are excluded from the count) |
 | `W_NO_VERIFY` | an action declares no `outputs` — no acceptance criteria |
 | `W_FLAT_TREE` | a practice lists many steps without grouping any of them (deferred when the children are a single source's timestamped chapter list — one practice per video is already the right shape) |
@@ -258,6 +260,8 @@ When a practice is read, steps / attachments / flow / **declared inputs & output
 
 - Dedup keys: attachments `hash+name` (same blob under different names = different uses, kept); declared flows `name+spec+declaring node`
 - **Declared flows are first-class view entries**: each action's `inputs` (needs) and `outputs` (productions, the acceptance criteria) ride along with the declaring node's hash — unwired inputs appear too, even though they generate no flow edge
+- **External inputs and final outputs are derived, never stored.** From the declared flows and the flow edges: a practice's *external inputs* are the declared inputs that no flow edge supplies (what must be prepared outside the practice); its *final outputs* are the declared outputs that no flow edge consumes (what the practice yields). Intermediate products — outputs consumed downstream, needs supplied upstream — are neither. An edge is matched to a declaration by flow name; when the wired node declares a single flow, the edge matches that flow by hash regardless of its name (a one-flow node is unambiguous). Renderers present the two lists as the practice's *what you need / what you get*
+- **`notice` rides along like `content`**: the read root's `notice` on the view, each action's `notice` on its step entry
 - **Stale-pin annotation (non-normative)**: views and validators *should* annotate a `from` (or child pin) whose target has known refinements — refinement edges are repository-layer records (§9.1), so this annotation is available only where a hub has indexed them. Informational, never a validation error: informing, not forcing (pins keep addressing old content — git semantics)
 - op semantics: `seq` concatenates in order; `par` marks steps parallelizable; `choice` marks alternatives; `loop` marks repetition (count ×N, until "repeat until: \<predicate\>"); `set` is a directory view — one entry per direct child, **no recursive aggregation** (aggregating unrelated practices is noise)
 - Depth is normalized to the read root: the same subtree read at any granularity yields strictly equivalent views
@@ -378,3 +382,15 @@ hash = sha256:95d4872db873283352020393a00381bfda021038ac701a107c33be8cab571d3a  
 ```
 hash = sha256:1974200356cf6d553ff2fce2305460c3c20d6f6e46155180070eb0fc5e62488f   // differs from A3/A7
 ```
+
+**A9 `notice`** (2.2.0): the field participates in the hash; whitespace-only ≡ absent
+
+```json
+{ "type": "action", "name": "Boil water", "notice": "Do not overfill the kettle.", "content": "Heat until boiling." }
+```
+
+```
+hash = sha256:25d75b54fd0f28bcacb61644c325cb12c4c2df665e389d89d0410b9949455a41
+```
+
+The same node with `"notice": "  "` hashes exactly as A1. A document that never carries `notice` hashes as it did before 2.2.0; one that carries it is rejected by implementations of 2.1.0 and earlier (`E_SCHEMA`, §8) until they are updated.

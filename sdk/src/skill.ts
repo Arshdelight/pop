@@ -38,6 +38,7 @@ interface DocNode {
   name: string;
   content: string;
   description?: string;
+  notice?: string;
   metadata?: Record<string, unknown>;
   attachments?: Attachment[];
   children?: DocNode[];
@@ -97,6 +98,11 @@ export function renderSkillMarkdown(doc: Record<string, unknown>): string {
 
 function renderBody(d: DocNode, depth: number): string {
   const parts: string[] = [];
+  // notice 投影成引用块（角色独立于正文，读者一眼能认出是提醒）。渲染必须确定：import 侧
+  // 的漂移检查拿同一函数重渲染 sidecar 逐字节比对
+  if (typeof d.notice === 'string' && d.notice.trim() !== '') {
+    parts.push(d.notice.trim().split('\n').map((line, i) => `> ${i === 0 ? '**Notice:** ' : ''}${line.trim()}`).join('\n'));
+  }
   const content = typeof d.content === 'string' ? d.content.trim() : '';
   if (content) parts.push(content);
   if (d.children !== undefined) {

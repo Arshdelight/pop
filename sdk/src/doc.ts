@@ -11,7 +11,7 @@ import { saveNode } from './store.js';
 
 /** Document-form node fields (§1/§2). Anything else is rejected, not dropped (§8). */
 const NODE_FIELDS = [
-  'name', 'type', 'description', 'license', 'metadata', 'content',
+  'name', 'type', 'description', 'notice', 'license', 'metadata', 'content',
   'attachments', 'inputs', 'outputs', 'children', 'op', 'loop',
 ] as const;
 
@@ -20,6 +20,7 @@ export interface Planned {
   path: string;
   name: string;
   description?: string;
+  notice?: string;
   license?: string;
   metadata?: Record<string, unknown>;
   content: string;
@@ -123,6 +124,7 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
     failDoc(`${nodePath}.type`, `must be a string when present (got ${typeof raw.type})`);
   }
   const description = presentString(raw.description, `${nodePath}.description`);
+  const notice = presentString(raw.notice, `${nodePath}.notice`);
   const license = presentString(raw.license, `${nodePath}.license`);
   const metadata = parseMetadataField(raw.metadata, nodePath);
   const content = presentString(raw.content, `${nodePath}.content`) ?? '';
@@ -138,6 +140,7 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
       path: nodePath,
       name,
       description,
+      notice,
       license,
       metadata,
       content,
@@ -191,6 +194,7 @@ export function plan(ctx: PlanCtx, raw: unknown, nodePath: string, depth = 0): P
     path: nodePath,
     name,
     description,
+    notice,
     license,
     metadata,
     content,
@@ -271,6 +275,7 @@ export function buildPlannedNode(p: Planned): { node: PNode; hash: string } {
       description: p.description,
       content: p.content,
     };
+    if (p.notice !== undefined) action.notice = p.notice; // 可选字段从不物化（§1 规则 2）
     if (p.license !== undefined) action.license = p.license;
     if (p.metadata !== undefined && Object.keys(p.metadata).length > 0) action.metadata = p.metadata;
     if (p.attachments.length > 0) action.attachments = p.attachments;
@@ -289,6 +294,7 @@ export function buildPlannedNode(p: Planned): { node: PNode; hash: string } {
       op: p.op,
       children,
     };
+    if (p.notice !== undefined) practice.notice = p.notice; // 可选字段从不物化（§1 规则 2）
     if (p.license !== undefined) practice.license = p.license;
     if (p.metadata !== undefined && Object.keys(p.metadata).length > 0) practice.metadata = p.metadata;
     if (p.loop !== undefined) practice.loop = p.loop;

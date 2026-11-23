@@ -171,15 +171,17 @@ export function qualityWarnings(
       const n = nodes.get(h);
       if (n === undefined) continue;
       if (n.type === 'action') {
-        // 过薄与过长同族：都量 content，只是方向相反；都按散文字数（剥掉代码围栏）算
-        const len = n.content.trim().length;
+        // 过薄与过长同族：都量 content，只是方向相反；都按散文字数（剥掉代码围栏）算。
+        // 过薄把 notice 一并计入（2.2.0）：提醒与做法同是节点的可读内容——「怎么做」一句话、
+        // 「别踩这个坑」一句话的步骤并不薄
+        const len = n.content.trim().length + (n.notice ?? '').trim().length;
         const prose = proseLength(n.content);
         if (len < t.minContentChars && (n.attachments ?? []).length === 0) {
           pushNode({
             code: 'W_THIN_CONTENT',
             hash: h,
             name: n.name,
-            message: `content is ${len} char${len === 1 ? '' : 's'} (limit ${t.minContentChars}) and there are no attachments — nobody else can reproduce this from what is written`,
+            message: `content (+notice) is ${len} char${len === 1 ? '' : 's'} (limit ${t.minContentChars}) and there are no attachments — nobody else can reproduce this from what is written`,
           });
         }
         if (prose > t.maxContentChars) {

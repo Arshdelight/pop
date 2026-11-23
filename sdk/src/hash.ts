@@ -103,6 +103,8 @@ function hashNode(node: HashableNode, depth: number): string {
     content: node.content.trim(),
   };
   if (node.description !== undefined && node.description.trim() !== '') payload.description = node.description;
+  // notice（2.2.0 可选字段）：有才参与哈希——没带它的旧文档身份不变；空串 ≡ 缺省
+  if (node.notice !== undefined && node.notice.trim() !== '') payload.notice = node.notice;
   if (node.license !== undefined && node.license.trim() !== '') payload.license = node.license;
   if (node.metadata !== undefined && Object.keys(node.metadata).length > 0) payload.metadata = node.metadata;
   if (node.type === 'action') {

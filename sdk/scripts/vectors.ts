@@ -35,11 +35,17 @@ const H8 = computeNodeHash(A8);
 
 const A4a = computeNodeHash({ ...A1, content: '  Heat until boiling.  ' });
 
+const A9 = { ...A1, notice: 'Do not overfill the kettle.' } as const;
+const H9 = computeNodeHash(A9);
+const A9blank = computeNodeHash({ ...A1, notice: '  ' });
+
 console.log('A1 (minimal action)      =', H1);
 console.log('A2 (full action, from=H1)=', H2);
 console.log('A3 (practice, pins)      =', H3);
 console.log('A7 (inline ≡ A3?)        =', H7, H7 === H3 ? '✓ equal' : '✗ MISMATCH');
 console.log('A8 (descendant edited)   =', H8, H8 !== H3 ? '✓ differs (Merkle)' : '✗ MISMATCH');
+console.log('A9 (notice)              =', H9, H9 !== H1 ? '✓ differs from A1' : '✗ MISMATCH');
+console.log('A9 blank notice ≡ A1?    =', A9blank, A9blank === H1 ? '✓ equal' : '✗ MISMATCH');
 console.log('A4 (trim ≡ A1?)          =', A4a, A4a === H1 ? '✓ equal' : '✗ MISMATCH');
 console.log('A5 (blob photo-bytes)    =', `sha256:${createHash('sha256').update('photo-bytes').digest('hex')}`);
 console.log('A6 (stableStringify)     =', stableStringify({ b: 1, a: undefined, c: [2, { d: null }] }));

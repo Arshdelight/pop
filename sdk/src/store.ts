@@ -134,6 +134,7 @@ export function loadWorkspace(root: string): Workspace {
 export function nodeToMarkdown(node: PNode): string {
   const fm: Record<string, unknown> = { type: node.type, name: node.name };
   if (node.description !== undefined) fm.description = node.description;
+  if (node.notice !== undefined) fm.notice = node.notice;
   if (node.license !== undefined) fm.license = node.license;
   if (node.metadata !== undefined && Object.keys(node.metadata).length > 0) fm.metadata = node.metadata;
   if (node.type === 'action') {
