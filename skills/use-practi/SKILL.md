@@ -73,10 +73,13 @@ Documents carry **no history fields**: a document is a pure content snapshot. Re
   "name": "Make tea",
   "description": "From kettle to cup",
   "children": [
-    { "name": "Boil water", "content": "Heat until boiling.",
+    { "name": "Boil water", "description": "Heat the water to a rolling boil.",
+      "content": "Fill the kettle and switch it on.",
       "outputs": [{ "name": "boiling water", "spec": "100°C" }] },
-    { "name": "Pour", "content": "Pour along the wall.",
-      "inputs": [{ "name": "boiling water", "from": "@Boil water" }] }
+    { "name": "Pour", "description": "Fill the cup.",
+      "content": "Pour along the wall.",
+      "inputs": [{ "name": "boiling water", "from": "@Boil water" }],
+      "outputs": [{ "name": "cup of tea", "spec": "85°C" }] }
   ]
 }
 ```
@@ -89,14 +92,99 @@ Rules that bite:
 - Export (`export`, `show --doc`, `skill export`) rewrites an in-subtree from pin as its `@name` label when the name is unambiguous — editing the referenced child then re-resolves by name on import instead of dangling on the old hash. Out-of-subtree or same-name-ambiguous pins export verbatim.
 - Children may inline recursively or reference stored content as `{ "hash": "sha256:…" }` — both forms produce the same root hash.
 
-## Recording quality
+### What the reader sees
 
-Check every document against these before committing it:
+A practice is read by someone who was not there, on a page you do not control. Every reader (practi web, the hub) shows the same surface, in this order:
 
-- **Detailed** — someone who wasn't here can reproduce it: exact commands, file changes, config values, concrete specs. Record what was actually done — dead ends included — not the idealized version.
-- **Sanitized** — remove values specific to the author that a reproducer won't reuse: own repos, accounts, usernames, addresses, phones, credentials, personal hostnames/IPs — even embedded in commands, and even inside attachment bytes (screenshots, logs). Replace with descriptive placeholders (`<your-github-username>/repo`). Keep third-party package names, public endpoints, standard tools, and command structure.
-- **Curated** — a child step is something a reproducer physically does. Research and deciding are not steps; their conclusions go in `content`. Test: *would a reproducer physically do this, or only need its conclusion?*
-- **Bounded** — one document is one thing a reproducer pulls up and follows end-to-end for a single trigger. Sessions are time units; practices are structural ones — "record a session" means extracting the *practices* the session produced (zero, one, or several documents). Split when the parts would be invoked by different triggers or share few or no steps; if what remains has 1–2 steps and no judgment content, it was an action — don't manufacture a document around it.
+1. **The card** — the root `name` and `description`. That is all a stranger has before deciding to open it.
+2. **The root page** — `description`, the "before you start" text in `content`, then a **table of contents**: one card per step, showing each child's `name` and its one-line `description`.
+3. **Each step** — `name`, `description`, inputs, the `content`, outputs.
+4. **The end** — the last step's output says what "done" looks like.
+
+Write for that surface. A step without a `description` is a blank line in the table of contents; a root `content` that opens with background makes the reader scroll before learning what the practice is for.
+
+### A practice is a tutorial, not a transcript
+
+The session you just finished was full of exploration: dead ends, retries, things you looked up, numbers that were only true for your machine. **The practice is the edited version of that session** — the one route that works, written for the next person.
+
+So the standard is not "as detailed as possible". It is: **as short as possible while a competent stranger can still do it and tell that it worked.** Record what actually worked — never an idealised route you did not run — then edit it the way a good tutorial is edited.
+
+## Writing quality
+
+Check every document against these before committing it.
+
+### Shape of a good practice
+
+| Part | Must be | Must not be |
+|---|---|---|
+| Root `name` | the result the reader gets — “煎出一块外焦里嫩的牛排” | a method chain (“X：A + B + C”), a topic (“关于牛排”) |
+| Root `description` | one sentence: for whom, and what they end up with. ≤ 50 Chinese characters / 25 English words | a list of techniques; a paragraph |
+| Root `content` | **before you start** — three short blocks: what you get, what you need (tools, accounts, materials), time and level. ≤ 200 characters / 120 words | dead-end analysis, parameter tables, background, anything a step already says |
+| Step `name` | verb + object — “擦干表面并撒盐” | a topic (“锅温”), a note (“提示词写法”), history (“已弃用”, “备用”, “v2”) |
+| Step `description` | the one-line summary shown in the table of contents. ≤ 25 Chinese characters / 15 English words | missing |
+| Step `content` | **do** — exact: values, commands, the names of buttons and menu items — then **check**: what you should see. At most one pitfall line, and only if the reader would fall into it *at this step* | a wall of prose; code described in words; exploration |
+| Step `outputs` | the done-when check: the observable result of this step | missing (that is the CLI's `W_NO_VERIFY`) |
+| Structure | `seq` by default. `choice`, `loop`, `par` only where the reader's path branches, repeats, or truly does not care about order. Phases (nested practices) past 8 steps | a structure that mirrors the order *you* happened to try things |
+
+Lengths are given for Chinese prose; for English, count words instead.
+
+### Size budget
+
+- **3–8 top-level steps.** Fewer than 3 with no judgment in them is an action, not a practice. More than 8 needs grouping into phases. Depth ≤ 3.
+- **Step prose ≤ 200 Chinese characters / 120 English words.** Fenced code blocks and tables do not count — they are compact reference material, not prose to read. (A table past 8 rows is still a sign the step is doing too much.)
+- **One action per step.** If you cannot write a single done-when check for the whole step, it is two steps.
+- The CLI's `W_CONTENT_LONG` fires at 2000 characters of prose. That is a floor for "several steps are sharing one node" — never a target. The exemplars average 60–120 characters per step.
+
+### Detail: keep vs cut
+
+“Detailed” means *exact where it matters*, not *complete*.
+
+**Keep, exactly:** commands, paths, config keys and values, thresholds and timings, the names of buttons and menu items (quote them), required tools, versions and accounts, the done-when check — and one worked example of every value the reader must substitute, labelled as an example.
+
+**Cut:**
+
+- **Abandoned routes, failed attempts, dead ends.** The reader needs the route that works. If they would be tempted down a known-bad path, leave *one* warning line in the step where the temptation occurs (“不要用 X——会 Y”). Everything else goes into a `practi note` pinned to that step — notes are the home for what you learned the hard way.
+- **Values that were only true for you**: one-off coordinates, your machine names and paths, timestamps, “本例” numbers nobody can reuse.
+- **Background, tool manuals, option lists, parameter sweeps.** One line where it is used, at most.
+- **History words**: 已弃用 / 备用 / 原方案 / v1 / deprecated / legacy. The document is the current route; history lives in the commit chain.
+- **Raw output and logs.** Keep only the one line the reader must compare against.
+- **Anything the root page already says.**
+
+### Code
+
+- Commands and code go in fenced code blocks, runnable as written, with the places to substitute marked (`<your-domain>`, `<你的电脑名>`). Never describe code in prose — a paragraph explaining what a script does cannot be run.
+- Keep the block to the part the reader must see or change. A whole script or file is an attachment (`practi blob add`), referenced from the step.
+
+### One practice stands alone
+
+Practices are independent units: a reader who opens this one has read none of your others. State the prerequisites in "before you start". If a step needs a skill that is explained elsewhere, inline the minimum here — never make "see my other practice" a prerequisite. (Naming a related practice in plain text, for going deeper, is fine.)
+
+### Only actions are nodes
+
+A child step is something the reader physically does. Research, deciding, background, pitfalls and reference material are not steps. Test: *would the reader physically do this, or only need its conclusion?* If only the conclusion — put that conclusion in one line of the step that needs it.
+
+### Flows
+
+- `outputs` on **every** step: the done-when check, written as the observable result (“两面深棕色，中心 50–52℃”).
+- `inputs` only when a step uses something produced **earlier than the step right before it** (wire it with `from`), or needs something from outside the practice. The reader already assumes each step takes the previous step's result — wiring every step is noise.
+
+### Sanitized
+
+Remove values specific to the author that a reproducer won't reuse: own repos, accounts, usernames, addresses, phones, credentials, personal hostnames/IPs — even embedded in commands, and even inside attachment bytes (screenshots, logs). Replace with descriptive placeholders (`<your-github-username>/repo`). Keep third-party package names, public endpoints, standard tools, and command structure.
+
+### Bounded
+
+One document is one thing a reader pulls up and follows end-to-end for a single trigger. Sessions are time units; practices are structural ones — "record a session" means extracting the *practices* the session produced (zero, one, or several documents). Split when the parts would be invoked by different triggers or share few or no steps; if what remains has 1–2 steps and no judgment content, it was an action — don't manufacture a document around it.
+
+### From a session to a practice
+
+1. **Write the promise.** Root `name` = the result; `description` = one sentence: for whom, and what they end up with.
+2. **List what the reader does** — not what you did. Three to eight verbs, in order.
+3. **For each step: do, then check.** Then delete everything on the cut list.
+4. **Choose the shape.** `seq` unless the reader's path branches (`choice`), repeats (`loop`) or genuinely does not care about order (`par`). Group past 8 steps.
+5. **Write "before you start".**
+6. **Commit and fix.** `practi new <name> --base doc.json` → resolve every `W_*` → then read it once as a newcomer: every question you would have to ask is a missing line; every line you would skip is a cut.
+7. **What you learned the hard way goes to notes**, pinned to the step: `practi note add <hash> -m "…"`.
 
 ### E_ blocks, W_ only prompts
 
@@ -106,9 +194,23 @@ Check every document against these before committing it:
 |---|---|---|
 | Meaning | a validation invariant is violated | the writing looks thin, but is *legal* |
 | Effect | the revision is **refused** — `new --base` rejects without leaving a half-born folder, `commit` rolls the chain back; exit 1 | the revision **is committed** and the command exits 0 |
-| What to do | fix the JSON and re-run — this is a hard stop | keep the recording, then go back and fill in content when you can |
+| What to do | fix the JSON and re-run — this is a hard stop | the commit already happened; go back and fix the writing before you move on |
 
-So: **`W_*` are prompts, not errors — seeing one means "go back and add the missing content", never "this failed"**. Do not retry a commit that only printed `W_*`: it already succeeded. The codes are `W_THIN_CONTENT` (near-empty action with no attachments), `W_NO_VERIFY` (an action with no `outputs`), `W_CONTENT_LONG` (a node carrying so much prose — fenced code blocks excluded — that it is probably several steps sharing one node: **split it into child steps, do not trim it**), `W_FLAT_TREE` (many steps, none grouped), `W_DEEP_TREE`, `W_DUP_NAME`, `W_VAGUE_NAME`, `W_DESC_MISSING` (a practice root with no `description` — the field search leans on most). The thresholds are the CLI's own calibration, not protocol (pop-spec §6); treat them as a nudge, not a rule.
+So: **`W_*` are prompts, not errors — seeing one means "go back and fix it", never "this failed"**. Do not retry a commit that only printed `W_*`: it already succeeded. The codes are `W_THIN_CONTENT` (near-empty action with no attachments), `W_NO_VERIFY` (an action with no `outputs`), `W_CONTENT_LONG` (a node carrying so much prose — fenced code blocks excluded — that it is probably several steps sharing one node: **cut what the reader does not need first; if what remains is still several steps, split it**), `W_FLAT_TREE` (many steps, none grouped), `W_DEEP_TREE`, `W_DUP_NAME`, `W_VAGUE_NAME`, `W_DESC_MISSING` (a practice root with no `description` — the field search leans on most). The thresholds are the CLI's own calibration, not protocol (pop-spec §6); treat them as a floor, not a target — a document with zero `W_*` has only cleared the minimum (see "Writing quality").
+
+## Exemplars
+
+Five complete practices live in `examples/` beside this file (written in Chinese; the rules are language-neutral). Before writing a new practice, open the one closest in shape and match its level of detail:
+
+| File | Domain | Shape | What to learn from it |
+|---|---|---|---|
+| `pan-seared-steak.json` | cooking | `seq` + `choice` | a branch on a decision the reader really makes (thickness); every step is do + check |
+| `first-5k-in-8-weeks.json` | fitness | `seq` + `loop` (count), with a `par` week | a repeating routine; a progression table in one step; an honest “repeat this week” rule |
+| `monthly-budget-routine.json` | personal finance | short `seq` | how short a complete practice can be — five steps, no filler |
+| `daily-folder-backup.json` | computing | `seq` + `choice`, code blocks | a dry run before the real command, one warning where it bites, a branch by OS, a restore test |
+| `patch-a-nail-hole.json` | home repair | `seq` + `loop` (until) | “repeat until” as a stop condition, judged by touch |
+
+To read one in the reader: `practi new <name> --base <this-skill-dir>/examples/<file>.json`, then `practi web`.
 
 ## Attachments
 
@@ -256,12 +358,12 @@ practi skill import <dir>                # replay a `practi skill export` direct
 ```
 
 - An exported directory carries `SKILL.md` (a readable projection), attachment files, and `pop.doc.json` — the sidecar holding the canonical document. Import replays the sidecar byte-identically (same hash, any machine), re-staging attachment files into the practice's blob store; then `practi commit -m "..."` records it as a revision.
-- Import refuses directories without a sidecar (`E_NO_SIDECAR`): it is the inverse of export, not a skill importer. To bring a foreign skill into POP, read it and **author** a structured tree of practices and actions (the recording-quality rules apply).
+- Import refuses directories without a sidecar (`E_NO_SIDECAR`): it is the inverse of export, not a skill importer. To bring a foreign skill into POP, read it and **author** a structured tree of practices and actions (the writing-quality rules apply).
 - Hand-editing `SKILL.md` after export desynchronizes the sidecar: import warns and treats the edited body as truth (a new hash — fork semantics). Edit the document and re-export instead.
 
 ## Error codes
 
-`E_*` refuse a revision (born-empty folder on `new --base`, chain rollback on `commit`). `W_*` never do — see "Recording quality" above.
+`E_*` refuse a revision (born-empty folder on `new --base`, chain rollback on `commit`). `W_*` never do — see "Writing quality" above.
 
 | Code | Trigger |
 |---|---|
@@ -275,7 +377,7 @@ practi skill import <dir>                # replay a `practi skill export` direct
 
 ## Workflow quick reference
 
-- **Record a session** — extract the *practices* the conversation produced → shape one JSON tree per practice (quality rules above) → `practi new <name> --base doc.json -m "first"` → replace any `W_*` prompts you can (edit the working file, `commit` again) → `practi push` when it should live on the hub.
+- **Turn a session into a practice** — extract the *practices* the conversation produced → for each, follow “From a session to a practice” above (promise → the reader's steps → do/check → cut → shape → before-you-start; match the nearest exemplar's level of detail) → `practi new <name> --base doc.json -m "first"` → resolve every `W_*` and re-read it as a newcomer (edit the working file, `commit` again) → `practi push` when it should live on the hub.
 - **Find prior art** — `cd` into the practice → `practi search <query>` (add `--notes`; `field:` when you know the field) → `practi show <hash>`. No wording recall? `practi similar <hash>` from a node you do have.
 - **Learn from a practice** — reproduce it, then pin what you learned: `practi note add <node-hash> -m "…"`. Fold it back by editing the working file and committing.
 - **Improve a practice** — edit `<name>.json` → `practi commit -m "what changed"` → `practi push`. Oops: `commit --amend`, `history reset <seq>` (working file kept — keep or discard), or `export <head>` and re-edit. Improving someone else's practice is a new instance on the hub declaring `refines` → the original's root hash (§9.1) — a hub-web action.
