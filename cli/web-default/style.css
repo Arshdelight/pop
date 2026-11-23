@@ -173,19 +173,31 @@ main.u-main { padding: 24px 24px 48px; }
 .card-excerpt .none { color: var(--ink-a40); }
 /* 实践页的派生清单（你会得到 / 需要准备）：紧凑单行「名字 · 规格」。清单常常一屏放不下
    （补墙篇 8 样东西），规格另起一行会把步骤目录整个挤出首屏。
-   条目默认不带步骤编号（2026-11-24 用户反馈：物料后面常驻一串编号显得零碎）——整行可悬停
-   （浅底高亮，hub ghost hover 口径）、可点击，点开后编号在该行内展开，编号本身可点直达该步骤 */
-ol.io-list.flow-list { font-size: 15px; line-height: 1.5; padding-left: 22px; }
+   序号自绘进条目（清单 list-style: none）：整行「序号 + 名字 · 规格」是一块悬停高亮区——
+   用户 2026-11-24：悬停要把前面的数字加点也包进去。菜单默认不开，点击才在条目下方弹出步骤菜单
+   （hub ghost hover 口径：浅底高亮、不换字色） */
+ol.io-list.flow-list { font-size: 15px; line-height: 1.5; padding-left: 0; list-style: none; }
 ol.io-list.flow-list li { padding: 1px 0; }
-.flow-toggle { display: inline-block; max-width: 100%; margin-left: -8px; padding: 3px 8px; border: none; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: 15px; line-height: 1.5; text-align: left; cursor: pointer; transition: background .15s; }
+.flow-item { position: relative; }
+.flow-item.open { z-index: 30; } /* 开着菜单的条目压过其后的内容 */
+.flow-idx { display: inline-block; min-width: 18px; margin-right: 2px; text-align: right; }
+/* 条目行：宽度贴着内容（不横贯整列），向左探出 6px——高亮区从序号前一点开始，名字仍起在小节左边缘 */
+.flow-toggle, .flow-row { display: inline-block; vertical-align: top; max-width: 100%; margin: 0 0 0 -6px; padding: 3px 8px 3px 3px; border: none; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; font-size: 15px; line-height: 1.5; text-align: left; }
+.flow-toggle { cursor: pointer; transition: background .15s; }
 .flow-toggle:hover { background: var(--ink-50); }
 .flow-toggle:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(17, 24, 39, .1); }
 .flow-item .io-spec { display: inline; font-size: 14px; color: var(--ink-a45); margin-left: 6px; }
 .flow-item .io-spec::before { content: '· '; }
-.flow-refs { margin-left: 6px; white-space: nowrap; }
-.flow-refs[hidden] { display: none; }
-.flow-refs .io-ref + .io-ref { margin-left: 5px; }
-/* 注意事项（spec 2.2.0 的 notice 字段）：独立提醒框，排在说明之后、正文之前——动手前先看到。
+/* 步骤菜单：条目下方的小卡（版本条的分支下拉同观感）；下方放不下时向上弹（.up） */
+.flow-menu { position: absolute; left: 0; top: 100%; margin-top: 4px; width: max-content; min-width: 240px; max-width: min(360px, 100%); max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid var(--ink-200); border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1), 0 4px 6px -4px rgba(0, 0, 0, .1); padding: 4px 0; }
+.flow-menu[hidden] { display: none; }
+.flow-menu.up { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; }
+.flow-menu-title { margin: 0; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.flow-option { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; color: var(--ink); font-size: 13px; line-height: 1.5; text-decoration: none; }
+.flow-option:hover { background: var(--ink-50); }
+.flow-option-num { flex: none; min-width: 20px; color: var(--ink-a50); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+.flow-option-name { min-width: 0; overflow-wrap: anywhere; }
+/* 注意事项（spec 2.2.0 的 notice 字段）：独立提醒框，垫在节点的最下方（用户 2026-11-24 定）。
    warning 族（50 底 / 200 描边 / 700 字），左侧 3px 竖线压出「提醒」的分量，hub 侧实现 notice 渲染时同观感 */
 .notice { margin: 12px 0 4px; padding: 10px 14px; border: 1px solid var(--warning-200); border-left: 3px solid var(--warning-700); border-radius: var(--radius); background: var(--warning-50); }
 .notice-label { font-size: 12px; font-weight: 600; color: var(--warning-700); margin-bottom: 2px; }

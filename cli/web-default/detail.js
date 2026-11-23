@@ -20,7 +20,7 @@ var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动�
 var renderedOnce = false; // 首载不滚标志：页面刚打开不代用户跳位（对齐 hub PopViews 首挂载跳过）
 var flowsByHash = {};    // practice 节点哈希 → 聚合视图缓存（/pop/<hash>.json）：对外清单由服务端按 spec §7 派生
 var flowsPending = {};   // 已发出、未返回的聚合请求（同一节点不重复发）
-var openFlows = {};      // 派生清单里被点开的条目（键=清单+条目）：步骤编号默认收起，点击才展开
+var flowMenuKey = null; // 派生清单里开着步骤菜单的条目（键=清单+条目）：菜单默认不开，点击才弹；同时只开一个
 var repoInfo = null;     // 仓库信息（/api/repo：分支 / 提交 / 创建时间 / hub 身份），版本条的数据源
 var branchMenuOpen = false; // 版本条的分支下拉面板开合
 
@@ -102,6 +102,7 @@ function noteBadge(pathKey, count) {
 function render() {
   var app = document.getElementById('app');
   var node = walk(path);
+  flowMenuKey = null; // 内容整体重渲染：步骤菜单随之收起（换了上下文菜单不留着）
   // 三视图：向导正文 / StandardView JSON / document JSON——侧栏大纲始终是导航脊柱，
   // 底部 Prev/Next 也常驻（在 JSON 视图里换节点=高亮跟着走）
   app.innerHTML = (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
@@ -864,16 +865,21 @@ function loadRepoInfo() {
     .catch(function () { /* 取不到就不显示版本条 */ });
 }
 
-// 分支下拉：外点关闭 + Esc 关闭（GitHub 菜单同款行为，hub BranchSelector 同款）
+// 分支下拉与步骤菜单：外点关闭 + Esc 关闭（GitHub 菜单同款行为，hub BranchSelector 同款）
 document.addEventListener('mousedown', function (e) {
-  if (!branchMenuOpen || e.target.closest('.branch-select')) return;
-  branchMenuOpen = false;
-  renderVersionBar(walk(path));
+  if (branchMenuOpen && !e.target.closest('.branch-select')) {
+    branchMenuOpen = false;
+    renderVersionBar(walk(path));
+  }
+  if (flowMenuKey && !e.target.closest('.flow-item.open')) closeFlowMenu();
 });
 document.addEventListener('keydown', function (e) {
-  if (e.key !== 'Escape' || !branchMenuOpen) return;
-  branchMenuOpen = false;
-  renderVersionBar(walk(path));
+  if (e.key !== 'Escape') return;
+  if (branchMenuOpen) {
+    branchMenuOpen = false;
+    renderVersionBar(walk(path));
+  }
+  if (flowMenuKey) closeFlowMenu();
 });
 
 /** 附件弹窗：固定尺寸，列表超出内滚（多附件不撑屏） */
@@ -1075,28 +1081,68 @@ function flowGroups(list) {
   return order.map(function (k) { return byKey[k]; });
 }
 
+/** 条目的步骤菜单：列声明该物品的各步骤（编号 + 步骤名），点一项直达（走 data-path 委托） */
+function flowMenuHtml(steps, isOpen) {
+  return '<div class="flow-menu" role="menu"' + (isOpen ? '' : ' hidden') + '>' +
+    '<p class="flow-menu-title">' + escapeHtml(POP_I18N.t('flowMenuTitle')) + '</p>' +
+    steps.map(function (s) {
+      return '<a href="#" class="flow-option" role="menuitem" data-path="' + s.path + '">' +
+        '<span class="flow-option-num">' + escapeHtml(s.num) + '</span>' +
+        '<span class="flow-option-name">' + escapeHtml(s.name) + '</span></a>';
+    }).join('') + '</div>';
+}
+
 function flowListHtml(labelKey, groups) {
   if (!groups.length) return '';
   return '<div class="section-sm"><div class="label">' + POP_I18N.t(labelKey) + '</div><ol class="io-list flow-list">' +
-    groups.map(function (g) {
-      // 声明该物品的步骤编号（与侧栏大纲、from 反解同一坐标系）：编号本身可点直达，悬停显示步骤名。
-      // 默认收起——物料后面常驻一串编号显得零碎（用户 2026-11-24 反馈）：整行可悬停可点击，点开才展开
-      var refs = g.refs.map(function (rh) {
+    groups.map(function (g, i) {
+      // 声明该物品的步骤（与侧栏大纲、from 反解同一坐标系）。菜单默认不开：整行（含序号）可悬停、可点击，
+      // 点击才在条目下方弹出步骤菜单（用户 2026-11-24 定；此前是行内开关式展开编号）
+      var steps = [];
+      (g.refs || []).forEach(function (rh) {
         var p = nodeIndex && nodeIndex[rh];
-        return p ? '<a href="#" class="io-ref" data-path="' + p.join(',') + '" data-tip="' + escapeHtml(walk(p).name) + '">' +
-          escapeHtml(p.map(function (i) { return i + 1; }).join('.')) + '</a>' : '';
-      }).join('');
+        if (p) steps.push({ path: p.join(','), num: p.map(function (k) { return k + 1; }).join('.'), name: walk(p).name });
+      });
+      // 序号自绘进条目里（清单 list-style: none）：它和名字同在一块悬停高亮区内
+      var idx = '<span class="flow-idx">' + (i + 1) + '.</span>';
       var body = escapeHtml(g.name) + (g.spec ? '<span class="io-spec">' + escapeHtml(g.spec) + '</span>' : '');
-      if (!refs) return '<li class="flow-item">' + body + '</li>';
+      if (!steps.length) return '<li class="flow-item"><span class="flow-row">' + idx + body + '</span></li>';
       // 条目标识只用 ASCII：键里的控制字符（如 \u0000）写进 HTML 属性会被解析器替换成 U+FFFD，
-      // 读回来就对不上，「点开状态」在重渲染后会丢
+      // 读回来就对不上，开合状态在重渲染后会丢
       var key = encodeURIComponent(labelKey + '\n' + g.name + '\n' + g.spec);
-      var isOpen = !!openFlows[key];
+      var isOpen = flowMenuKey === key;
       return '<li class="flow-item' + (isOpen ? ' open' : '') + '">' +
-        '<button type="button" class="flow-toggle" data-flow-key="' + escapeHtml(key) + '" aria-expanded="' + isOpen +
-        '" title="' + escapeHtml(POP_I18N.t('flowToggleTip')) + '">' + body + '</button>' +
-        '<span class="flow-refs"' + (isOpen ? '' : ' hidden') + '>' + refs + '</span></li>';
+        '<button type="button" class="flow-toggle" data-flow-key="' + escapeHtml(key) + '" aria-haspopup="menu" aria-expanded="' + isOpen +
+        '" title="' + escapeHtml(POP_I18N.t('flowToggleTip')) + '">' + idx + body + '</button>' +
+        flowMenuHtml(steps, isOpen) + '</li>';
     }).join('') + '</ol></div>';
+}
+
+/** 收起步骤菜单：就地改 DOM（不重渲染整页、不动滚动位置） */
+function closeFlowMenu() {
+  var item = document.querySelector('.flow-item.open');
+  if (item) {
+    item.classList.remove('open');
+    item.querySelector('.flow-menu').hidden = true;
+    item.querySelector('.flow-toggle').setAttribute('aria-expanded', 'false');
+  }
+  flowMenuKey = null;
+}
+
+/** 往下放会压到阅读区底边之外 → 改成向上弹（阅读区装不下整个菜单时仍向下，可滚动看到） */
+function flowMenuOpensUp(menu) {
+  var box = menu.getBoundingClientRect();
+  var stage = document.getElementById('app').getBoundingClientRect();
+  return box.height <= stage.height && box.bottom > stage.bottom - 8;
+}
+
+function openFlowMenu(item) {
+  flowMenuKey = item.querySelector('.flow-toggle').getAttribute('data-flow-key');
+  item.classList.add('open');
+  var menu = item.querySelector('.flow-menu');
+  menu.hidden = false;
+  menu.classList.toggle('up', flowMenuOpensUp(menu));
+  item.querySelector('.flow-toggle').setAttribute('aria-expanded', 'true');
 }
 
 /** 一条派生清单；没有缓存就发请求并留槽。kind: externalInputs / finalOutputs */
@@ -1264,17 +1310,12 @@ document.addEventListener('click', function (e) {
       renderNoteSide();
     }
   }
-  // 派生清单的条目：点一下展开 / 收起它对应的步骤编号（展开后的编号走下面的 data-path 跳转）
+  // 派生清单的条目：点一下在条目下方弹出它的步骤菜单（再点收起；菜单项走下面的 data-path 跳转）
   var flowToggle = e.target.closest('.flow-toggle');
   if (flowToggle) {
-    var flowItem = flowToggle.closest('.flow-item');
-    var flowKey = flowToggle.getAttribute('data-flow-key');
-    var flowOpen = !flowItem.classList.contains('open');
-    flowItem.classList.toggle('open', flowOpen);
-    flowItem.querySelector('.flow-refs').hidden = !flowOpen;
-    flowToggle.setAttribute('aria-expanded', flowOpen ? 'true' : 'false');
-    if (flowOpen) openFlows[flowKey] = true;
-    else delete openFlows[flowKey];
+    var wasOpen = flowMenuKey === flowToggle.getAttribute('data-flow-key');
+    closeFlowMenu();
+    if (!wasOpen) openFlowMenu(flowToggle.closest('.flow-item'));
     return;
   }
   var jump = e.target.closest('[data-path]');

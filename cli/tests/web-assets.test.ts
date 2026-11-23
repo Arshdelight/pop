@@ -82,6 +82,22 @@ describe('web-default：详情页版本条与步骤卡', () => {
     }
   });
 
+  it('派生清单的条目：序号画进条目（悬停高亮连「数字＋点」一起包住），点击弹步骤菜单、菜单项直达步骤', () => {
+    const js = read('detail.js');
+    expect(js).not.toMatch(/openFlows|flow-refs/); // 行内开关式展开编号的旧实现已拆净
+    // 序号与名字同在按钮里；菜单默认隐藏、挂在按钮之后
+    expect(js).toContain("' + idx + body + '</button>' +");
+    expect(js).toContain("class=\"flow-toggle\" data-flow-key=\"' + escapeHtml(key) + '\" aria-haspopup=\"menu\" aria-expanded=\"' + isOpen");
+    expect(js).toContain("class=\"flow-option\" role=\"menuitem\" data-path=\"' + s.path + '\"");
+    expect(js).toContain("'<div class=\"flow-menu\" role=\"menu\"' + (isOpen ? '' : ' hidden') + '>'");
+    const css = read('style.css');
+    expect(cssRule('ol.io-list.flow-list')).toContain('list-style: none');
+    expect(cssRule('ol.io-list.flow-list')).toContain('padding-left: 0');
+    expect(cssRule('.flow-menu')).toContain('position: absolute');
+    expect(cssRule('.flow-menu.up')).toContain('bottom: 100%');
+    expect(css).not.toContain('.flow-refs');
+  });
+
   it('步骤卡与选项卡同观感（hub ChildCard 同款）：节点名正黑、圆角 10px、悬停品牌蓝描边、描述 80% 墨', () => {
     for (const card of ['.child-card', '.choice-card']) {
       expect(cssRule(card)).toContain('color: var(--ink)');
@@ -108,8 +124,8 @@ describe('web-default：语言层', () => {
     const M = vm.runInContext('POP_I18N.M', ctx) as Record<'zh' | 'en', Record<string, unknown>>;
     expect(Object.keys(M.en).sort()).toEqual(Object.keys(M.zh).sort());
     for (const key of Object.keys(M.zh)) expect(typeof M.en[key]).toBe(typeof M.zh[key]);
-    // 版本条用到的文案两种语言都齐
-    for (const key of ['switchBranch', 'commitCount', 'createdAtOn', 'backToHead', 'syncNone', 'syncPartial', 'syncPushed']) {
+    // 版本条与步骤菜单用到的文案两种语言都齐
+    for (const key of ['switchBranch', 'commitCount', 'createdAtOn', 'backToHead', 'syncNone', 'syncPartial', 'syncPushed', 'flowMenuTitle', 'flowToggleTip']) {
       expect(M.zh[key], key).toBeTruthy();
       expect(M.en[key], key).toBeTruthy();
     }

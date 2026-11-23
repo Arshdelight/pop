@@ -39,6 +39,8 @@ var POP_I18N = (function () {
       // spec 2.2.0：notice 字段的提醒框标题；实践页派生清单（externalInputs / finalOutputs）的标题
       noticeLabel: '注意', needsLabel: '需要准备', yieldsLabel: '你会得到',
       flowToggleTip: '显示相关步骤',
+      // 条目的步骤菜单标题（点击「你会得到 / 需要准备」的条目后弹出）
+      flowMenuTitle: '相关步骤',
       secSteps: function (n) { return '步骤 (' + n + ')'; },
       secTasks: function (n) { return '任务 (' + n + ')'; },
       secOptions: function (n) { return '选项 (' + n + ')'; },
@@ -88,6 +90,7 @@ var POP_I18N = (function () {
       secContent: 'content', secInputs: 'inputs', secOutputs: 'outputs', secAttachments: 'attachments',
       noticeLabel: 'Notice', needsLabel: 'What you need', yieldsLabel: 'What you get',
       flowToggleTip: 'Show related steps',
+      flowMenuTitle: 'Related steps',
       secSteps: function (n) { return 'steps (' + n + ')'; },
       secTasks: function (n) { return 'tasks (' + n + ')'; },
       secOptions: function (n) { return 'options (' + n + ')'; },
