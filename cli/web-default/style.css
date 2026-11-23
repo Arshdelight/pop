@@ -194,7 +194,8 @@ ol.io-list.flow-list li { padding: 1px 0; }
 .flow-menu.up { top: auto; bottom: 100%; margin-top: 0; margin-bottom: 4px; }
 .flow-menu-title { margin: 0; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--ink); }
 .flow-option { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; color: var(--ink); font-size: 13px; line-height: 1.5; text-decoration: none; }
-.flow-option:hover { background: var(--ink-50); }
+/* 菜单项 hover 只换底色：全局 a:hover 的下划线在这里压掉（用户 2026-11-24：相关步骤的 hover 不要下划线） */
+.flow-option:hover { background: var(--ink-50); text-decoration: none; }
 .flow-option-num { flex: none; min-width: 20px; color: var(--ink-a50); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
 .flow-option-name { min-width: 0; overflow-wrap: anywhere; }
 /* 注意事项（spec 2.2.0 的 notice 字段）：独立提醒框，垫在节点的最下方（用户 2026-11-24 定）。

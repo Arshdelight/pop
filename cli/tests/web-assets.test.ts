@@ -95,6 +95,8 @@ describe('web-default：详情页版本条与步骤卡', () => {
     expect(cssRule('ol.io-list.flow-list')).toContain('padding-left: 0');
     expect(cssRule('.flow-menu')).toContain('position: absolute');
     expect(cssRule('.flow-menu.up')).toContain('bottom: 100%');
+    // 菜单项 hover 不带下划线：全局 a:hover 会压过 .flow-option 的 text-decoration: none，必须在 hover 规则里再压回去
+    expect(cssRule('.flow-option:hover')).toContain('text-decoration: none');
     expect(css).not.toContain('.flow-refs');
   });
 
