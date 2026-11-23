@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { aggregateView, computeNodeHash, exportSubtree, readBlob, resolveNodeRef } from '@arshdelight/pop-sdk';
+import { aggregateView, exportSubtree, readBlob, resolveNodeRef, type PNode } from '@arshdelight/pop-sdk';
 import { chainPathFor, findRepoFromCwd, isRepoDir, loadChain, openPool, practiDirFor, resolveRepo, workingFileFor, type Repo } from './practice.js';
 import { defaultDataDir } from './state.js';
 import { loadNotes, insertNote, updateNote, removeNote } from './notes.js';
@@ -187,7 +187,8 @@ async function handleRepo(req: http.IncomingMessage, res: http.ServerResponse, r
     if (doc) {
       const hash = doc[1].replace(/\.json$/, '');
       const ws = openPool(repo);
-      const node = ws.nodes.get(resolveNodeRef(ws, hash));
+      const resolved = resolveNodeRef(ws, hash);
+      const node = ws.nodes.get(resolved);
       if (!node) {
         send(res, 404, 'application/json; charset=utf-8', JSON.stringify({ error: 'node not found' }));
         return;
@@ -195,7 +196,7 @@ async function handleRepo(req: http.IncomingMessage, res: http.ServerResponse, r
       const document = exportSubtree(node, ws.nodes) as Record<string, unknown>;
       // 加法演进：树字段在顶层（老前端照常读），nodeIndex 是新增兄弟键（前端把
       // inputs.from 反解成 #编号引用用——哈希不在树里，引用靠旁路登记）
-      send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ ...document, nodeIndex: buildNodeIndex(document) }, null, 2));
+      send(res, 200, 'application/json; charset=utf-8', JSON.stringify({ ...document, nodeIndex: buildNodeIndex(resolved, ws.nodes) }, null, 2));
       return;
     }
     const blob = pathname.match(/^\/blobs\/(sha256:[0-9a-f]{64})$/);
@@ -275,17 +276,22 @@ async function readBody(req: http.IncomingMessage, limit: number): Promise<strin
   });
 }
 
-/** 节点指纹登记簿（哈希→树内 children 下标路径），/doc 数据窗附带：前端把 inputs.from
- *  反解成 #编号引用用。根（空路径）不成节、无编号，不登记。 */
-function buildNodeIndex(tree: Record<string, unknown>): Record<string, number[]> {
+/** 节点指纹登记簿（节点的真实哈希→树内 children 下标路径），/doc 数据窗附带：前端把 inputs.from
+ *  反解成 #编号引用、给派生清单标出声明步骤用。根（空路径）不成节、无编号，不登记。
+ *  必须走存储态的树（children 是 {hash} 钉）——不能对着导出态文档重算哈希：导出会把 subtree 内的
+ *  from 改写成 "@名字" 标签（作者改完子节点后重新导入不断链），拿标签形态算出的哈希不是节点
+ *  身份，带 from 的节点会全部登记不上，来源步骤的跳转链接就全失效。缺字节的子树跳过。 */
+function buildNodeIndex(root: string, nodes: Map<string, PNode>): Record<string, number[]> {
   const index: Record<string, number[]> = {};
-  type Hashable = Parameters<typeof computeNodeHash>[0];
-  const visit = (n: Record<string, unknown>, p: number[]): void => {
-    if (p.length > 0) index[computeNodeHash(n as Hashable)] = p;
-    const kids = Array.isArray(n.children) ? (n.children as Record<string, unknown>[]) : [];
-    kids.forEach((c, i) => visit(c, [...p, i]));
+  const visit = (hash: string, p: number[]): void => {
+    const node = nodes.get(hash);
+    if (node === undefined || node.type !== 'practice') return;
+    node.children.forEach((c, i) => {
+      index[c.hash] = [...p, i];
+      visit(c.hash, [...p, i]);
+    });
   };
-  visit(tree, []);
+  visit(root, []);
   return index;
 }
 

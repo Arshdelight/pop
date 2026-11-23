@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { chainOf, init, runIn, tempDataDir, writeDoc } from './helpers.js';
+import { chainOf, freePort, init, runIn, spawnWeb, tempDataDir, untilHealthy, writeDoc } from './helpers.js';
 
 const TREE = {
   name: 'Make tea',
@@ -116,5 +116,116 @@ describe('show: found-but-hash-mismatch is an error, never silent', () => {
     const r = await runIn(repo, home, ['show', root]);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('Plain');
+  });
+});
+
+// spec 2.2.0：notice 与派生的对外清单。照着做的人 / agent 读的是 `show`——提醒、要备什么、
+// 得到什么必须都在这份输出里，作者才能不必在正文里复述
+describe('show: notice and the derived external-input / final-output lists (spec 2.2.0)', () => {
+  const FLOWS = {
+    name: 'Make tea',
+    description: 'From kettle to cup',
+    notice: 'Keep the kettle half-full at most.',
+    children: [
+      {
+        name: 'Boil water',
+        description: 'Heat the water to a rolling boil.',
+        notice: 'Do not overfill the kettle.',
+        content: 'Fill the kettle with drinking water and switch it on.',
+        inputs: [{ name: 'kettle' }],
+        outputs: [{ name: 'boiling water', spec: '100°C' }],
+      },
+      {
+        name: 'Pour',
+        description: 'Fill the cup.',
+        content: 'Pour along the wall.',
+        inputs: [{ name: 'boiling water', from: '@Boil water' }, { name: 'tea leaves', spec: '2 g' }],
+        outputs: [{ name: 'cup of tea', spec: '85°C' }],
+      },
+    ],
+  };
+
+  async function setupFlows(): Promise<{ home: string; repo: string; root: string }> {
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    const file = writeDoc(parent, 'seed.json', FLOWS);
+    await runIn(parent, home, ['new', 'tea-flows', '--base', file]);
+    const repo = path.join(parent, 'tea-flows');
+    return { home, repo, root: chainOf(repo).commits[0]!.root };
+  }
+
+  it('human output: both notices, and only the flows that cross the practice boundary', async () => {
+    const { home, repo, root } = await setupFlows();
+    const r = await runIn(repo, home, ['show', root]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('notice: Keep the kettle half-full at most.');
+    expect(r.stdout).toMatch(/Boil water[^\n]*\n[^\n]*⚠ Do not overfill the kettle\./);
+    expect(r.stdout).toContain('external inputs (prepare these outside the practice):');
+    const external = r.stdout.slice(r.stdout.indexOf('external inputs'), r.stdout.indexOf('final outputs'));
+    expect(external).toContain('kettle');
+    expect(external).toContain('tea leaves — 2 g');
+    expect(external).not.toContain('boiling water'); // 上游供给的中间需求不算「要备的」
+    const finals = r.stdout.slice(r.stdout.indexOf('final outputs'), r.stdout.indexOf('declared inputs'));
+    expect(finals).toContain('cup of tea — 85°C');
+    expect(finals).not.toContain('boiling water'); // 被下游消费的中间产物不算「得到的」
+    expect(r.stdout).toContain('declared outputs (produces):'); // 声明全表照旧，派生清单是另一对
+  });
+
+  it('--json: notice on the view and on each step, plus the two derived lists', async () => {
+    const { home, repo, root } = await setupFlows();
+    const r = await runIn(repo, home, ['show', root, '--json']);
+    expect(r.code).toBe(0);
+    const view = JSON.parse(r.stdout) as {
+      notice?: string;
+      steps: { name: string; notice?: string }[];
+      externalInputs: { name: string; spec?: string }[];
+      finalOutputs: { name: string; spec?: string }[];
+    };
+    expect(view.notice).toBe('Keep the kettle half-full at most.');
+    expect(view.steps.map((s) => `${s.name}:${s.notice ?? ''}`)).toEqual(['Boil water:Do not overfill the kettle.', 'Pour:']);
+    expect(view.externalInputs.map((d) => `${d.name}${d.spec ? ` — ${d.spec}` : ''}`)).toEqual(['kettle', 'tea leaves — 2 g']);
+    expect(view.finalOutputs.map((d) => `${d.name}${d.spec ? ` — ${d.spec}` : ''}`)).toEqual(['cup of tea — 85°C']);
+  });
+
+  it('--doc: notice round-trips verbatim through the authoring channel', async () => {
+    const { home, repo, root } = await setupFlows();
+    const r = await runIn(repo, home, ['show', root, '--doc']);
+    expect(r.code).toBe(0);
+    const doc = JSON.parse(r.stdout) as { notice?: string; children: { notice?: string }[] };
+    expect(doc.notice).toBe('Keep the kettle half-full at most.');
+    expect(doc.children[0].notice).toBe('Do not overfill the kettle.');
+    expect('notice' in doc.children[1]).toBe(false);
+  });
+
+  it('practi web serves the same derived lists on /pop/<hash>.json (the wizard renders them on practice pages)', async () => {
+    const { home, repo, root } = await setupFlows();
+    const port = await freePort();
+    const child = spawnWeb(repo, home, port);
+    try {
+      const base = await untilHealthy(port, child);
+      const view = (await (await fetch(`${base}/pop/${encodeURIComponent(root)}.json`)).json()) as {
+        notice?: string;
+        steps: { refHash: string; name: string }[];
+        externalInputs: { name: string }[];
+        finalOutputs: { name: string }[];
+      };
+      expect(view.notice).toBe('Keep the kettle half-full at most.');
+      expect(view.externalInputs.map((d) => d.name)).toEqual(['kettle', 'tea leaves']);
+      expect(view.finalOutputs.map((d) => d.name)).toEqual(['cup of tea']);
+
+      // 哈希登记簿记的是节点的真实哈希：/doc 导出态把 subtree 内的 from 改写成 "@名字"，对着
+      // 导出态重算的哈希不是节点身份——带 from 的步骤（这里是 Pour）曾经因此全部登记不上
+      const docView = (await (await fetch(`${base}/doc/${encodeURIComponent(root)}.json`)).json()) as {
+        nodeIndex: Record<string, number[]>;
+        children: { inputs?: { from?: string }[] }[];
+      };
+      expect(docView.children[1].inputs?.[0].from).toBe('@Boil water'); // 导出态确实是标签写法
+      for (const s of view.steps) expect(docView.nodeIndex[s.refHash], s.name).toBeDefined();
+      expect(docView.nodeIndex[view.steps[0].refHash]).toEqual([0]);
+      expect(docView.nodeIndex[view.steps[1].refHash]).toEqual([1]);
+    } finally {
+      child.kill();
+    }
   });
 });

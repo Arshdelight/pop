@@ -24,6 +24,10 @@ export function renderSteps(steps: StepItem[], nodes: Map<string, PNode>): strin
     const note = s.note ? `  (${s.note})` : '';
     const desc = s.description !== undefined ? `  — ${s.description}` : '';
     lines.push(`${'  '.repeat(s.depth)}${s.name}  ${tag}  ${shortHash(s.refHash)}${note}${desc}`);
+    // notice（spec 2.2.0）：紧跟所属步骤缩进一级，多行压成一行——照着骨架做的人不能漏掉提醒
+    if (s.notice !== undefined && s.notice.trim() !== '') {
+      lines.push(`${'  '.repeat(s.depth)}  ⚠ ${s.notice.trim().replace(/\s*\n\s*/g, ' ')}`);
+    }
   }
   return lines;
 }

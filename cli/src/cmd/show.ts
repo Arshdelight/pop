@@ -68,6 +68,7 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
 
   console.log(viewHeader(view));
   if (view.description !== undefined) console.log(`\ndescription: ${view.description}`);
+  if (view.notice !== undefined) console.log(`\nnotice: ${view.notice}`);
   if (view.content !== undefined && view.content.trim() !== '') console.log(`\n${view.content}`);
 
   if (view.steps.length > 0) {
@@ -79,6 +80,16 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
     for (const e of view.flow) {
       console.log(`  ${e.name}  ${short(e.fromHash)} (${e.fromName}) → ${short(e.toHash)} (${e.toName})`);
     }
+  }
+  // 对外清单（spec §7，2.2.0）：实践之外要备好的 / 实践最终交出的。动作视图下它与下面的
+  // declared 两表重复（叶子内看不见消费者），只对 practice 打印
+  if (view.type === 'practice' && view.externalInputs.length > 0) {
+    console.log('\nexternal inputs (prepare these outside the practice):');
+    for (const d of mergedBySpec(view.externalInputs)) console.log(`  ${d.name}${d.spec ? ` — ${d.spec}` : ''}  [${short(d.refHash)}]`);
+  }
+  if (view.type === 'practice' && view.finalOutputs.length > 0) {
+    console.log('\nfinal outputs (what this practice yields):');
+    for (const d of mergedBySpec(view.finalOutputs)) console.log(`  ${d.name}${d.spec ? ` — ${d.spec}` : ''}  [${short(d.refHash)}]`);
   }
   if (view.inputs.length > 0) {
     console.log('\ndeclared inputs (needs):');
@@ -100,6 +111,18 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
     console.error('  the view above shows placeholders where they belong — the node files are gone (or never synced here)');
   }
   return code;
+}
+
+/** 派生清单按「名 + 规格」合并：同一样东西被多个步骤声明时只列一次（视图里逐条留着来源步骤，
+ *  给需要来源的渲染方；人读的清单不该出现三行「跑鞋」） */
+function mergedBySpec<T extends { name: string; spec?: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  return list.filter((d) => {
+    const key = `${d.name}\u0000${d.spec ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function short(hash: string): string {

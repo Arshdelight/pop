@@ -38,7 +38,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@arshdelight/pop-sdk": "^2.1.0"
+    "@arshdelight/pop-sdk": "^2.3.0"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
