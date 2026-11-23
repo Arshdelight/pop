@@ -79,8 +79,9 @@ export interface StandardView {
   outputs: FlowDeclarationView[];
   /**
    * 派生的「对外清单」（§7，由 inputs/outputs 与 flow 边算出，不另存）：
-   * - externalInputs：没有任何 flow 边供给的 declared input——实践之外要备好的东西（「需要准备」）
-   * - finalOutputs：没有任何 flow 边消费的 declared output——实践最终交出的东西（「你会得到」）
+   * - externalInputs：没有被实践**之内**的步骤供给的 declared input——实践之外要备好的东西（「需要准备」）。
+   *   供给方在子树之外的边不算已供给：读一个子实践时，那一步在它外面，它的产出要带进来
+   * - finalOutputs：没有被实践之内的步骤消费的 declared output——实践最终交出的东西（「你会得到」）
    * 中间产物（被下游步骤消费的 output）与中间需求（由上游供给的 input）都不在其中。
    */
   externalInputs: FlowDeclarationView[];
@@ -147,11 +148,16 @@ export function aggregateView(rootHash: string, nodes: Map<string, PNode>, opts?
   if (acc.missing.length > 0) view.missing = acc.missing;
   // 对外清单：拿 flow 边对声明求差。边的 name 取自消费方的 input 名，而协议允许 input 名
   // 与它消费的 output 名不同（靠 from 的哈希连接，见 Appendix A2：boiling water → hot water）——
-  // 所以先按名匹配；连线的一端只声明了一个流时，按哈希直接对应，名字不同也不会误判
+  // 所以先按名匹配；连线的一端只声明了一个流时，按哈希直接对应，名字不同也不会误判。
+  // 供给方在子树之外的边不算「已供给」（用户 2026-11-24 发现：「按周训练」的需要准备漏了「基线结果」——
+  // 它由外面的基线测试产出）：读的是子树时，外面那一步的产出是这个实践要准备的。消费那一侧天然如此——
+  // 边是从消费方的 input 建的，子树外的消费方不在本视图里，它消费的输出照列为最终产出
   const declaredBy = (list: FlowDeclarationView[], hash: string): string[] => list.filter((d) => d.refHash === hash).map((d) => d.name);
+  const inside = new Set(acc.steps.map((s) => s.refHash));
   const supplied = new Set<string>();
   const consumed = new Set<string>();
   for (const e of acc.flow) {
+    if (!inside.has(e.fromHash)) continue;
     const inNames = declaredBy(acc.inputs, e.toHash);
     for (const name of inNames.length === 1 ? inNames : [e.name]) supplied.add(`${e.toHash}\u0000${name}`);
     const outNames = declaredBy(acc.outputs, e.fromHash);

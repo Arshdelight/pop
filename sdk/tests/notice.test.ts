@@ -157,6 +157,35 @@ describe('external inputs / final outputs (§7, POP 2.2.0)', () => {
     expect(v.finalOutputs).toEqual([{ name: 'cup of tea', spec: '85°C', refHash: pourH }]);
   });
 
+  it('reading a sub-practice: a need supplied by a step OUTSIDE the subtree is external — its product must be brought in', () => {
+    // 用户 2026-11-24 发现的缺陷（「按周训练」的需要准备漏了「基线结果」）：基线测试在「按周训练」外面，
+    // 它的产出对这一节来说是要从外面带进来的东西
+    const nodes = new Map<string, PNode>();
+    const baseH = put(nodes, action('Baseline test', { outputs: [{ name: 'baseline result' }] }));
+    const runH = put(nodes, action('Run three times', {
+      inputs: [{ name: 'shoes' }, { name: 'baseline result', from: baseH }],
+      outputs: [{ name: 'week of running' }],
+    }));
+    const assessH = put(nodes, action('Assess', {
+      inputs: [{ name: 'week of running', from: runH }],
+      outputs: [{ name: 'next plan' }],
+    }));
+    const weekH = put(nodes, practice('Train by week', 'loop', [runH, assessH]));
+    const week = aggregateView(weekH, nodes);
+    expect(week.externalInputs).toEqual([
+      { name: 'shoes', refHash: runH },
+      { name: 'baseline result', refHash: runH },
+    ]);
+    expect(week.finalOutputs).toEqual([{ name: 'next plan', refHash: assessH }]);
+    // 整篇读：基线结果与一周的跑步都是中间产物，两边都不列
+    const whole = aggregateView(put(nodes, practice('First 5k', 'seq', [baseH, weekH])), nodes);
+    expect(whole.externalInputs.map((d) => d.name)).toEqual(['shoes']);
+    expect(whole.finalOutputs.map((d) => d.name)).toEqual(['next plan']);
+    // 只读评估这一步所在的小节：它消费的「一周的跑步」同样来自外面
+    const tail = aggregateView(put(nodes, practice('Weekend', 'seq', [assessH])), nodes);
+    expect(tail.externalInputs.map((d) => d.name)).toEqual(['week of running']);
+  });
+
   it('a wired flow whose input name differs from the output name still counts when the wired node declares a single flow (Appendix A2 shape)', () => {
     const nodes = new Map<string, PNode>();
     const boilH = put(nodes, action('Boil water', { outputs: [{ name: 'boiling water', spec: '100°C' }] }));
@@ -189,14 +218,20 @@ describe('external inputs / final outputs (§7, POP 2.2.0)', () => {
     expect(aggregateView(put(nodes, practice('Collection', 'set', [aH])), nodes)).toMatchObject({ externalInputs: [], finalOutputs: [] });
   });
 
-  it('action view: its unwired inputs are external and every output final (no consumer is visible inside a leaf)', () => {
+  it('action view: every input is external and every output final (nothing inside a leaf can supply or consume)', () => {
     const nodes = new Map<string, PNode>();
+    // 供给方在工作区里存在也罢、指向一个不存在的节点也罢——对一个叶子来说它都在外面
+    const boilH = put(nodes, action('Boil water', { outputs: [{ name: 'boiling water' }] }));
     const h = put(nodes, action('Pour', {
-      inputs: [{ name: 'boiling water', from: `sha256:${'a'.repeat(64)}` }, { name: 'cup' }],
+      inputs: [{ name: 'boiling water', from: boilH }, { name: 'hot water', from: `sha256:${'a'.repeat(64)}` }, { name: 'cup' }],
       outputs: [{ name: 'cup of tea' }],
     }));
     const v = aggregateView(h, nodes);
-    expect(v.externalInputs).toEqual([{ name: 'cup', refHash: h }]);
+    expect(v.externalInputs).toEqual([
+      { name: 'boiling water', refHash: h },
+      { name: 'hot water', refHash: h },
+      { name: 'cup', refHash: h },
+    ]);
     expect(v.finalOutputs).toEqual([{ name: 'cup of tea', refHash: h }]);
   });
 

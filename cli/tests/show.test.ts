@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { loadWorkspace } from '@arshdelight/pop-sdk';
 import { chainOf, freePort, init, runIn, spawnWeb, tempDataDir, untilHealthy, writeDoc } from './helpers.js';
 
 const TREE = {
@@ -191,6 +192,59 @@ describe('show: notice and the derived external-input / final-output lists (spec
     expect(view.steps.map((s) => `${s.name}:${s.notice ?? ''}`)).toEqual(['Boil water:Do not overfill the kettle.', 'Pour:']);
     expect(view.externalInputs.map((d) => `${d.name}${d.spec ? ` — ${d.spec}` : ''}`)).toEqual(['kettle', 'tea leaves — 2 g']);
     expect(view.finalOutputs.map((d) => `${d.name}${d.spec ? ` — ${d.spec}` : ''}`)).toEqual(['cup of tea — 85°C']);
+  });
+
+  it('a sub-practice read on its own lists a need supplied from OUTSIDE it (show + practi web agree)', async () => {
+    // 用户 2026-11-24 发现的缺陷：基线测试在「按周训练」外面，它供给的「基线结果」曾被当成内部中间产物，
+    // 从这一节的「要备的」里漏掉——整篇读时两边都不列才是对的
+    const home = tempDataDir();
+    await init(home);
+    const parent = tempDataDir();
+    const file = writeDoc(parent, 'nested.json', {
+      name: 'First 5k',
+      children: [
+        { name: 'Baseline test', content: 'Walk fast for 30 minutes and note how it feels.', outputs: [{ name: 'baseline result' }] },
+        {
+          name: 'Train by week',
+          children: [
+            {
+              name: 'Run three times',
+              content: 'Run three times this week at an easy pace.',
+              inputs: [{ name: 'shoes' }, { name: 'baseline result', from: '@Baseline test' }],
+              outputs: [{ name: 'week of running' }],
+            },
+          ],
+        },
+      ],
+    });
+    await runIn(parent, home, ['new', 'nested', '--base', file]);
+    const repo = path.join(parent, 'nested');
+    const root = chainOf(repo).commits[0]!.root;
+    const rootNode = loadWorkspace(path.join(repo, '.practi')).nodes.get(root)! as { children: { hash: string }[] };
+    const week = rootNode.children[1]!.hash;
+
+    const externalOf = (stdout: string): string[] => {
+      const block = stdout.slice(stdout.indexOf('external inputs'), stdout.indexOf('final outputs'));
+      return block.split('\n').slice(1).map((l) => l.trim().replace(/\s+\[[0-9a-f]+\]$/, '')).filter(Boolean);
+    };
+    const sub = await runIn(repo, home, ['show', week]);
+    expect(sub.code, sub.stderr).toBe(0);
+    expect(externalOf(sub.stdout)).toEqual(['shoes', 'baseline result']);
+    const whole = await runIn(repo, home, ['show', root]);
+    expect(whole.code, whole.stderr).toBe(0);
+    expect(externalOf(whole.stdout)).toEqual(['shoes']);
+
+    const port = await freePort();
+    const child = spawnWeb(repo, home, port);
+    try {
+      const base = await untilHealthy(port, child);
+      const view = (await (await fetch(`${base}/pop/${encodeURIComponent(week)}.json`)).json()) as {
+        externalInputs: { name: string; refHash: string }[];
+      };
+      expect(view.externalInputs.map((d) => d.name)).toEqual(['shoes', 'baseline result']);
+    } finally {
+      child.kill();
+    }
   });
 
   it('--doc: notice round-trips verbatim through the authoring channel', async () => {
