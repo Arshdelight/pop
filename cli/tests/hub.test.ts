@@ -635,6 +635,7 @@ describe('log：提交历史', () => {
 describe('web：实例浏览器', () => {
   it('/api/repo 出链与支；/pop/<root>.json 出聚合视图', async () => {
     const { spawnWeb, untilHealthy } = await import('./helpers.js');
+    const startedAt = Date.now();
     const home = await hubHome();
     const { repo, root } = await practiceWithCommit(home);
     const port = await freePort();
@@ -642,10 +643,22 @@ describe('web：实例浏览器', () => {
     try {
       const base = await untilHealthy(port, child);
       const repoRes = await fetch(`${base}/api/repo`);
-      const info = (await repoRes.json()) as { name: string; current: string; commits: { root: string }[] };
+      const info = (await repoRes.json()) as {
+        name: string;
+        current: string;
+        commits: { root: string }[];
+        branches: { name: string; head: string; isDefault: boolean; current: boolean }[];
+        createdAt: string | null;
+      };
       expect(info.name).toBe('my-practice');
       expect(info.current).toBe('main');
       expect(info.commits).toHaveLength(1);
+      // 版本条的数据面：每条支带头哈希（前端选中即跳 /pop/<头>），创建时间取实例目录的诞生时刻
+      expect(info.branches).toEqual([{ name: 'main', head: root, isDefault: true, current: true }]);
+      expect(typeof info.createdAt).toBe('string');
+      const created = Date.parse(info.createdAt!);
+      expect(created).toBeGreaterThanOrEqual(startedAt - 5_000);
+      expect(created).toBeLessThanOrEqual(Date.now() + 5_000);
       const view = await fetch(`${base}/pop/${encodeURIComponent(root)}.json`);
       expect(view.ok).toBe(true);
       const page = await fetch(base);
@@ -653,6 +666,10 @@ describe('web：实例浏览器', () => {
       expect(pageHtml).toContain('chain.js');
       // 站点图标（pop#3）：页面只留对 /favicon.svg 的引用，不再内嵌手抄副本
       expect(pageHtml).toContain(ICON_LINK);
+      // 详情页：页眉之下挂版本条容器（数据到了才显形），旧的内容列顶栏已并入
+      const wizardHtml = await (await fetch(`${base}/pop/${encodeURIComponent(root)}`)).text();
+      expect(wizardHtml).toContain('<div class="version-bar" id="version-bar" hidden></div>');
+      expect(wizardHtml).not.toContain('detail-topbar');
       const icon = await fetch(`${base}/favicon.svg`);
       expect(icon.headers.get('content-type')).toBe('image/svg+xml');
       expect(await icon.text()).toContain('viewBox="67.5 75 459 459"');

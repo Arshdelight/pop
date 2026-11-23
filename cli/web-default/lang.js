@@ -10,14 +10,15 @@ var POP_I18N = (function () {
   // 字典值：字符串，或函数（复数/拼接类文案按参数生成）
   var M = {
     zh: {
-      settings: '设置', language: '语言', done: '完成', copied: '已复制', back: '返回', metaInfo: '文档信息', docAttach: '附件', mediaMissing: '未找到', mediaAttach: '附件', nodeMissing: '节点缺失',
+      settings: '设置', language: '语言', done: '完成', copied: '已复制', metaInfo: '文档信息', docAttach: '附件', mediaMissing: '未找到', mediaAttach: '附件', nodeMissing: '节点缺失',
       tabWizard: '步骤', tabSv: '标准视图', tabDoc: '文档树',
       labelDocJson: '文档 JSON', labelSvJson: '标准视图 JSON',
       // 总览页
       pageTitle: '我的实践',
       tabOverview: '总览', tabPractices: '实践', viewAll: '查看全部',
       findPlaceholder: '查找',
-      commitCount: function (n) { return n + ' 次提交'; },
+      // 提交数的说法与 hub 一致（「N 个提交」）：总览卡 / 链页 / 详情页版本条共用
+      commitCount: function (n) { return n + ' 个提交'; },
       homeNoRevisions: '还没有修订',
       homeEmptyLead: '这里还没有实践。',
       homeEmptyHint: '在终端用 <code>practi new &lt;名字&gt;</code> 诞生一个，或 <code>practi clone &lt;owner&gt;/&lt;名字&gt;</code> 从 hub 克隆。',
@@ -56,10 +57,14 @@ var POP_I18N = (function () {
       noteServerStale: '服务器像是旧构建（前端新、服务器旧）——重启 practi web 再试',
       docFail: function (s) { return '文档加载失败（' + s + '）'; },
       backMine: '← 我的实践',
-      revisions: '修订历史'
+      // 版本条（hub 实例页「版本条」同款）：分支下拉 / N 个提交 / 同步状态徽标 / 创建于 / 回到头版本
+      switchBranch: '切换分支',
+      createdAtOn: function (d) { return '创建于 ' + d; },
+      backToHead: '回到头版本',
+      syncNone: '未推送', syncPushed: '已推送', syncPartial: '有未推送'
     },
     en: {
-      settings: 'Settings', language: 'Language', done: 'Done', copied: 'Copied', back: 'Back', metaInfo: 'Document info', docAttach: 'Attachments', mediaMissing: 'not found', mediaAttach: 'attachment', nodeMissing: 'node missing',
+      settings: 'Settings', language: 'Language', done: 'Done', copied: 'Copied', metaInfo: 'Document info', docAttach: 'Attachments', mediaMissing: 'not found', mediaAttach: 'attachment', nodeMissing: 'node missing',
       tabWizard: 'Todo', tabSv: 'StandardView', tabDoc: 'Document',
       labelDocJson: 'Document JSON', labelSvJson: 'StandardView JSON',
       pageTitle: 'My practices',
@@ -101,8 +106,11 @@ var POP_I18N = (function () {
       noteServerStale: 'the server looks like an older build — restart practi web and retry',
       docFail: function (s) { return 'failed to load document (' + s + ')'; },
       backMine: '← My practices',
-      revisions: 'Revisions'
-    }
+      switchBranch: 'Switch branch',
+      createdAtOn: function (d) { return 'Created ' + d; },
+      backToHead: 'Back to head',
+      syncNone: 'Not pushed', syncPushed: 'Pushed', syncPartial: 'Unpushed commits'
+  }
   };
 
   function getLang() {

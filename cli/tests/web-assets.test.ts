@@ -44,3 +44,64 @@ describe('web-default：站点图标单一来源', () => {
     expect(pathData(headerLogo(page))).toEqual(pathData(read('favicon.svg')));
   });
 });
+
+/** 样式表里某个选择器的规则体（按行首整条匹配；找不到即测试失败） */
+function cssRule(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = read('style.css').match(new RegExp(`(?:^|\\n)${escaped} \\{([^}]*)\\}`));
+  if (!m) throw new Error(`style.css: rule "${selector}" not found`);
+  return m[1]!;
+}
+
+describe('web-default：详情页版本条与步骤卡', () => {
+  it('版本条挂在页眉之下；旧的内容列顶栏（返回 / 修订历史 / 信息）三处都已拆净', () => {
+    expect(read('detail.html')).toContain('<div class="version-bar" id="version-bar" hidden></div>');
+    expect(read('detail.js')).not.toMatch(/topbarHtml|detail-topbar|BACK_SVG/);
+    expect(read('style.css')).not.toMatch(/detail-topbar|topbar-right/);
+  });
+
+  it('分支选择器 / 提交数 / 回到头版本 / 信息按钮都在版本条上，数据取自 /api/repo', () => {
+    const js = read('detail.js');
+    expect(js).toContain("fetch(P + '/api/repo')");
+    for (const needle of ['data-act="branch-toggle"', 'data-act="branch-pick"', 'vb-commits', 'class="vb-link"', 'data-top="info"']) {
+      expect(js).toContain(needle);
+    }
+    const css = read('style.css');
+    for (const selector of ['.version-bar', '.branch-select', '.branch-menu', '.branch-option', '.vb-badge']) {
+      expect(css).toContain(`${selector} {`);
+    }
+  });
+
+  it('步骤卡与选项卡同观感（hub ChildCard 同款）：节点名正黑、圆角 10px、悬停品牌蓝描边、描述 80% 墨', () => {
+    for (const card of ['.child-card', '.choice-card']) {
+      expect(cssRule(card)).toContain('color: var(--ink)');
+      expect(cssRule(card)).toContain('border-radius: 10px');
+    }
+    expect(cssRule('button.child-card:hover')).toContain('border-color: var(--secondary-brand)');
+    expect(cssRule('.choice-card:hover')).toContain('border-color: var(--secondary-brand)');
+    expect(cssRule('.child-desc')).toContain('color: var(--ink-a80)');
+  });
+});
+
+describe('web-default：语言层', () => {
+  it('lang.js：中英键集一致、同名键类型一致（缺键=界面冒出裸键名）', async () => {
+    const { default: vm } = await import('node:vm');
+    // 字典 M 不对外导出：在内存里的副本上改导出行取出来，落盘文件不动
+    const EXPORT = 'return { t: t, getLang: getLang, setLang: setLang, onChange: onChange };';
+    const src = read('lang.js');
+    expect(src).toContain(EXPORT);
+    const ctx = vm.createContext({
+      document: { addEventListener() {}, documentElement: {} },
+      localStorage: { getItem: () => null, setItem() {} },
+    });
+    vm.runInContext(src.replace(EXPORT, 'return { M: M };'), ctx);
+    const M = vm.runInContext('POP_I18N.M', ctx) as Record<'zh' | 'en', Record<string, unknown>>;
+    expect(Object.keys(M.en).sort()).toEqual(Object.keys(M.zh).sort());
+    for (const key of Object.keys(M.zh)) expect(typeof M.en[key]).toBe(typeof M.zh[key]);
+    // 版本条用到的文案两种语言都齐
+    for (const key of ['switchBranch', 'commitCount', 'createdAtOn', 'backToHead', 'syncNone', 'syncPartial', 'syncPushed']) {
+      expect(M.zh[key], key).toBeTruthy();
+      expect(M.en[key], key).toBeTruthy();
+    }
+  });
+});

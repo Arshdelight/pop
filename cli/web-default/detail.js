@@ -21,6 +21,8 @@ var renderedOnce = false; // 首载不滚标志：页面刚打开不代用户跳
 var flowsByHash = {};    // practice 节点哈希 → 聚合视图缓存（/pop/<hash>.json）：对外清单由服务端按 spec §7 派生
 var flowsPending = {};   // 已发出、未返回的聚合请求（同一节点不重复发）
 var openFlows = {};      // 派生清单里被点开的条目（键=清单+条目）：步骤编号默认收起，点击才展开
+var repoInfo = null;     // 仓库信息（/api/repo：分支 / 提交 / 创建时间 / hub 身份），版本条的数据源
+var branchMenuOpen = false; // 版本条的分支下拉面板开合
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -72,6 +74,7 @@ function nextOf(p) {
 function goTo(p) {
   navStack.push(path.slice());
   path = p;
+  branchMenuOpen = false; // 节点内导航时收起分支面板（GitHub 菜单同款：换了上下文菜单不留着）
   render();
 }
 
@@ -101,7 +104,8 @@ function render() {
   var node = walk(path);
   // 三视图：向导正文 / StandardView JSON / document JSON——侧栏大纲始终是导航脊柱，
   // 底部 Prev/Next 也常驻（在 JSON 视图里换节点=高亮跟着走）
-  app.innerHTML = topbarHtml(node) + (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
+  app.innerHTML = (view === 'wizard' ? nodeHtml(node) : jsonSectionHtml()) + navHtml();
+  renderVersionBar(node); // 文档动作（附件）跟随当前节点
   enhanceCodeBlocks(app);
   enhanceMedia(app);
   updateTabs();
@@ -733,7 +737,12 @@ function showToast(text) {
 var FP_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>';
 var INFO_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
 var CLIP_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/></svg>';
-var BACK_SVG = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>';
+var CHECK_ICON = '<svg class="vb-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+// 版本条图标：逐字对照 hub 所用 lucide-react v1.75（arsh_practihub/node_modules/lucide-react/dist/esm/icons/*.mjs 的 __iconData.node）；
+// History 图标在该版本里是 rotate-ccw-clock 的别名
+var BRANCH_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6a9 9 0 0 0-9 9V3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/></svg>';
+var CHEVRON_SVG = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+var HISTORY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>';
 
 /** 节点附件平铺（附件跟随节点：practice 无附件表，action 列自己的） */
 function sizeLabel(bytes) {
@@ -759,18 +768,112 @@ function collectAttachments(node) {
   return out;
 }
 
-function topbarHtml(node) {
+// ── 版本条（hub 实例页「版本条」同款，2026-11-24 用户要求补齐；举报不需要）：页眉之下的整行。
+// 左=分支选择器 / N 个提交（→ 提交历史页）/ 同步状态徽标 / 创建于，右=文档动作（附件跟随当前节点 / 信息）。
+// 数据来自 /api/repo，没到之前不占位；取不到就不显示——版本条是增强，阅读照常。
+// 徽标不是 hub 的「公开 / 私密」：可见性只存在于 hub、本地不存（推送时一律以私密创建，之后由
+// `practi visibility` 在 hub 侧改），这里如实显示本地可知的同步状态 ──
+
+/** 当前查看的版本（HASH）是哪条支的头 → 选择器显示那条支；不是任何支的头（看的是旧版本）→
+ *  显示仓库当前支，并给「回到头版本」链接（hub 同款） */
+function viewedBranch() {
+  var atHead = repoInfo.branches.filter(function (b) { return b.head === HASH; });
+  return atHead.length ? atHead[0].name : repoInfo.current;
+}
+
+/** 同步状态的文案键：链上没有 hub 身份=从未推送；当前支有提交没盖推送戳=有未推送；否则=已推送 */
+function syncStateKey() {
+  if (!repoInfo.owner) return 'syncNone';
+  return repoInfo.commits.some(function (c) { return !c.pushedAt; }) ? 'syncPartial' : 'syncPushed';
+}
+
+/** 「创建于」的日期：中文=2026年11月20日，英文=Nov 20, 2026 */
+function fmtCreated(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return POP_I18N.getLang() === 'zh'
+    ? d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日'
+    : MON[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+
+function versionBarHtml(node) {
+  var current = viewedBranch();
+  var cur = repoInfo.branches.filter(function (b) { return b.name === current; })[0];
+  var state = syncStateKey();
   var atts = collectAttachments(node);
   var attachBtn = atts.length
-    ? '<button type="button" class="topbar-btn" data-top="attach" aria-label="' + POP_I18N.t('docAttach') + '" data-tip="' + escapeHtml(POP_I18N.t('docAttach')) + '">' + CLIP_SVG + '<span>(' + atts.length + ')</span></button>'
+    ? '<button type="button" class="vb-action" data-top="attach" aria-label="' + POP_I18N.t('docAttach') + '" data-tip="' + escapeHtml(POP_I18N.t('docAttach')) + '">' + CLIP_SVG + '<span>(' + atts.length + ')</span></button>'
     : '';
-  return '<div class="detail-topbar">' +
-    '<button type="button" class="topbar-btn" data-top="back">' + BACK_SVG + '<span>' + POP_I18N.t('back') + '</span></button>' +
-    '<div class="topbar-right">' + attachBtn +
-    '<a class="topbar-btn" href="' + P + '/">' + escapeHtml(POP_I18N.t('revisions')) + '</a>' +
-    '<button type="button" class="topbar-btn topbar-icon" data-top="info" aria-label="' + POP_I18N.t('metaInfo') + '" data-tip="' + escapeHtml(POP_I18N.t('metaInfo')) + '">' + INFO_SVG + '</button></div>' +
+  return '<div class="vb-left">' +
+    '<div class="branch-select">' +
+      '<button type="button" class="vb-btn' + (branchMenuOpen ? ' on' : '') + '" data-act="branch-toggle" aria-haspopup="listbox" aria-expanded="' + branchMenuOpen + '">' +
+        BRANCH_SVG + '<span>' + escapeHtml(current) + '</span>' + CHEVRON_SVG + '</button>' +
+      (branchMenuOpen ? '<div class="branch-menu" role="listbox">' +
+        '<p class="branch-menu-title">' + escapeHtml(POP_I18N.t('switchBranch')) + '</p>' +
+        repoInfo.branches.map(function (b) {
+          var active = b.name === current;
+          return '<button type="button" class="branch-option' + (active ? ' on' : '') + '" role="option" aria-selected="' + active + '"' +
+            (active ? ' disabled' : ' data-act="branch-pick" data-head="' + escapeHtml(b.head) + '"') + '>' +
+            BRANCH_SVG + '<span class="branch-name">' + escapeHtml(b.name) + '</span>' +
+            (b.isDefault ? '<span class="branch-default">' + escapeHtml(POP_I18N.t('defaultBranch')) + '</span>' : '') +
+            (active ? CHECK_ICON : '') + '</button>';
+        }).join('') + '</div>' : '') +
+    '</div>' +
+    '<a class="vb-btn vb-commits" href="' + P + '/?branch=' + encodeURIComponent(current) + '">' + HISTORY_SVG +
+      '<span>' + escapeHtml(POP_I18N.t('commitCount', repoInfo.commits.length)) + '</span></a>' +
+    '<span class="badge-pill vb-badge' + (state === 'partial' ? ' badge-warn' : '') + '">' +
+      escapeHtml(POP_I18N.t(state)) + '</span>' +
+    (repoInfo.createdAt ? '<span class="vb-date">' + escapeHtml(POP_I18N.t('createdAtOn', fmtCreated(repoInfo.createdAt))) + '</span>' : '') +
+    (cur && cur.head && cur.head !== HASH
+      ? '<a class="vb-link" href="' + P + '/pop/' + encodeURIComponent(cur.head) + '">' + escapeHtml(POP_I18N.t('backToHead')) + '</a>'
+      : '') +
+    '</div>' +
+    '<div class="vb-right">' + attachBtn +
+    '<button type="button" class="vb-action vb-action-icon" data-top="info" aria-label="' + escapeHtml(POP_I18N.t('metaInfo')) + '" data-tip="' + escapeHtml(POP_I18N.t('metaInfo')) + '">' + INFO_SVG + '</button>' +
     '</div>';
 }
+
+function renderVersionBar(node) {
+  var bar = document.getElementById('version-bar');
+  if (!bar || !repoInfo || !doc) return;
+  bar.innerHTML = versionBarHtml(node);
+  bar.hidden = false;
+}
+
+/** 拉仓库信息。提交数要按「当前查看的支」算：默认接口回的是仓库当前支，看的是别的支的头就再取一次 */
+function loadRepoInfo() {
+  fetch(P + '/api/repo')
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (info) {
+      var atHead = info.branches.filter(function (b) { return b.head === HASH; });
+      if (!atHead.length || atHead[0].name === info.branch) return info;
+      return fetch(P + '/api/repo?branch=' + encodeURIComponent(atHead[0].name)).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      });
+    })
+    .then(function (info) {
+      repoInfo = info;
+      renderVersionBar(walk(path));
+    })
+    .catch(function () { /* 取不到就不显示版本条 */ });
+}
+
+// 分支下拉：外点关闭 + Esc 关闭（GitHub 菜单同款行为，hub BranchSelector 同款）
+document.addEventListener('mousedown', function (e) {
+  if (!branchMenuOpen || e.target.closest('.branch-select')) return;
+  branchMenuOpen = false;
+  renderVersionBar(walk(path));
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape' || !branchMenuOpen) return;
+  branchMenuOpen = false;
+  renderVersionBar(walk(path));
+});
 
 /** 附件弹窗：固定尺寸，列表超出内滚（多附件不撑屏） */
 function openAttDialog(node) {
@@ -1107,10 +1210,7 @@ function navHtml() {
 document.addEventListener('click', function (e) {
   var top = e.target.closest('[data-top]');
   if (top) {
-    if (top.getAttribute('data-top') === 'back') {
-      if (history.length > 1) history.back();
-      else location.href = '/';
-    } else if (top.getAttribute('data-top') === 'info') {
+    if (top.getAttribute('data-top') === 'info') {
       openInfoDialog();
     } else if (top.getAttribute('data-top') === 'attach') {
       openAttDialog(walk(path));
@@ -1185,6 +1285,16 @@ document.addEventListener('click', function (e) {
   var act = e.target.closest('[data-act]');
   if (!act) return;
   var a = act.getAttribute('data-act');
+  // 版本条：分支下拉开合；选中另一条支 → 看它的头版本（本地分支必带头哈希：新建的支指向当前头）
+  if (a === 'branch-toggle') {
+    branchMenuOpen = !branchMenuOpen;
+    renderVersionBar(walk(path));
+    return;
+  }
+  if (a === 'branch-pick') {
+    location.href = P + '/pop/' + encodeURIComponent(act.getAttribute('data-head'));
+    return;
+  }
   if (a === 'note-new') {
     // 新建=在列表末尾补一个草稿框（已有草稿就聚焦它）；失焦有内容才落库
     var list = document.getElementById('note-list');
@@ -1348,10 +1458,13 @@ function loadNotesData() {
     .catch(function () { /* 笔记是锦上添花：拉取失败静默，文档照常显示 */ });
 }
 
-// header 接线：brand-link 回首页（practices 总览）；修订历史走内容列顶栏按钮。
+// header 接线：brand-link 回首页（practices 总览）；提交历史的入口=版本条的「N 个提交」。
 // 单仓模式无独立首页，/ 即本仓链页
 var brandLink = document.querySelector('.brand-link');
 if (brandLink) brandLink.setAttribute('href', '/');
+
+// 版本条与文档并行拉取：谁后到谁补渲染（renderVersionBar 两者缺一不出）
+loadRepoInfo();
 
 fetch(P + '/doc/' + encodeURIComponent(HASH) + '.json')
   .then(function (r) {

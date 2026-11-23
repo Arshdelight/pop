@@ -125,6 +125,22 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse, ctx: 
   }
 }
 
+/** 实例的创建时间（版本条「创建于」展示用）。链文件不记时间戳：取实例文件夹的创建时间；
+ *  文件系统不给创建时间（birthtime 为纪元零）时退回链文件的创建时间、再不行退回其修改时间；
+ *  都无从考据 → null（前端不出这一段） */
+function repoCreatedAt(repo: Repo): string | null {
+  try {
+    const dirBirth = fs.statSync(repo.dir).birthtimeMs;
+    if (dirBirth > 0) return new Date(dirBirth).toISOString();
+  } catch { /* 目录读不到就看链文件 */ }
+  try {
+    const chain = fs.statSync(repo.chainPath);
+    return new Date(chain.birthtimeMs > 0 ? chain.birthtimeMs : chain.mtimeMs).toISOString();
+  } catch {
+    return null;
+  }
+}
+
 /** 单实例路由（pathname 已剥前缀）：单仓模式 prefix 为空串，home 模式传 /p/<name> 供页面注入 */
 async function handleRepo(req: http.IncomingMessage, res: http.ServerResponse, repo: Repo, pathname: string, prefix = ''): Promise<void> {
   try {
@@ -146,6 +162,7 @@ async function handleRepo(req: http.IncomingMessage, res: http.ServerResponse, r
         name: repo.chain.name,
         owner: repo.chain.owner,
         current: repo.chain.current,
+        createdAt: repoCreatedAt(repo),
         branches: Object.entries(repo.chain.branches).map(([name, r]) => ({
           name,
           head: r,
