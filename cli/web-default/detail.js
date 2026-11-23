@@ -299,15 +299,16 @@ function nodeHtml(node) {
     if (note) html += '<p class="op-note">' + escapeHtml(note()) + '</p>';
   }
 
-  // 读序：动作页=输入 → 提醒 → 正文 → 输出（管道读序）；实践页=你会得到 → 提醒 → 需要准备 → 正文
-  // （先说结果，再说要备什么——决定「做不做」的两条信息放在最前）。两个清单都是派生的，作者不写
+  // 读序：动作页=输入 → 正文 → 输出；实践页=你会得到 → 需要准备 → 正文 → 步骤（先说结果，再说要备什么——
+  // 决定「做不做」的两条信息放在最前）。两个清单都是派生的，作者不写。
+  // 提醒（notice）垫底：放在每个节点的最下方（用户 2026-11-24 定）——这一节的内容读完才看到它
   if (node.type === 'action') html += inputsHtml(node);
   else html += flowsHtml(node, 'finalOutputs', 'yieldsLabel');
-  html += noticeHtml(node);
   if (node.type === 'practice') html += flowsHtml(node, 'externalInputs', 'needsLabel');
   html += proseHtml(node);
   if (node.type === 'action') html += outputsHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
+  html += noticeHtml(node);
   // 笔记只住右侧栏（不进内容区）
   return html;
 }
@@ -1045,7 +1046,8 @@ function outputsHtml(node) {
 // 正文的附件小节已撤（信息进顶栏附件按钮弹窗，附件跟随节点）
 
 // ── 注意事项（spec 2.2.0 的 notice 字段）：有才出；独立提醒框，与正文同一套 markdown 渲染。
-// 排在输入之后、正文之前——照着做的人先看到坑，再看到做法 ──
+// 排在节点的最下方——该节点的输入 / 清单 / 正文 / 子步骤都出完才轮到它（用户 2026-11-24 定；
+// practi show 与 skill 导出同序） ──
 
 function noticeHtml(node) {
   if (!node.notice || !String(node.notice).trim()) return '';

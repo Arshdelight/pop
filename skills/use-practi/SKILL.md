@@ -103,8 +103,8 @@ Rules that bite:
 A practice is read by someone who was not there, on a page you do not control. Every reader (practi web, the hub) shows the same surface, in this order:
 
 1. **The card** — the root `name` and `description`. That is all a stranger has before deciding to open it.
-2. **The root page** — `description`, an optional `notice`, then two lists the SDK **derives from the steps' `inputs` and `outputs`**: *what you need* (inputs no step supplies) and *what you get* (outputs no step consumes). After them: optional `content`, then a **table of contents** — one card per step, showing each child's `name` and its one-line `description`.
-3. **Each step** — `description`, `inputs`, `notice`, the `content` (how), `outputs`.
+2. **The root page** — `description`, then two lists the SDK **derives from the steps' `inputs` and `outputs`**: *what you need* (inputs no step supplies) and *what you get* (outputs no step consumes). After them: optional `content`, then a **table of contents** — one card per step, showing each child's `name` and its one-line `description`. Last of all, the optional `notice`: a notice always sits at the bottom of its node.
+3. **Each step** — `description`, `inputs`, the `content` (how), `outputs`, and last the optional `notice`.
 4. **The end** — the last step's output says what "done" looks like.
 
 Write for that surface. The two lists are computed, so you never write them — a tool a step uses but does not declare is simply missing from *what you need*. A step without a `description` is a blank line in the table of contents.
@@ -377,7 +377,7 @@ practi skill export <ref> [--dir <out>]  # a revision → an installable skill d
 practi skill import <dir>                # replay a `practi skill export` directory back into the practice
 ```
 
-- An exported directory carries `SKILL.md` (a readable projection), attachment files, and `pop.doc.json` — the sidecar holding the canonical document. Import replays the sidecar byte-identically (same hash, any machine), re-staging attachment files into the practice's blob store; then `practi commit -m "..."` records it as a revision. A node's `notice` is projected as a `> **Notice:**` blockquote under its heading.
+- An exported directory carries `SKILL.md` (a readable projection), attachment files, and `pop.doc.json` — the sidecar holding the canonical document. Import replays the sidecar byte-identically (same hash, any machine), re-staging attachment files into the practice's blob store; then `practi commit -m "..."` records it as a revision. A node's `notice` is projected as a `> **Notice:**` blockquote at the end of the node's own content, before any child heading.
 - Import refuses directories without a sidecar (`E_NO_SIDECAR`): it is the inverse of export, not a skill importer. To bring a foreign skill into POP, read it and **author** a structured tree of practices and actions (the writing-quality rules apply).
 - Hand-editing `SKILL.md` after export desynchronizes the sidecar: import warns and treats the edited body as truth (a new hash — fork semantics). Edit the document and re-export instead.
 

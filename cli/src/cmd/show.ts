@@ -68,7 +68,6 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
 
   console.log(viewHeader(view));
   if (view.description !== undefined) console.log(`\ndescription: ${view.description}`);
-  if (view.notice !== undefined) console.log(`\nnotice: ${view.notice}`);
   if (view.content !== undefined && view.content.trim() !== '') console.log(`\n${view.content}`);
 
   if (view.steps.length > 0) {
@@ -103,6 +102,8 @@ function renderNode(hash: string, nodes: Map<string, PNode>, opts: ShowOpts): nu
     console.log('\nattachments:');
     for (const a of view.attachments) console.log(`  ${a.name}  ${a.mime ?? ''}  ${a.size ?? ''}b  ${short(a.hash)}`);
   }
+  // notice 垫底：节点的各节都打完才轮到提醒（与 practi web 的阅读器同序，用户 2026-11-24 定）
+  if (view.notice !== undefined) console.log(`\nnotice: ${view.notice}`);
   if (view.missing !== undefined && view.missing.length > 0) {
     console.error(`\nerror [E_MISSING]: ${view.missing.length} referenced node(s) absent from this workspace:`);
     for (const m of view.missing) {

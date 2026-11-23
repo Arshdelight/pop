@@ -72,6 +72,16 @@ describe('web-default：详情页版本条与步骤卡', () => {
     }
   });
 
+  it('「注意」提醒框垫底：节点页的输入 / 清单 / 正文 / 子步骤都出完才轮到它', () => {
+    const body = read('detail.js').slice(read('detail.js').indexOf('function nodeHtml(node)'), read('detail.js').indexOf('\n}\n', read('detail.js').indexOf('function nodeHtml(node)')));
+    expect(body).toContain('html += noticeHtml(node);');
+    const noticeAt = body.indexOf('html += noticeHtml(node);');
+    for (const section of ["html += inputsHtml(node)", "flowsHtml(node, 'externalInputs'", 'html += proseHtml(node)', "html += outputsHtml(node)", 'html += childrenHtml(node)']) {
+      expect(body.indexOf(section), section).toBeGreaterThan(-1);
+      expect(noticeAt, section).toBeGreaterThan(body.indexOf(section));
+    }
+  });
+
   it('步骤卡与选项卡同观感（hub ChildCard 同款）：节点名正黑、圆角 10px、悬停品牌蓝描边、描述 80% 墨', () => {
     for (const card of ['.child-card', '.choice-card']) {
       expect(cssRule(card)).toContain('color: var(--ink)');

@@ -121,6 +121,8 @@ describe('notice (POP 2.2.0)', () => {
     const md = fs.readFileSync(path.join(outDir, SKILL_FILE), 'utf8');
     expect(md).toContain('> **Notice:** Watch the steam.');
     expect(md).toContain('> **Notice:** Do not overfill the kettle.');
+    // 提醒垫底：排在本节点自己的正文之后、子节点小节之前
+    expect(md.indexOf('> **Notice:** Do not overfill the kettle.')).toBeGreaterThan(md.indexOf('Heat until boiling.'));
     expect(md.indexOf('## Boil water')).toBeGreaterThan(md.indexOf('Watch the steam.'));
     expect(res.files).toEqual([]);
 

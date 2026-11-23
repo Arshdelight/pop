@@ -160,6 +160,11 @@ describe('show: notice and the derived external-input / final-output lists (spec
     const r = await runIn(repo, home, ['show', root]);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('notice: Keep the kettle half-full at most.');
+    // 提醒垫底：节点的各节都打完才轮到它（与 practi web 阅读器同序）
+    const noticeAt = r.stdout.indexOf('notice: Keep the kettle half-full at most.');
+    expect(noticeAt).toBeGreaterThan(r.stdout.indexOf('steps:'));
+    expect(noticeAt).toBeGreaterThan(r.stdout.indexOf('final outputs'));
+    expect(noticeAt).toBeGreaterThan(r.stdout.indexOf('declared outputs'));
     expect(r.stdout).toMatch(/Boil water[^\n]*\n[^\n]*⚠ Do not overfill the kettle\./);
     expect(r.stdout).toContain('external inputs (prepare these outside the practice):');
     const external = r.stdout.slice(r.stdout.indexOf('external inputs'), r.stdout.indexOf('final outputs'));
