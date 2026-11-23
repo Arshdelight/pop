@@ -72,14 +72,30 @@ describe('web-default：详情页版本条与步骤卡', () => {
     }
   });
 
-  it('「注意」提醒框垫底：节点页的输入 / 清单 / 正文 / 子步骤都出完才轮到它', () => {
+  it('「注意」提醒框垫底：节点页的清单 / 正文 / 子步骤都出完才轮到它', () => {
     const body = read('detail.js').slice(read('detail.js').indexOf('function nodeHtml(node)'), read('detail.js').indexOf('\n}\n', read('detail.js').indexOf('function nodeHtml(node)')));
     expect(body).toContain('html += noticeHtml(node);');
     const noticeAt = body.indexOf('html += noticeHtml(node);');
-    for (const section of ["html += inputsHtml(node)", "flowsHtml(node, 'externalInputs'", 'html += proseHtml(node)', "html += outputsHtml(node)", 'html += childrenHtml(node)']) {
+    for (const section of ["flowListHtml('needsLabel', actionRows(node.inputs, true))", "flowsHtml(node, 'externalInputs'", 'html += proseHtml(node)', "flowListHtml('yieldsLabel', actionRows(node.outputs))", 'html += childrenHtml(node)']) {
       expect(body.indexOf(section), section).toBeGreaterThan(-1);
       expect(noticeAt, section).toBeGreaterThan(body.indexOf(section));
     }
+  });
+
+  it('动作页的两份清单与实践页同名同序同观感：你会得到 → 需要准备，同一套清单组件', () => {
+    const js = read('detail.js');
+    const body = js.slice(js.indexOf('function nodeHtml(node)'), js.indexOf('\n}\n', js.indexOf('function nodeHtml(node)')));
+    const yieldsAt = body.indexOf("flowListHtml('yieldsLabel', actionRows(node.outputs))");
+    const needsAt = body.indexOf("flowListHtml('needsLabel', actionRows(node.inputs, true))");
+    expect(yieldsAt).toBeGreaterThan(-1);
+    expect(needsAt).toBeGreaterThan(yieldsAt); // 先说结果，再说要备什么
+    // 动作页带 from 的输入：菜单里列供给它的那一步
+    expect(js).toContain("var p = sourced ? pathOfFrom(f.from) : null;");
+    expect(js).toContain("return { name: f.name, spec: f.spec || '', steps: p ? [p] : [] };");
+    // 旧的「输入 / 输出」清单（行内 #编号引用、独立的一套有序列表）已拆净
+    expect(js).not.toMatch(/inputsHtml|outputsHtml|ioItem|fromRef|io-ref|io-from|io-list/);
+    expect(read('style.css')).not.toMatch(/io-list|io-ref|io-from/);
+    expect(read('lang.js')).not.toMatch(/secInputs|secOutputs/);
   });
 
   it('派生清单的条目：序号画进条目（悬停高亮连「数字＋点」一起包住），点击弹步骤菜单、菜单项直达步骤', () => {
@@ -88,11 +104,11 @@ describe('web-default：详情页版本条与步骤卡', () => {
     // 序号与名字同在按钮里；菜单默认隐藏、挂在按钮之后
     expect(js).toContain("' + idx + body + '</button>' +");
     expect(js).toContain("class=\"flow-toggle\" data-flow-key=\"' + escapeHtml(key) + '\" aria-haspopup=\"menu\" aria-expanded=\"' + isOpen");
-    expect(js).toContain("class=\"flow-option\" role=\"menuitem\" data-path=\"' + s.path + '\"");
+    expect(js).toContain("class=\"flow-option\" role=\"menuitem\" data-path=\"' + p.join(',') + '\"");
     expect(js).toContain("'<div class=\"flow-menu\" role=\"menu\"' + (isOpen ? '' : ' hidden') + '>'");
     const css = read('style.css');
-    expect(cssRule('ol.io-list.flow-list')).toContain('list-style: none');
-    expect(cssRule('ol.io-list.flow-list')).toContain('padding-left: 0');
+    expect(cssRule('ol.flow-list')).toContain('list-style: none');
+    expect(cssRule('ol.flow-list')).toContain('padding-left: 0');
     expect(cssRule('.flow-menu')).toContain('position: absolute');
     expect(cssRule('.flow-menu.up')).toContain('bottom: 100%');
     // 菜单项 hover 不带下划线：全局 a:hover 会压过 .flow-option 的 text-decoration: none，必须在 hover 规则里再压回去

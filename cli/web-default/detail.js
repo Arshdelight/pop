@@ -225,7 +225,7 @@ function jsonHtml(value, markChild) {
 }
 
 // ── 左侧大纲（学 hub /pop 详情侧栏）：根的直接孩子成节（1、2…）递归（1.1），
-// 与 fromRef 的 #编号同一坐标系；点击 goTo 跳转，当前节点高亮 ──
+// 与步骤菜单里的步骤编号同一坐标系；点击 goTo 跳转，当前节点高亮 ──
 
 /** 全树节点数（含根本身）——侧栏大纲列的就是节点（1、1.1…），统计行与之同口径；
  *  不叫 steps：steps 只对 op:seq 成立 */
@@ -300,14 +300,17 @@ function nodeHtml(node) {
     if (note) html += '<p class="op-note">' + escapeHtml(note()) + '</p>';
   }
 
-  // 读序：动作页=输入 → 正文 → 输出；实践页=你会得到 → 需要准备 → 正文 → 步骤（先说结果，再说要备什么——
-  // 决定「做不做」的两条信息放在最前）。两个清单都是派生的，作者不写。
-  // 提醒（notice）垫底：放在每个节点的最下方（用户 2026-11-24 定）——这一节的内容读完才看到它
-  if (node.type === 'action') html += inputsHtml(node);
-  else html += flowsHtml(node, 'finalOutputs', 'yieldsLabel');
-  if (node.type === 'practice') html += flowsHtml(node, 'externalInputs', 'needsLabel');
+  // 读序（动作页与实践页同序，用户 2026-11-24 定）：你会得到 → 需要准备 → 正文 →（子步骤）→ 注意
+  // （先说结果，再说要备什么——决定「做不做」的两条信息放在最前）。实践页的两份清单由 SDK 从步骤的
+  // 声明派生（作者不写）；动作页直接读它自己的声明。提醒（notice）垫底：这一节的内容读完才看到它
+  if (node.type === 'action') {
+    html += flowListHtml('yieldsLabel', actionRows(node.outputs));
+    html += flowListHtml('needsLabel', actionRows(node.inputs, true));
+  } else {
+    html += flowsHtml(node, 'finalOutputs', 'yieldsLabel');
+    html += flowsHtml(node, 'externalInputs', 'needsLabel');
+  }
   html += proseHtml(node);
-  if (node.type === 'action') html += outputsHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
   html += noticeHtml(node);
   // 笔记只住右侧栏（不进内容区）
@@ -1006,7 +1009,8 @@ function mediaUrl(target, node) {
   return null;
 }
 
-// ── action 字段：管道读序 inputs → 正文 → outputs，有序列表；空缺的块整个不出现 ──
+// ── 两份清单（动作页与实践页同名、同序、同观感）：你会得到 → 需要准备，紧凑单行「名字 · 规格」；
+//    空缺的块整个不出现。渲染见 flowListHtml ──
 
 /** from → 来源节点的树内路径：真实哈希直接查登记簿；"@名字" 标签（/doc 导出态把 subtree 内的连线
  *  改写成的作者写法）按名字在树里找唯一的那个节点。找不到、有歧义或指向根 → null（根不成节） */
@@ -1022,31 +1026,13 @@ function pathOfFrom(from) {
   return hits.length === 1 && hits[0].length ? hits[0] : null;
 }
 
-// from 反解（同 hub 口径）：解析出来源节点 → #编号引用（可点跳转 data-path 委托、
-// 悬停气泡 data-tip=来源节点名）；解析不出/无登记簿/指向根 → 原文（可验真）
-function fromRef(from) {
-  if (!from) return '';
-  var p = pathOfFrom(from);
-  if (!p) return ' <span class="io-from">← ' + escapeHtml(shortHash(from)) + '</span>';
-  var num = p.map(function (i) { return i + 1; }).join('.');
-  return ' <a href="#" class="io-ref" data-path="' + p.join(',') + '" data-tip="' + escapeHtml(walk(p).name) + '">← #' + num + '</a>';
-}
-
-function ioItem(f) {
-  return '<li>' + escapeHtml(f.name) + fromRef(f.from) +
-    (f.spec ? '<span class="io-spec">' + escapeHtml(f.spec) + '</span>' : '') + '</li>';
-}
-
-function inputsHtml(node) {
-  var ins = node.inputs || [];
-  if (!ins.length) return '';
-  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secInputs') + '</div><ol class="io-list">' + ins.map(ioItem).join('') + '</ol></div>';
-}
-
-function outputsHtml(node) {
-  var outs = node.outputs || [];
-  if (!outs.length) return '';
-  return '<div class="section-sm"><div class="label">' + POP_I18N.t('secOutputs') + '</div><ol class="io-list">' + outs.map(ioItem).join('') + '</ol></div>';
+/** 动作页的清单直接读它自己的声明（它就是声明者，不必走聚合视图）。带 from 的输入由上游某一步
+ *  供给——它的步骤菜单里就列那一步；输出与外部输入没有相关步骤，是普通行 */
+function actionRows(list, sourced) {
+  return (list || []).map(function (f) {
+    var p = sourced ? pathOfFrom(f.from) : null;
+    return { name: f.name, spec: f.spec || '', steps: p ? [p] : [] };
+  });
 }
 
 // 正文的附件小节已撤（信息进顶栏附件按钮弹窗，附件跟随节点）
@@ -1066,55 +1052,53 @@ function noticeHtml(node) {
 // 数据来自该节点的聚合视图（与「标准视图」tab 同一接口）：到达前留空槽，到达后就地填入
 // （不重渲染整页、不抢滚动位置）；取不到就不显示——派生清单是增强，不阻断阅读 ──
 
-/** 同名同规格的声明合并成一行（两条分支产出同名物只列一次），并记住声明它的各步骤 */
-function flowGroups(list) {
+/** 聚合视图里的声明（每条带声明它的步骤哈希）→ 清单行：同名同规格的合并成一行（两条分支产出同名物
+ *  只列一次），并记住声明它的各步骤的树内路径（与侧栏大纲、from 反解同一坐标系） */
+function flowRows(list) {
   var order = [];
   var byKey = {};
   (list || []).forEach(function (d) {
     var k = d.name + '\u0000' + (d.spec || '');
     if (!byKey[k]) {
-      byKey[k] = { name: d.name, spec: d.spec || '', refs: [] };
+      byKey[k] = { name: d.name, spec: d.spec || '', steps: [] };
       order.push(k);
     }
-    byKey[k].refs.push(d.refHash);
+    var p = nodeIndex && nodeIndex[d.refHash];
+    if (p) byKey[k].steps.push(p);
   });
   return order.map(function (k) { return byKey[k]; });
 }
 
-/** 条目的步骤菜单：列声明该物品的各步骤（编号 + 步骤名），点一项直达（走 data-path 委托） */
+/** 条目的步骤菜单：列相关步骤（编号 + 步骤名），点一项直达（走 data-path 委托）。steps = 树内路径数组 */
 function flowMenuHtml(steps, isOpen) {
   return '<div class="flow-menu" role="menu"' + (isOpen ? '' : ' hidden') + '>' +
     '<p class="flow-menu-title">' + escapeHtml(POP_I18N.t('flowMenuTitle')) + '</p>' +
-    steps.map(function (s) {
-      return '<a href="#" class="flow-option" role="menuitem" data-path="' + s.path + '">' +
-        '<span class="flow-option-num">' + escapeHtml(s.num) + '</span>' +
-        '<span class="flow-option-name">' + escapeHtml(s.name) + '</span></a>';
+    steps.map(function (p) {
+      return '<a href="#" class="flow-option" role="menuitem" data-path="' + p.join(',') + '">' +
+        '<span class="flow-option-num">' + escapeHtml(p.map(function (k) { return k + 1; }).join('.')) + '</span>' +
+        '<span class="flow-option-name">' + escapeHtml(walk(p).name) + '</span></a>';
     }).join('') + '</div>';
 }
 
-function flowListHtml(labelKey, groups) {
-  if (!groups.length) return '';
-  return '<div class="section-sm"><div class="label">' + POP_I18N.t(labelKey) + '</div><ol class="io-list flow-list">' +
-    groups.map(function (g, i) {
-      // 声明该物品的步骤（与侧栏大纲、from 反解同一坐标系）。菜单默认不开：整行（含序号）可悬停、可点击，
-      // 点击才在条目下方弹出步骤菜单（用户 2026-11-24 定；此前是行内开关式展开编号）
-      var steps = [];
-      (g.refs || []).forEach(function (rh) {
-        var p = nodeIndex && nodeIndex[rh];
-        if (p) steps.push({ path: p.join(','), num: p.map(function (k) { return k + 1; }).join('.'), name: walk(p).name });
-      });
+/** 一份清单。rows = [{ name, spec, steps: [树内路径…] }]：有相关步骤的条目可点击（弹步骤菜单），其余是普通行 */
+function flowListHtml(labelKey, rows) {
+  if (!rows.length) return '';
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t(labelKey) + '</div><ol class="flow-list">' +
+    rows.map(function (g, i) {
+      // 菜单默认不开：整行（含序号）可悬停、可点击，点击才在条目下方弹出步骤菜单（用户 2026-11-24 定；
+      // 此前是行内开关式展开编号）
       // 序号自绘进条目里（清单 list-style: none）：它和名字同在一块悬停高亮区内
       var idx = '<span class="flow-idx">' + (i + 1) + '.</span>';
       var body = escapeHtml(g.name) + (g.spec ? '<span class="io-spec">' + escapeHtml(g.spec) + '</span>' : '');
-      if (!steps.length) return '<li class="flow-item"><span class="flow-row">' + idx + body + '</span></li>';
+      if (!g.steps.length) return '<li class="flow-item"><span class="flow-row">' + idx + body + '</span></li>';
       // 条目标识只用 ASCII：键里的控制字符（如 \u0000）写进 HTML 属性会被解析器替换成 U+FFFD，
-      // 读回来就对不上，开合状态在重渲染后会丢
-      var key = encodeURIComponent(labelKey + '\n' + g.name + '\n' + g.spec);
+      // 读回来就对不上，开合状态在重渲染后会丢。带上行号：同名同规格的两行各自开合
+      var key = encodeURIComponent(labelKey + '\n' + i + '\n' + g.name + '\n' + g.spec);
       var isOpen = flowMenuKey === key;
       return '<li class="flow-item' + (isOpen ? ' open' : '') + '">' +
         '<button type="button" class="flow-toggle" data-flow-key="' + escapeHtml(key) + '" aria-haspopup="menu" aria-expanded="' + isOpen +
         '" title="' + escapeHtml(POP_I18N.t('flowToggleTip')) + '">' + idx + body + '</button>' +
-        flowMenuHtml(steps, isOpen) + '</li>';
+        flowMenuHtml(g.steps, isOpen) + '</li>';
     }).join('') + '</ol></div>';
 }
 
@@ -1155,7 +1139,7 @@ function flowsHtml(node, kind, labelKey) {
     loadFlows(h);
     return '<div class="flows-slot" data-flows-slot="' + escapeHtml(h + ':' + kind) + '"></div>';
   }
-  return flowListHtml(labelKey, flowGroups(s[kind]));
+  return flowListHtml(labelKey, flowRows(s[kind]));
 }
 
 function loadFlows(h) {
@@ -1177,7 +1161,7 @@ function loadFlows(h) {
 function fillFlowsSlot(h, kind, labelKey) {
   var slot = document.querySelector('[data-flows-slot="' + h + ':' + kind + '"]');
   if (!slot) return; // 读者已离开该节点：缓存留着，下次进来直接出
-  slot.outerHTML = flowListHtml(labelKey, flowGroups(flowsByHash[h][kind])); // 空清单 = 槽位撤掉
+  slot.outerHTML = flowListHtml(labelKey, flowRows(flowsByHash[h][kind])); // 空清单 = 槽位撤掉
 }
 
 // ── practice 的孩子呈现（按 op 分形态） ──

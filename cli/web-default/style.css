@@ -171,13 +171,13 @@ main.u-main { padding: 24px 24px 48px; }
 .card-title { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-excerpt { font-size: 14px; color: var(--ink-a60); margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-excerpt .none { color: var(--ink-a40); }
-/* 实践页的派生清单（你会得到 / 需要准备）：紧凑单行「名字 · 规格」。清单常常一屏放不下
-   （补墙篇 8 样东西），规格另起一行会把步骤目录整个挤出首屏。
+/* 实践页的派生清单与动作页自己的声明是同一份清单组件（你会得到 / 需要准备）：紧凑单行「名字 · 规格」。
+   清单常常一屏放不下（补墙篇 8 样东西），规格另起一行会把步骤目录整个挤出首屏。
    序号自绘进条目（清单 list-style: none）：整行「序号 + 名字 · 规格」是一块悬停高亮区——
    用户 2026-11-24：悬停要把前面的数字加点也包进去。菜单默认不开，点击才在条目下方弹出步骤菜单
    （hub ghost hover 口径：浅底高亮、不换字色） */
-ol.io-list.flow-list { font-size: 15px; line-height: 1.5; padding-left: 0; list-style: none; }
-ol.io-list.flow-list li { padding: 1px 0; }
+ol.flow-list { margin: 0; padding-left: 0; list-style: none; font-size: 15px; line-height: 1.5; color: var(--ink); }
+ol.flow-list li { padding: 1px 0; }
 .flow-item { position: relative; }
 .flow-item.open { z-index: 30; } /* 开着菜单的条目压过其后的内容 */
 .flow-idx { display: inline-block; min-width: 18px; margin-right: 2px; text-align: right; }
@@ -322,12 +322,7 @@ h2.node-title.child { font-size: 20px; }
 .prose th, .prose td { border: 1px solid var(--border); padding: 6px 12px; text-align: left; }
 .prose th { background: var(--ink-50); font-weight: 600; }
 .prose hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-/* action 管道读序：inputs → 正文 → outputs，各占一块有序列表；io 条目与正文同字体同字号 */
-ol.io-list { margin: 0; padding-left: 24px; font-size: 16px; line-height: 1.75; color: var(--ink); }
-ol.io-list li { padding: 2px 0; }
-/* spec 独立成行放在名字下方（弃括号内联），小一号弱化 */
-.io-spec { display: block; font-size: 13px; line-height: 1.5; color: var(--ink-a45); }
-.io-from, .att-meta { color: var(--ink-a35); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+.att-meta { color: var(--ink-a35); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
 /* from 反解命中的 #编号引用：小号等宽+点状下划线提示可悬停（title=来源节点名） */
 /* 通用悬停气泡（hub Tooltip.tsx 深色皮肤）：#24292f 白字圆角，hover .5s 延迟出现 */
 [data-tip] { position: relative; }
@@ -336,9 +331,6 @@ ol.io-list li { padding: 2px 0; }
 /* 侧栏 tab 的气泡朝下翻：tab 贴侧栏顶，朝上会被 .side 的 overflow-y:auto 裁剪
    （absolute 元素出不了滚动容器，非 z-index 问题），朝下空间无限不受裁 */
 .side-tab[data-tip]::after { bottom: auto; top: calc(100% + 6px); }
-/* from 反解命中的 #编号引用：可点跳转（data-path 委托） */
-.io-ref { color: var(--ink-a50); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; cursor: pointer; border-bottom: 1px dotted var(--ink-a30); text-decoration: none; }
-.io-ref:hover { color: var(--ink); text-decoration: none; }
 .section-sm { margin-top: 18px; }
 .section-sm .label { font-size: 12px; font-weight: 600; color: var(--ink-a55); margin-bottom: 6px; }
 /* JSON 视图 label 行：label 居左 + 复制按钮居右（按钮复用 .codeblock-copy 深色样式，在浅底上取中性色） */
