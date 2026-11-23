@@ -18,9 +18,11 @@
       <rect x="180" y="196" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
       <text x="280" y="217" fill="#78350F">name*</text>
       <rect x="410" y="196" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
-      <text x="510" y="217" fill="#57534E">outputs</text>
-      <rect x="180" y="248" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
-      <text x="280" y="269" fill="#78350F">type*</text>
+      <text x="510" y="217" fill="#57534E">notice</text>
+      <rect x="180" y="248" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="280" y="269" fill="#57534E">outputs</text>
+      <rect x="410" y="248" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="510" y="269" fill="#78350F">type*</text>
     </g>
     <text x="620" y="300" text-anchor="end" fill="#64748B" font-size="12">*＝必填</text>
   </g>
@@ -42,10 +44,12 @@
       <text x="510" y="165" fill="#57534E">metadata</text>
       <rect x="180" y="196" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
       <text x="280" y="217" fill="#78350F">name*</text>
-      <rect x="410" y="196" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
-      <text x="510" y="217" fill="#78350F">op*</text>
+      <rect x="410" y="196" width="200" height="32" rx="16" fill="#FEFCE8" stroke="#D6D3D1"/>
+      <text x="510" y="217" fill="#57534E">notice</text>
       <rect x="180" y="248" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
-      <text x="280" y="269" fill="#78350F">type*</text>
+      <text x="280" y="269" fill="#78350F">op*</text>
+      <rect x="410" y="248" width="200" height="32" rx="16" fill="#FCD34D" stroke="#B45309"/>
+      <text x="510" y="269" fill="#78350F">type*</text>
     </g>
     <text x="620" y="300" text-anchor="end" fill="#64748B" font-size="12">*＝必填</text>
   </g>
