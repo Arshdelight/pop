@@ -20,6 +20,7 @@ var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动�
 var renderedOnce = false; // 首载不滚标志：页面刚打开不代用户跳位（对齐 hub PopViews 首挂载跳过）
 var flowsByHash = {};    // practice 节点哈希 → 聚合视图缓存（/pop/<hash>.json）：对外清单由服务端按 spec §7 派生
 var flowsPending = {};   // 已发出、未返回的聚合请求（同一节点不重复发）
+var openFlows = {};      // 派生清单里被点开的条目（键=清单+条目）：步骤编号默认收起，点击才展开
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -973,16 +974,23 @@ function flowListHtml(labelKey, groups) {
   if (!groups.length) return '';
   return '<div class="section-sm"><div class="label">' + POP_I18N.t(labelKey) + '</div><ol class="io-list flow-list">' +
     groups.map(function (g) {
-      // 声明该物品的步骤编号（与侧栏大纲、from 反解同一坐标系）：可点直达，悬停显示步骤名
+      // 声明该物品的步骤编号（与侧栏大纲、from 反解同一坐标系）：编号本身可点直达，悬停显示步骤名。
+      // 默认收起——物料后面常驻一串编号显得零碎（用户 2026-11-24 反馈）：整行可悬停可点击，点开才展开
       var refs = g.refs.map(function (rh) {
         var p = nodeIndex && nodeIndex[rh];
         return p ? '<a href="#" class="io-ref" data-path="' + p.join(',') + '" data-tip="' + escapeHtml(walk(p).name) + '">' +
           escapeHtml(p.map(function (i) { return i + 1; }).join('.')) + '</a>' : '';
       }).join('');
-      // 读序：名字 · 规格，最后是声明它的步骤编号
-      return '<li>' + escapeHtml(g.name) +
-        (g.spec ? '<span class="io-spec">' + escapeHtml(g.spec) + '</span>' : '') +
-        (refs ? '<span class="flow-refs">' + refs + '</span>' : '') + '</li>';
+      var body = escapeHtml(g.name) + (g.spec ? '<span class="io-spec">' + escapeHtml(g.spec) + '</span>' : '');
+      if (!refs) return '<li class="flow-item">' + body + '</li>';
+      // 条目标识只用 ASCII：键里的控制字符（如 \u0000）写进 HTML 属性会被解析器替换成 U+FFFD，
+      // 读回来就对不上，「点开状态」在重渲染后会丢
+      var key = encodeURIComponent(labelKey + '\n' + g.name + '\n' + g.spec);
+      var isOpen = !!openFlows[key];
+      return '<li class="flow-item' + (isOpen ? ' open' : '') + '">' +
+        '<button type="button" class="flow-toggle" data-flow-key="' + escapeHtml(key) + '" aria-expanded="' + isOpen +
+        '" title="' + escapeHtml(POP_I18N.t('flowToggleTip')) + '">' + body + '</button>' +
+        '<span class="flow-refs"' + (isOpen ? '' : ' hidden') + '>' + refs + '</span></li>';
     }).join('') + '</ol></div>';
 }
 
@@ -1153,6 +1161,19 @@ document.addEventListener('click', function (e) {
       notesTouched = true;
       renderNoteSide();
     }
+  }
+  // 派生清单的条目：点一下展开 / 收起它对应的步骤编号（展开后的编号走下面的 data-path 跳转）
+  var flowToggle = e.target.closest('.flow-toggle');
+  if (flowToggle) {
+    var flowItem = flowToggle.closest('.flow-item');
+    var flowKey = flowToggle.getAttribute('data-flow-key');
+    var flowOpen = !flowItem.classList.contains('open');
+    flowItem.classList.toggle('open', flowOpen);
+    flowItem.querySelector('.flow-refs').hidden = !flowOpen;
+    flowToggle.setAttribute('aria-expanded', flowOpen ? 'true' : 'false');
+    if (flowOpen) openFlows[flowKey] = true;
+    else delete openFlows[flowKey];
+    return;
   }
   var jump = e.target.closest('[data-path]');
   if (jump) {
