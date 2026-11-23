@@ -168,6 +168,24 @@ main.u-main { padding: 24px 24px 48px; }
 .card-title { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-excerpt { font-size: 14px; color: var(--ink-a60); margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-excerpt .none { color: var(--ink-a40); }
+/* 实践页的派生清单（你会得到 / 需要准备）：紧凑单行——名字 + 行内规格 + 声明步骤。清单常常一屏
+   放不下（补墙篇 8 样东西），规格另起一行会把步骤目录整个挤出首屏 */
+ol.io-list.flow-list { font-size: 15px; line-height: 1.5; padding-left: 22px; }
+ol.io-list.flow-list li { padding: 4px 0; }
+ol.io-list.flow-list .io-spec { display: inline; font-size: 14px; margin-left: 6px; }
+ol.io-list.flow-list .io-spec::before { content: '· '; }
+.flow-refs { margin-left: 8px; white-space: nowrap; }
+.flow-refs .io-ref + .io-ref { margin-left: 5px; }
+/* 注意事项（spec 2.2.0 的 notice 字段）：独立提醒框，排在说明之后、正文之前——动手前先看到。
+   warning 族（50 底 / 200 描边 / 700 字），左侧 3px 竖线压出「提醒」的分量，hub 侧实现 notice 渲染时同观感 */
+.notice { margin: 12px 0 4px; padding: 10px 14px; border: 1px solid var(--warning-200); border-left: 3px solid var(--warning-700); border-radius: var(--radius); background: var(--warning-50); }
+.notice-label { font-size: 12px; font-weight: 600; color: var(--warning-700); margin-bottom: 2px; }
+.notice-body { font-size: 14px; line-height: 1.65; color: var(--ink-800); }
+.notice-body p { margin: 4px 0; }
+.notice-body p:last-child { margin-bottom: 0; }
+.notice-body code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .9em; background: #fff; border: 1px solid var(--warning-200); border-radius: 4px; padding: 1px 5px; }
+/* 实践页派生清单的槽位：聚合数据到达前占位，到达后就地填入（不重渲染整页，不抢滚动位置） */
+.flows-slot:empty { display: none; }
 /* 页脚行（hub InstanceCard 页脚：mt-2 text-sm ink/60 truncate）；本地无头像，只出 owner/文件夹名 */
 .card-foot { font-size: 14px; color: var(--ink-a60); margin: 8px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { font-size: 12px; color: var(--ink-a40); margin: 8px 0 0; font-variant-numeric: tabular-nums; }

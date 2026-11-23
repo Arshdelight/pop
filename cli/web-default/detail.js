@@ -18,6 +18,8 @@ var notesTouched = false; // 用户本页手动开合过——之后自动规则
 var draftByHash = {};   // 未落库的新建草稿（文档哈希 → 文本）：跨重渲染/导航存活，失焦有内容才落库
 var noteErrorMsg = null; // 右栏写操作失败的一次性报错（下次动作或重渲染即清）
 var renderedOnce = false; // 首载不滚标志：页面刚打开不代用户跳位（对齐 hub PopViews 首挂载跳过）
+var flowsByHash = {};    // practice 节点哈希 → 聚合视图缓存（/pop/<hash>.json）：对外清单由服务端按 spec §7 派生
+var flowsPending = {};   // 已发出、未返回的聚合请求（同一节点不重复发）
 
 // op 旁注：用自然语言说清组合语义（seq 不需要说明）；loop 的旁注由 loopNote 按数据推导
 var OP_NOTES = {
@@ -292,7 +294,12 @@ function nodeHtml(node) {
     if (note) html += '<p class="op-note">' + escapeHtml(note()) + '</p>';
   }
 
+  // 读序：动作页=输入 → 提醒 → 正文 → 输出（管道读序）；实践页=你会得到 → 提醒 → 需要准备 → 正文
+  // （先说结果，再说要备什么——决定「做不做」的两条信息放在最前）。两个清单都是派生的，作者不写
   if (node.type === 'action') html += inputsHtml(node);
+  else html += flowsHtml(node, 'finalOutputs', 'yieldsLabel');
+  html += noticeHtml(node);
+  if (node.type === 'practice') html += flowsHtml(node, 'externalInputs', 'needsLabel');
   html += proseHtml(node);
   if (node.type === 'action') html += outputsHtml(node);
   html += childrenHtml(node) + choiceHtml(node) + setHtml(node);
@@ -890,11 +897,25 @@ function mediaUrl(target, node) {
 
 // ── action 字段：管道读序 inputs → 正文 → outputs，有序列表；空缺的块整个不出现 ──
 
-// from 反解（同 hub 口径）：命中登记簿 → #编号引用（可点跳转 data-path 委托、
-// 悬停气泡 data-tip=来源节点名）；未命中/无登记簿/指向根 → 短哈希（可验真）
+/** from → 来源节点的树内路径：真实哈希直接查登记簿；"@名字" 标签（/doc 导出态把 subtree 内的连线
+ *  改写成的作者写法）按名字在树里找唯一的那个节点。找不到、有歧义或指向根 → null（根不成节） */
+function pathOfFrom(from) {
+  var hit = nodeIndex && nodeIndex[from];
+  if (hit) return hit;
+  if (typeof from !== 'string' || from.charAt(0) !== '@') return null;
+  var hits = [];
+  (function w(n, p) {
+    if (n.name === from.slice(1)) hits.push(p);
+    (n.children || []).forEach(function (c, i) { w(c, p.concat([i])); });
+  })(doc, []);
+  return hits.length === 1 && hits[0].length ? hits[0] : null;
+}
+
+// from 反解（同 hub 口径）：解析出来源节点 → #编号引用（可点跳转 data-path 委托、
+// 悬停气泡 data-tip=来源节点名）；解析不出/无登记簿/指向根 → 原文（可验真）
 function fromRef(from) {
   if (!from) return '';
-  var p = nodeIndex && nodeIndex[from];
+  var p = pathOfFrom(from);
   if (!p) return ' <span class="io-from">← ' + escapeHtml(shortHash(from)) + '</span>';
   var num = p.map(function (i) { return i + 1; }).join('.');
   return ' <a href="#" class="io-ref" data-path="' + p.join(',') + '" data-tip="' + escapeHtml(walk(p).name) + '">← #' + num + '</a>';
@@ -918,6 +939,87 @@ function outputsHtml(node) {
 }
 
 // 正文的附件小节已撤（信息进顶栏附件按钮弹窗，附件跟随节点）
+
+// ── 注意事项（spec 2.2.0 的 notice 字段）：有才出；独立提醒框，与正文同一套 markdown 渲染。
+// 排在输入之后、正文之前——照着做的人先看到坑，再看到做法 ──
+
+function noticeHtml(node) {
+  if (!node.notice || !String(node.notice).trim()) return '';
+  return '<div class="notice"><div class="notice-label">' + POP_I18N.t('noticeLabel') + '</div>' +
+    '<div class="notice-body">' + renderMarkdown(String(node.notice), node) + '</div></div>';
+}
+
+// ── practice 的对外清单（spec §7，2.2.0 派生，作者不写、由聚合算出）：
+// 需要准备 = 没被任何步骤供给的输入；你会得到 = 没被任何步骤消费的输出；中间产物不在其中。
+// 数据来自该节点的聚合视图（与「标准视图」tab 同一接口）：到达前留空槽，到达后就地填入
+// （不重渲染整页、不抢滚动位置）；取不到就不显示——派生清单是增强，不阻断阅读 ──
+
+/** 同名同规格的声明合并成一行（两条分支产出同名物只列一次），并记住声明它的各步骤 */
+function flowGroups(list) {
+  var order = [];
+  var byKey = {};
+  (list || []).forEach(function (d) {
+    var k = d.name + '\u0000' + (d.spec || '');
+    if (!byKey[k]) {
+      byKey[k] = { name: d.name, spec: d.spec || '', refs: [] };
+      order.push(k);
+    }
+    byKey[k].refs.push(d.refHash);
+  });
+  return order.map(function (k) { return byKey[k]; });
+}
+
+function flowListHtml(labelKey, groups) {
+  if (!groups.length) return '';
+  return '<div class="section-sm"><div class="label">' + POP_I18N.t(labelKey) + '</div><ol class="io-list flow-list">' +
+    groups.map(function (g) {
+      // 声明该物品的步骤编号（与侧栏大纲、from 反解同一坐标系）：可点直达，悬停显示步骤名
+      var refs = g.refs.map(function (rh) {
+        var p = nodeIndex && nodeIndex[rh];
+        return p ? '<a href="#" class="io-ref" data-path="' + p.join(',') + '" data-tip="' + escapeHtml(walk(p).name) + '">' +
+          escapeHtml(p.map(function (i) { return i + 1; }).join('.')) + '</a>' : '';
+      }).join('');
+      // 读序：名字 · 规格，最后是声明它的步骤编号
+      return '<li>' + escapeHtml(g.name) +
+        (g.spec ? '<span class="io-spec">' + escapeHtml(g.spec) + '</span>' : '') +
+        (refs ? '<span class="flow-refs">' + refs + '</span>' : '') + '</li>';
+    }).join('') + '</ol></div>';
+}
+
+/** 一条派生清单；没有缓存就发请求并留槽。kind: externalInputs / finalOutputs */
+function flowsHtml(node, kind, labelKey) {
+  if (node.op === 'set') return ''; // 目录视图不聚合
+  var h = hashAt(path);
+  if (!h) return '';
+  var s = (path.length === 0 && svJson) ? svJson : flowsByHash[h]; // 根：标准视图 tab 已拉过就直接复用
+  if (!s) {
+    loadFlows(h);
+    return '<div class="flows-slot" data-flows-slot="' + escapeHtml(h + ':' + kind) + '"></div>';
+  }
+  return flowListHtml(labelKey, flowGroups(s[kind]));
+}
+
+function loadFlows(h) {
+  if (flowsPending[h]) return;
+  flowsPending[h] = true;
+  fetch(P + '/pop/' + encodeURIComponent(h) + '.json')
+    .then(function (r) {
+      if (!r.ok) throw new Error(String(r.status));
+      return r.json();
+    })
+    .then(function (j) {
+      flowsByHash[h] = j;
+      fillFlowsSlot(h, 'externalInputs', 'needsLabel');
+      fillFlowsSlot(h, 'finalOutputs', 'yieldsLabel');
+    })
+    .catch(function () { delete flowsPending[h]; }); // 失败可重试；没有清单也照常读
+}
+
+function fillFlowsSlot(h, kind, labelKey) {
+  var slot = document.querySelector('[data-flows-slot="' + h + ':' + kind + '"]');
+  if (!slot) return; // 读者已离开该节点：缓存留着，下次进来直接出
+  slot.outerHTML = flowListHtml(labelKey, flowGroups(flowsByHash[h][kind])); // 空清单 = 槽位撤掉
+}
 
 // ── practice 的孩子呈现（按 op 分形态） ──
 
