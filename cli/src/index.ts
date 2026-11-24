@@ -22,6 +22,7 @@ import { runUpdate } from './cmd/update.js';
 import { runNotifications } from './cmd/notifications.js';
 import { runAppeal } from './cmd/appeal.js';
 import { runVisibility } from './cmd/visibility.js';
+import { runDelete } from './cmd/delete.js';
 import { runSpec } from './cmd/spec.js';
 import { runLogin, runLogout, runMe } from './cmd/login.js';
 import { runRemote } from './cmd/remote.js';
@@ -106,6 +107,9 @@ anywhere:
                                  your appeals for this instance + head review state
   practi visibility <owner>/<name> public|private
                                  request publication (enters hub review) or revert to private
+  practi delete <owner>/<name> --yes [--local <dir>]
+                                 permanently delete the hub instance and its revisions;
+                                 --local also removes that practice folder (same name only)
   practi fix <file.json> [--dry-run]   migrate a POP 1.x document file to 2.0
   practi spec                    print pop-spec.md (bundled with the SDK)
   practi skill install | update | uninstall | import <dir> | export <ref>
@@ -598,6 +602,23 @@ async function main(rawArgv: string[]): Promise<number> {
         return 0;
       }
       return runVisibility({ dataDir: str(values['data-dir']), positional: positionals, json: values.json === true });
+    }
+    case 'delete': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, yes: { type: 'boolean' as const }, local: { type: 'string' } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi delete <owner>/<name> --yes [--local <dir>]   (permanent; --local also removes the practice folder)');
+        return 0;
+      }
+      return runDelete({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        yes: values.yes === true,
+        local: str(values.local),
+      });
     }
     case 'help':
     case '--help':

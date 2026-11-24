@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { freePort, init, pop, tempDataDir } from './helpers.js';
+import { freePort, init, pop, runIn, tempDataDir } from './helpers.js';
 
 /**
  * 用户行为面命令组（2026-11-19，practi 从工具面补齐 hub 用户行为）：
@@ -87,6 +87,14 @@ beforeAll(async () => {
         respond(res, 200, { ok: true });
         return;
       }
+      if (req.method === 'DELETE' && p === '/api/v1/instances/liz/thing') {
+        respond(res, 200, { ok: true });
+        return;
+      }
+      if (req.method === 'DELETE' && p === '/api/v1/instances/liz/other') {
+        respond(res, 403, { error: 'missing scope', code: 'E_SCOPE' });
+        return;
+      }
       respond(res, 404, { error: 'not found' });
     })().catch(() => respond(res, 500, { error: 'mock failure' }));
   });
@@ -151,5 +159,65 @@ describe('visibility（实例可见性，pop#1）', () => {
   it('非法模式拒绝', async () => {
     const home = await hubHome();
     expect((await pop(home, ['visibility', 'liz/thing', 'draft'])).code).toBe(1);
+  });
+});
+
+describe('delete（删 hub 实例）', () => {
+  it('--yes：DELETE 实例端点', async () => {
+    const home = await hubHome();
+    const rs = await pop(home, ['delete', 'liz/thing', '--yes']);
+    expect(rs.code).toBe(0);
+    expect(last?.method).toBe('DELETE');
+    expect(last?.path).toBe('/api/v1/instances/liz/thing');
+    expect(rs.stdout).toContain('deleted: liz/thing');
+  });
+
+  it('缺 --yes 不发请求', async () => {
+    const home = await hubHome();
+    last = null;
+    const rs = await pop(home, ['delete', 'liz/thing']);
+    expect(rs.code).toBe(1);
+    expect(last).toBeNull();
+    expect(rs.stdout).toContain('permanently deletes');
+  });
+
+  it('凭据缺 practice:delete scope 时本地拦下并指路 reauth', async () => {
+    const home = await hubHome();
+    const f = path.join(home, 'practi.auth.json');
+    const creds = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>;
+    fs.writeFileSync(f, JSON.stringify({ ...creds, scope: 'practice:read practice:write' }));
+    last = null;
+    const rs = await pop(home, ['delete', 'liz/thing', '--yes']);
+    expect(rs.code).toBe(1);
+    expect(last).toBeNull();
+    expect(rs.stderr).toContain('login --reauth');
+  });
+
+  it('hub 拒绝时报状态码与错误码，不动本地', async () => {
+    const home = await hubHome();
+    const rs = await pop(home, ['delete', 'liz/other', '--yes']);
+    expect(rs.code).toBe(1);
+    expect(rs.stderr).toContain('HTTP 403 (E_SCOPE)');
+  });
+
+  it('--local：删 hub 成功后移除同名实践文件夹', async () => {
+    const home = await hubHome();
+    const dir = path.join(tempDataDir(), 'thing');
+    const rs0 = await runIn(path.dirname(dir), home, ['new', 'thing', '--dir', dir]);
+    expect(rs0.code).toBe(0);
+    const rs = await pop(home, ['delete', 'liz/thing', '--yes', '--local', dir]);
+    expect(rs.code).toBe(0);
+    expect(fs.existsSync(dir)).toBe(false);
+  });
+
+  it('--local：文件夹不是同名实践时拒删，且不发请求', async () => {
+    const home = await hubHome();
+    const dir = path.join(tempDataDir(), 'else');
+    await init(dir);
+    last = null;
+    const rs = await pop(home, ['delete', 'liz/thing', '--yes', '--local', dir]);
+    expect(rs.code).toBe(1);
+    expect(last).toBeNull();
+    expect(fs.existsSync(dir)).toBe(true);
   });
 });
