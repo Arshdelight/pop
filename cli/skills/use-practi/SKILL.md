@@ -328,6 +328,11 @@ practi visibility <owner>/<name> public|private
                                            # request publication (enters hub review,
                                            # PUBLIC_REVIEWING — verdict via notifications) or
                                            # revert to private
+practi delete <owner>/<name> --yes [--local <dir>]
+                                           # permanently delete the hub instance and its
+                                           # revisions (needs the practice:delete scope —
+                                           # `practi login --reauth` and tick it); --local also
+                                           # removes that practice folder
 practi branch [name] [--from <hash>] | -d <name>   # list (* = current) / create / delete
 practi switch <branch>                    # switch branches; the working file follows the
                                            # head (refuses when dirty — commit first)
@@ -340,8 +345,8 @@ practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
 ```
 
 - **The commit is repository state, the document is a snapshot.** History lives in `chain.json` (local) and the hub instance's commit chain (remote) — never in the document.
-- **The hub never changes the content.** Pushes are re-hashed server-side with the same SDK; visibility follows the instance (a PUBLIC instance's chain is readable by anyone, PRIVATE only by its owner). Making an instance public is a hub-web workflow, not a CLI one.
-- Deleting a practice folder removes the local copy only — the hub instance stays (delete it on the hub web).
+- **The hub never changes the content.** Pushes are re-hashed server-side with the same SDK; visibility follows the instance (a PUBLIC instance's chain is readable by anyone, PRIVATE only by its owner); `practi visibility` switches it.
+- Deleting a practice folder removes the local copy only — the hub instance stays until `practi delete` removes it (permanent).
 
 ## Finding things again
 
