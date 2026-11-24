@@ -66,12 +66,25 @@ function serve(ctx: Ctx, opts: WebOpts): number {
   return 0;
 }
 
+/** 打开系统默认浏览器的进程调用（命令 + 参数 + 是否 verbatim），按平台给；单独导出以便测试 */
+export function browserOpenCommand(
+  platform: string,
+  url: string
+): { cmd: string; args: string[]; verbatim: boolean } {
+  if (platform === 'win32') {
+    // cmd 把 & 当命令分隔符，URL 必须整体加引号（否则带 query 的 OAuth 授权 URL 被截断在首个 &——
+    // 2026-10-20 实例文件夹模型重构时丢了引号，登录页报「授权请求不完整」）；
+    // start 的首个引号参数是窗口标题占位；/d /s + verbatim 让 cmd 按原样解析这条命令行
+    return { cmd: 'cmd', args: ['/d', '/s', '/c', `start "" "${url}"`], verbatim: true };
+  }
+  return { cmd: platform === 'darwin' ? 'open' : 'xdg-open', args: [url], verbatim: false };
+}
+
 /** 打开系统默认浏览器（oauth 登录流程共用）；失败静默——URL 已打印在终端 */
 export function openBrowser(url: string): void {
-  const opener = process.platform === 'win32' ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  const { cmd, args, verbatim } = browserOpenCommand(process.platform, url);
   try {
-    const child = spawn(opener, args, { stdio: 'ignore', detached: true });
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true, windowsVerbatimArguments: verbatim });
     child.on('error', () => console.log(`open this in your browser: ${url}`));
     child.unref();
   } catch {
