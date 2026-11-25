@@ -29,9 +29,10 @@
 ## 快速开始
 
 ```bash
-practi init          # 初始化工作区（默认 ~/.practi）
-practi new doc.json  # 注册第一份 POP
-practi web           # 在本地 web UI 里浏览
+npm install -g @arshdelight/practi
+practi init                                    # 创建配置家（默认 ~/.practi）
+practi new make-tea --base tea.json -m "first"  # 从一份文档诞生实践文件夹（把上面的树存成 tea.json）
+practi web                                     # 在本地 web UI 里浏览
 ```
 
 Agent-first：把 [use-practi skill](skills/use-practi/SKILL.md) 交给你的 AI agent——`practi skill install` 会把它装到 agent 能看到的地方（默认 `~/.agents/skills`），之后的每一次记录 / 检索 / 复盘都由 skill 引导完成。
@@ -41,7 +42,7 @@ Agent-first：把 [use-practi skill](skills/use-practi/SKILL.md) 交给你的 AI
 ```
 pop-spec.md              协议规范
 sdk/                     @arshdelight/pop-sdk——官方 SDK + 一致性测试套件
-cli/                     practi——`practi` 本地 registry CLI（基于 SDK）
+cli/                     practi——`practi` 命令行：带本地历史的实践文件夹 + 可选的 hub 同步（基于 SDK）
 skills/                  可安装的 agent skill（use-practi）
 examples/                种子文档
 ```
@@ -64,92 +65,114 @@ npm test -w @arshdelight/pop-sdk        # vitest（含 Appendix A 向量复验�
 
 ## cli/ — practi（`practi` 命令）
 
-POP 文档的本地管理 CLI：建立在内容寻址工作区之上的个人 registry。数据目录就是一个 POP 工作区（节点内容寻址存于 `nodes/*.md`）；`practi.json` 记录注册的 **direct** 根（indirect = direct POP 引用到的其余全部节点）；学习笔记在旁边的 `notes.json`（仅本地）。
+**带完整本地历史的实践文件夹，可选接 hub。** 一个实践就是一个自包含的文件夹：POP 是一份普通的 JSON 文件，用任何编辑器都能改；历史像 `.git` 一样放在旁边。除了你主动发起的同步（对 hub——比如 [practihub](https://practihub.com)——执行 `push` / `pull` / `clone`），没有任何东西离开本机。
+
+```
+green-tea/
+  green-tea.json      pop——一份普通文档，随便用什么编辑
+  .practi/            历史（类似 .git）：
+    chain.json          提交 {seq, root, parent, message} + 分支指针
+    nodes/              每个版本，内容寻址（哈希 = 身份）
+    blobs/              附件字节
+```
+
+工作文件通常与头版本一致；不一致时就是有**未提交的改动**——`practi commit` 把它存成一个新版本。配置家（`~/.practi`）只放 `practi.json`（远端）和 `practi.auth.json`（凭据）；实践本身是普通文件夹，放在你存放文档的任何地方。
 
 ```bash
-practi blob add <file-or-url> [--name <name>]
-                                  暂存附件：对字节算哈希并存入本地 blob 库。URL 来源经系统代理
-                                  抓取，其字节同样入库——指针本身仍只含哈希
-practi branch [name] [--from <hash>] | -d <name>
-                                  实例分支（需先绑定实例）：无参列出分支（* = 默认分支），
-                                  带名字则从当前分支头建新分支，-d 删除分支指针
-practi claim <hash>               把工作区里已存的节点登记为 direct pop（indirect → direct）
-practi clone <owner>/<name>[@branch]
-                                  把 hub 上的实践实例拉进本工作区并绑定（git clone：实例即仓库），
-                                  拉全分支的每个版本并把头检出为 direct pop
-practi config                     查看数据目录与 registry 概要
-practi edit <hash> <file.json>    编辑 direct POP（产生新哈希；换根记入本地提交日志 commits.json + 回收不可达节点）
-practi fix <file> | <hash> | --all  把 POP 1.x 文档迁移到 2.0：剥除已删除的历史字段（revisions/refines），
-                                  重新校验并报告新哈希。<hash> 重存工作区节点并重绑 direct/claims；
-                                  --all 扫全部 direct；--dry-run 预览
-practi fetch <hash>               从 hub 单拉一份 POP 进本地 registry（direct；须完整 sha256
-                                  哈希——不猜前缀）。与实例无关——对象直接进你的 pop 库
-practi gc [--apply]                释放孤儿 blob——没有节点引用的附件字节（默认 dry-run；--apply 才删）
-practi init [path]                初始化数据目录（默认： ~/.practi）
-practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
-                                  在 hub 上建实践实例，或把本工作区绑定到一个实例（git 的 origin）；
-                                  push/merge/log 默认走绑定
-practi lint [--json] [--limit N]  对全部 direct pop 做记录质量审计：与 `practi new` 创建时打印的
-                                  是同一组 W_* 提示，按需可查。只读、永不阻断（退出码恒为 0）
-                                  ——是待办清单，不是闸门
-practi log [--branch <b>] [--limit N] [--json]
-                                  绑定实例分支的修订历史（tip 在前）
-practi ls [-a] [--json]           列出 direct POP（-a 连 indirect 节点一起列）
-practi login [--no-open] [--reauth]  OAuth 登录 hub（浏览器授权；--no-open 打印 URL 供无头使用）
-practi logout                     吊销并清除本地凭据
-practi me                         查看当前登录账号、角色与 scope
-practi merge <branch>             把分支合并进当前分支：tip 的父链能到达当前头则快进，
-                                  否则追加一个 squash 合并提交
-practi migrate [path] [--keep]      把 workspace 剪切到新数据目录（逐文件校验后删除旧目录；
-                                   --keep 保留为 .bak 备份；无参 = ~/.practi；带路径则记入
-                                   ~/.practi-home 作为默认目录）
-practi note add|list|edit|delete  钉在节点哈希上的本地学习笔记（sidecar notes.json）
-practi note promote <note-id> [--out <file>]
-                                  把一条笔记变回其所属 direct 根的草稿文档，笔记内容拼回当初
-                                  钉住的节点位置——只起草、不代你编辑（内容寻址下编辑即新哈希，
-                                  拍板权在你）
-practi new <file.json>            从 JSON 文档创建 pop（或 --json '<text>'，或 stdin）
-practi push [hash] [--branch <b>] [--message <text>]
-                                  一次调用：存文档并绑为分支头（提交以 parent=当前头 追加）。
-                                  需要绑定实例——POP 在 hub 上只以实践实例的形式存在
-practi pull                       把绑定实例的修订同步进工作区（仓库内的 git pull）：补齐缺失的
-                                  链上修订（逐哈希校验），本地 direct 是祖先则快进分支头，否则检出 tip
-practi remove <hash>               把一个 direct 根移出本地目录（注册层操作；回收从剩余 direct
-                                   出发不可达的节点——共享的 indirect 节点保得住）
-practi remote set <url> | remove  配置 practi 指向的 hub
-practi repair                     从节点文件 mtime 回补缺失的认领时刻（幂等）
-practi search [query...]          搜索全部已存节点——direct、indirect 与孤儿一视同仁：
-                                  字段加权 BM25、标题优先排序，`field:` 限定（name: desc:
-                                  content: flow: loop: op: hash:），多词 AND 可跨字段命中。
-                                  命中结果标注命中的字段；严格匹配无果时放宽到多数词命中
-                                  （标注为 relaxed）。--limit N；--json；--notes 连本地笔记
-                                  一起进索引（默认关）。
-                                  空查询 = 浏览 direct 根
-practi show <hash> [--json] [--doc]   查看一个节点（hash 前缀即可；--json 的 steps 带正文——一次读完的复现视图）
-practi similar <hash> [--limit N] [--json]
-                                  内容近邻：以目标子树为查询，对每个已存节点打分，每条命中
-                                  列出撑起它命中的共享词。字面匹配（字符 bigram + 拉丁词相关度），
-                                  不是语义——换了措辞、不共享字面的不会浮出
-practi skill install               安装包内自带的 use-practi skill（默认：~/.agents/skills）
-practi skill update                刷新已安装的 use-practi skill（--dir 指定其它 skills 目录）
-practi skill uninstall             卸载已安装的 use-practi skill
-practi skill import <dir>          把 `practi skill export` 导出的目录回放成 POP（须带 sidecar；外来 skill 靠撰写进入 POP，不做机械导入）
-practi skill export <ref> [--dir]  把 POP 投影成可安装的技能目录（SKILL.md + 附件文件 + pop.doc.json sidecar）
-practi spec                       打印包内 pop-spec.md（无网络依赖）
-practi switch <branch>            切换绑定实例的当前分支（本地指针；用 "practi pull" 把内容带进工作区）
-practi unclaim <hash>              把仍被引用的 direct pop 退回 indirect（未被引用时报错——
-                                   那会孤儿化它；要删除请用 "remove"）
-practi update                     经 npm 自更新（检查 registry 最新版）
-practi version | --version        查看 CLI 与 pop-spec 协议版本
-practi web [--port 4317] [--no-open]  在本地 web UI 浏览 direct pop
+npm install -g @arshdelight/practi
 ```
+
+```bash
+诞生 · 编辑 · 同步（除非另有说明，都在实践文件夹内运行）
+  practi new <name> [--base <file.json>] [-m <msg>]  在当前目录诞生一个实践文件夹；
+                                   --base 用一份 pop 文档种入第一个版本
+  practi commit [-m <msg>] [--amend]   把工作文件存为一个新版本
+                                   （仅本地；与头版本相同时无可提交；
+                                   --amend 改为替换头版本）
+  practi export <hash> [-o <file>]       把任一版本写回成文档
+  practi push [--force]            同步到 hub（首次推送在那里创建实例）
+  practi pull                      拉取缺失的版本、快进分支、更新工作文件
+                                   （有未提交改动时拒绝）
+  practi clone <owner>/<name>[@branch] [--dir <path>]
+                                   把 hub 上的实践克隆成本地文件夹（完整链）；
+                                   只写 <name> = 你自己的实践
+
+历史
+  practi log [--branch <b>] [--limit N] [--json]   提交历史，tip 在前
+  practi branch [name] [-d <name>] [--from <hash>]   列出（* = 当前）/ 创建 / 删除
+  practi switch <branch>           切换分支；工作文件跟随头版本
+                                   （有未提交改动时拒绝——先 commit）
+  practi merge <branch>            能快进就快进，否则移动指针（树相同的提交
+                                   是同一个——POP §9.1：一个根一行）
+  practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
+                                   改写本地提交链；工作文件原样不动
+                                   （git reset 语义）——想留住就用 commit 收下，
+                                   想丢弃就用 export 取回头版本
+
+实践文件夹内
+  practi show <hash> [--json] [--doc]   查看一个版本节点（hash 前缀即可）
+  practi search [query...] [--json]     搜索这个实践的各个版本（BM25、标题优先、
+                                   多词 AND 可跨字段、field: 限定、hash 前缀、
+                                   标注出来的部分匹配档；--notes 连本地笔记一起搜）
+  practi similar <hash>         这个实践内的内容近邻（字面 bigram 相似度——
+                                   换了措辞、不共享字面的不会浮出）
+  practi lint                   当前分支头的质量提示（只读，退出码恒为 0
+                                   ——是待办清单，不是闸门）
+  practi note add|list|edit|delete   钉在节点哈希上的学习笔记（.practi/notes.json，
+                                   从不上传；`practi web` 的笔记边栏写的是同一个文件）
+  practi blob add <file-or-url> [--name <name>]   把附件字节存进池（.practi/blobs/）
+  practi gc [--apply]           释放孤儿 blob（默认 dry-run）
+  practi web [--port 4317]      在本地 web UI 浏览实践：在实践文件夹内提供
+                                   提交链、分支与逐版本的阅读器
+                                   （wizard / 标准视图 / 树）；在别处提供
+                                   practices 家目录（默认 ~/.practi/practices）的
+                                   目录页——点进去就是阅读器
+
+任何地方
+  practi init [path]            创建配置家（凭据 + 远端；默认 ~/.practi）
+  practi remote set <url> | remove    指向一个 hub
+  practi login [--no-open] [--reauth]   OAuth 登录（PKCE，浏览器授权）；logout 吊销
+  practi me                     查看当前登录账号与 scope
+  practi config                 查看配置家与远端
+  practi ls [--remote] [--json]  practices 家目录的跨实践概览
+                                （每个实践的分支 / 头 / 版本数 / 未推送数）；
+                                --remote 改为列出你在 hub 上的实践
+  practi search --remote [query...] [--limit N] [--json]
+                                hub 上的实践——公开的（hub 排名）加你自己的
+                                （按名字／描述）；不带词 = 浏览最新的公开实践。
+                                公开部分不登录也能用
+  practi notifications [-n N] [--since D] [--until D] [--json]
+                                hub 信箱（最近 N 条，或 since/until 时间段；
+                                YYYY-MM-DD 或 ISO 日期时间）
+  practi visibility <owner>/<name> public|private
+                                申请公开（进入 hub 审核）或退回私有
+  practi appeal submit <owner>/<name> --root <hash> --reason <text> | list <owner>/<name>
+                                为被拒版本提交申诉 / 列出你的申诉
+  practi delete <owner>/<name> --yes [--local <dir>]
+                                永久删除 hub 实例及其版本；--local 连那个
+                                实践文件夹一起删
+  practi fix <file.json> [--dry-run]  把 POP 1.x 文档文件迁移到 2.0
+  practi skill install | update | uninstall | import <dir> | export <ref>
+  practi spec                   打印包内自带的 pop-spec.md（不联网）
+  practi update                 经 npm 自更新
+                                （每条命令会静默地每 10 分钟查一次 registry——
+                                结果缓存，失败也缓存；给任何命令加
+                                --checkversion 可立即重查）
+  practi version | --version    查看 CLI 与 pop-spec 版本
+```
+
+随 pops 登记簿退役的命令（2026-10-20）：`edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice`——各自会打印去向（`ls` 于 2026-11-18 以文件夹模型语义回归：跨实践概览）。
+
+一个实践文件夹对应 hub 上的一个**实例**——单 owner、GitHub 式的仓库，容纳一份 POP 的演进链与分支。`practi push` 在首次推送时在 hub 上创建它，`practi clone` 把整条链拉下来成为文件夹，`ls --remote` / `search --remote` 负责找到要克隆什么。内容寻址不受影响：hub 用同一份 SDK 在服务端重新推导哈希。
+
+从源码运行：
 
 ```bash
 npm run build -w @arshdelight/practi
 npm link -w @arshdelight/practi   # 全局安装 `practi` 命令
 ```
 
-两个包同仓为 npm workspace（根目录 `npm install` 即本地互链）。
+两个包同仓为 npm workspace（根目录 `npm install` 即本地互链）。完整命令参考见 [cli/README.md](cli/README.md)；面向 agent 的操作指引见 [use-practi skill](skills/use-practi/SKILL.md)。
 
 ## 仓库语义（面向托管 hub）
 

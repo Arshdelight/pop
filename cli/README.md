@@ -84,6 +84,16 @@ anywhere
                                 practices on the hub — public ones (hub ranking) plus
                                 yours by name/description; no query = browse the newest
                                 public. The public part works without a login
+  practi notifications [-n N] [--since D] [--until D] [--json]
+                                mailbox from the hub (recent N, or a since/until range;
+                                YYYY-MM-DD or ISO datetime)
+  practi visibility <owner>/<name> public|private
+                                request publication (enters hub review) or revert to private
+  practi appeal submit <owner>/<name> --root <hash> --reason <text> | list <owner>/<name>
+                                file a review appeal for a rejected version / list your appeals
+  practi delete <owner>/<name> --yes [--local <dir>]
+                                permanently delete the hub instance and its revisions;
+                                --local also removes that practice folder
   practi fix <file.json> [--dry-run]  migrate a POP 1.x document file to 2.0
   practi skill install | update | uninstall | import <dir> | export <ref>
   practi spec                   print the bundled pop-spec.md (no network)
