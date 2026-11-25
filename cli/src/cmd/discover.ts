@@ -108,7 +108,7 @@ export async function runSearchRemote(opts: SearchRemoteOpts): Promise<number> {
   for (const [i, term] of (browse ? [''] : terms).entries()) {
     const page = await fetchPublicInstances(remote, term, browse ? opts.limit : 50);
     if (page === null) {
-      console.error('error: this hub cannot list or search its practices yet — it needs practihub v0.2.20 or later');
+      console.error('error: this hub cannot list or search its practices yet — it needs practihub v0.2.22 or later');
       return 1;
     }
     if (i === 0) {

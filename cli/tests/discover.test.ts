@@ -313,7 +313,7 @@ describe('practi search --remote：公开实践浏览/检索 + 我的', () => {
     const r = await pop(home, ['search', '--remote', 'deploy']);
     searchSupported = true;
     expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/cannot list or search its practices yet — it needs practihub v0\.2\.20/);
+    expect(r.stderr).toMatch(/cannot list or search its practices yet — it needs practihub v0\.2\.22/);
   });
 });
 
