@@ -56,14 +56,8 @@ export async function runClone(opts: CloneOpts): Promise<number> {
     console.error(`clone failed: ${dir} already exists and is not empty`);
     return 1;
   }
-  const poolDir = path.join(dir, '.practi');
-  fs.mkdirSync(poolDir, { recursive: true });
-  try {
-    initWorkspace(poolDir);
-  } catch {
-    // practice.yaml 已在（半途重试）——沿用
-  }
 
+  // 先问 hub、后建目录：实例不存在时不留空文件夹（`clone <name>` 靠名字猜时常见的失败路径）
   // 只给 <name>：owner 段 = 当前登录账号（auth username）
   const owner = parsed.owner ?? (await fetchMyUsername(dataDir, state.remote.url));
   let view: InstanceChainView;
@@ -75,6 +69,13 @@ export async function runClone(opts: CloneOpts): Promise<number> {
       `error: ${(e as Error).message} — looked under your account (${owner}/${name}); another owner's practice needs \`practi clone <owner>/<name>\``
     );
     return 1;
+  }
+  const poolDir = path.join(dir, '.practi');
+  fs.mkdirSync(poolDir, { recursive: true });
+  try {
+    initWorkspace(poolDir);
+  } catch {
+    // practice.yaml 已在（半途重试）——沿用
   }
   const ws = loadWorkspace(poolDir);
   const sync = await syncInstanceObjects(dataDir, poolDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));

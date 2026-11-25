@@ -326,7 +326,7 @@ describe('practi clone <name>：owner 由登录账号补全', () => {
     expect(chainOf(dir)).toMatchObject({ name: 'empty-one', owner: ME, current: 'main' });
   });
 
-  it('未登录 → 1 并说明两种走法；我名下没有这个名字 → 1 并说明去哪找', async () => {
+  it('未登录 → 1 并说明两种走法；我名下没有这个名字 → 1、说明去哪找，且不留空文件夹', async () => {
     const anon = await hubHome(true);
     const noLogin = await pop(anon, ['clone', 'empty-one', '--dir', path.join(tempDataDir(), 'a')]);
     expect(noLogin.code).toBe(1);
@@ -334,8 +334,10 @@ describe('practi clone <name>：owner 由登录账号补全', () => {
 
     const home = await hubHome();
     myRows = [];
-    const missing = await pop(home, ['clone', 'no-such-one', '--dir', path.join(tempDataDir(), 'b')]);
+    const parent = tempDataDir();
+    const missing = await pop(home, ['clone', 'no-such-one', '--dir', path.join(parent, 'b')]);
     expect(missing.code).toBe(1);
     expect(missing.stderr).toMatch(/looked under your account \(tester\/no-such-one\); another owner's practice needs `practi clone <owner>\/<name>`/);
+    expect(fs.existsSync(path.join(parent, 'b'))).toBe(false);
   });
 });
