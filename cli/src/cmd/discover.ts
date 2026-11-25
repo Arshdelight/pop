@@ -73,7 +73,7 @@ export async function runLsRemote(opts: LsRemoteOpts): Promise<number> {
   console.log(`${'name'.padEnd(nameW)}  visibility  revs  updated     head`);
   for (const r of rows) {
     console.log(
-      `${r.name.padEnd(nameW)}  ${visibilityLabel(r.visibility).padEnd(10)}  ${String(r.revisions).padStart(4)}  ${day(r.updatedAt)}  ${r.title ?? '(no revision yet)'}`
+      `${r.name.padEnd(nameW)}  ${visibilityLabel(r.visibility).padEnd(10)}  ${String(r.revisions).padStart(4)}  ${day(r.updatedAt)}  ${clip(r.title ?? '(no revision yet)', 80)}`
     );
   }
   console.log(`\n${rows.length} practice(s) on the hub as ${rows[0].owner} — get one down with \`practi clone <name>\``);

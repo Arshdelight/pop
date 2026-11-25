@@ -154,6 +154,7 @@ describe('practi ls --remote：我在 hub 上的实践', () => {
       mine('deploy-next', 'PUBLIC', { head_name: 'Deploy Next.js', revision_count: 12 }),
       mine('training-plan', 'PRIVATE', { head_name: '按周训练', revision_count: 3 }),
       mine('ci-check', 'PUBLIC_REVIEWING'),
+      mine('long-title', 'PRIVATE', { head_name: `t${'x'.repeat(100)}`, revision_count: 1 }),
       mine('empty-one', 'PRIVATE', { revision_count: 0 }),
     ];
     const r = await pop(home, ['ls', '--remote']);
@@ -163,8 +164,9 @@ describe('practi ls --remote：我在 hub 上的实践', () => {
     expect(lines.find((l) => l.startsWith('deploy-next'))).toMatch(/public\s+12\s+2026-11-20\s+Deploy Next\.js$/);
     expect(lines.find((l) => l.startsWith('training-plan'))).toMatch(/private\s+3\s+2026-11-20\s+按周训练$/);
     expect(lines.find((l) => l.startsWith('ci-check'))).toMatch(/reviewing\s+1\s+2026-11-20/);
+    expect(lines.find((l) => l.startsWith('long-title'))).toMatch(/^long-title\s+private\s+1\s+2026-11-20\s+tx{78}…$/); // 标题截到 80 字符（101 字符 → 前 79 + 省略号）
     expect(lines.find((l) => l.startsWith('empty-one'))).toMatch(/\(no revision yet\)$/);
-    expect(r.stdout).toMatch(/4 practice\(s\) on the hub as tester — .*`practi clone <name>`/);
+    expect(r.stdout).toMatch(/5 practice\(s\) on the hub as tester — .*`practi clone <name>`/);
   });
 
   it('--json：owner/name/visibility/title/description/revisions/updated 逐行', async () => {
