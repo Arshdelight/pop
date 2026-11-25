@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { defaultDataDir, loadState } from '../state.js';
+import { loadCredentials } from '../credentials.js';
 import { exportSubtree, initWorkspace, loadWorkspace } from '@arshdelight/pop-sdk';
-import { fetchInstanceChain, syncInstanceObjects } from '../sync.js';
+import { fetchInstanceChain, syncInstanceObjects, type InstanceChainView } from '../sync.js';
+import { fetchMyUsername } from '../client.js';
 import { chainHead, saveChain, workingFileFor, type ChainFile, type Repo } from '../practice.js';
 import { shortHash } from '../render.js';
 
@@ -13,12 +15,16 @@ export interface CloneOpts {
   dir?: string;
 }
 
-/** `practi clone <owner>/<name>[@branch]` 的 ref 形态（分支段可选，缺省=实例默认支） */
-export function parseCloneRef(ref: string): { owner: string; name: string; branch?: string } | null {
+/** clone 的 ref 形态：`<owner>/<name>[@branch]`（分支段可选，缺省=实例默认支）；
+ *  只给 `<name>` = 自己名下的实例，owner 留空由登录账号补全（gh repo clone 同惯例） */
+export function parseCloneRef(ref: string): { owner?: string; name: string; branch?: string } | null {
   const m = /^([a-z0-9][a-z0-9-]{0,38}[a-z0-9]?)\/([a-z0-9][a-z0-9-]{0,38}[a-z0-9]?)(?:@([a-z0-9][a-z0-9-]{0,38}[a-z0-9]?))?$/.exec(ref);
-  if (!m) return null;
-  const [, owner, name, branch] = m;
-  return { owner, name, branch };
+  if (m) {
+    const [, owner, name, branch] = m;
+    return { owner, name, branch };
+  }
+  const own = /^([a-z0-9][a-z0-9-]{0,38}[a-z0-9]?)$/.exec(ref);
+  return own ? { name: own[1] } : null;
 }
 
 /**
@@ -36,14 +42,32 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   const ref = opts.positional[0];
   const parsed = ref ? parseCloneRef(ref) : null;
   if (!parsed) {
-    console.error('usage: practi clone <owner>/<name>[@branch] [--dir <path>]');
+    console.error('usage: practi clone <owner>/<name>[@branch] [--dir <path>]   |   practi clone <name>   (one of your own)');
     return 1;
   }
-  const { owner, name, branch } = parsed;
+  if (parsed.owner === undefined && loadCredentials(dataDir) === null) {
+    console.error('error: `practi clone <name>` takes one of your own practices — run `practi login` first, or give the full <owner>/<name>');
+    return 1;
+  }
+  const { name, branch } = parsed;
 
   const dir = path.resolve(opts.dir ?? path.join(process.cwd(), name));
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) {
     console.error(`clone failed: ${dir} already exists and is not empty`);
+    return 1;
+  }
+
+  // 先问 hub、后建目录：实例不存在时不留空文件夹（`clone <name>` 靠名字猜时常见的失败路径）
+  // 只给 <name>：owner 段 = 当前登录账号（auth username）
+  const owner = parsed.owner ?? (await fetchMyUsername(dataDir, state.remote.url));
+  let view: InstanceChainView;
+  try {
+    view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
+  } catch (e) {
+    if (parsed.owner !== undefined) throw e;
+    console.error(
+      `error: ${(e as Error).message} — looked under your account (${owner}/${name}); another owner's practice needs \`practi clone <owner>/<name>\``
+    );
     return 1;
   }
   const poolDir = path.join(dir, '.practi');
@@ -53,8 +77,6 @@ export async function runClone(opts: CloneOpts): Promise<number> {
   } catch {
     // practice.yaml 已在（半途重试）——沿用
   }
-
-  const view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
   const ws = loadWorkspace(poolDir);
   const sync = await syncInstanceObjects(dataDir, poolDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
   if (sync.failed.length > 0) {

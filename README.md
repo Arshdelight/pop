@@ -29,9 +29,10 @@ Nodes carry no ids: a node's content hash is its only address, and the root hash
 ## Quick start
 
 ```bash
-practi init          # initialize the workspace (~/.practi by default)
-practi new doc.json  # register your first POP
-practi web           # browse it in a local web UI
+npm install -g @arshdelight/practi
+practi init                                    # create the config home (~/.practi by default)
+practi new make-tea --base tea.json -m "first"  # birth a practice folder from a document (the tree above, saved as tea.json)
+practi web                                     # browse it in a local web UI
 ```
 
 Agent-first: point your AI agent at the [use-practi skill](skills/use-practi/SKILL.md) — `practi skill install` puts it where agents look (default: `~/.agents/skills`), and the skill walks the agent through every later record / search / review operation.
@@ -41,7 +42,7 @@ Agent-first: point your AI agent at the [use-practi skill](skills/use-practi/SKI
 ```
 pop-spec.md              the specification
 sdk/                     @arshdelight/pop-sdk — the official SDK + its conformance test suite
-cli/                     practi — the `practi` local registry CLI (built on the SDK)
+cli/                     practi — the `practi` CLI: practice folders with local history + optional hub sync (built on the SDK)
 skills/                  installable agent skill (use-practi)
 examples/                seed documents
 ```
@@ -64,107 +65,116 @@ npm test -w @arshdelight/pop-sdk        # vitest (incl. Appendix A vector re-ver
 
 ## cli/ — practi (the `practi` command)
 
-A local management CLI for POP documents: a personal registry on top of a content-addressed workspace. The data directory is a POP workspace (nodes content-addressed under `nodes/*.md`); `practi.json` records the registered **direct** roots (indirect = every other node the direct POPs reference); learning notes live beside it in `notes.json` (local only).
+**Practice folders with full local history, with an optional hub.** A practice is a self-contained folder you own: the POP is a plain JSON file edited with any editor, and the history lives beside it like `.git`. Nothing leaves the machine except the syncs you ask for (`push` / `pull` / `clone` against a hub such as [practihub](https://practihub.com)).
+
+```
+green-tea/
+  green-tea.json      the pop — a plain document, edit it with anything
+  .practi/            the history (like .git):
+    chain.json          commits {seq, root, parent, message} + branch pointers
+    nodes/              every revision, content-addressed (hash = identity)
+    blobs/              attachment bytes
+```
+
+The working file and the head usually match; when they don't, you have **uncommitted changes** — `practi commit` snapshots them as a new revision. The config home (`~/.practi`) only holds `practi.json` (remote) and `practi.auth.json` (credentials); practices are plain folders wherever you keep your documents.
 
 ```bash
-practi blob add <file-or-url> [--name <name>]
-                                  stage an attachment: hashes the bytes and stores local blobs.
-                                  A URL source is fetched through the system proxy and its bytes
-                                  are stored too — the pointer itself stays hash-only
-practi branch [name] [--from <hash>] | -d <name>
-                                  instance branches (needs a bound instance): no arg lists
-                                  branches (* = default), a name creates one from the current
-                                  branch head, -d deletes the pointer
-practi claim <hash>               register an existing stored node as a direct pop (indirect → direct)
-practi clone <owner>/<name>[@branch]
-                                  fetch a practice instance from the hub into this workspace and
-                                  bind to it (git clone: the instance IS the repository), pulling
-                                  every revision of the branch and checking out the head as a
-                                  direct pop
-practi config                     show data dir and registry summary
-practi edit <hash> <file.json>    replace a direct POP (new hash; swap recorded in the local commit
-                                log commits.json; GC of unreachable nodes)
-practi fix <file> | <hash> | --all  migrate POP 1.x documents to 2.0: strip the removed history
-                                fields (revisions/refines), re-validate, report the new hash
-practi fetch <hash>               pull a single POP from the hub into your local registry (direct;
-                                  full sha256 hash — no prefix guessing). No instance involved —
-                                  the object goes straight into your pop library
-practi gc [--apply]               free orphan blobs — bytes no stored node references
-                                  (dry-run by default; --apply removes)
-practi init [path]                initialize a data directory (default: ~/.practi)
-practi instance create <name> [--public] [--desc <text>] | bind <owner>/<name> | show
-                                  create a practice instance on the hub, or bind this workspace to
-                                  one (git's origin); push/merge/log default to the binding
-practi lint [--json] [--limit N]  audit recording quality across every direct pop: the same W_*
-                                  hints `practi new` prints once, on demand. Read-only and never
-                                  blocking (exit code is always 0) — a to-do list, not a gate
-practi log [--branch <b>] [--limit N] [--json]
-                                  revision history of the bound instance branch (tip first)
-practi ls [-a] [--json]           list direct POPs (-a also lists indirect nodes)
-practi login [--no-open] [--reauth]  OAuth sign-in to the hub (browser consent; --no-open prints
-                                  the URL for headless use)
-practi logout                     revoke and drop stored credentials
-practi me                         show the signed-in account, role and scopes
-practi merge <branch>             merge a branch into the current one: fast-forward when the tip's
-                                  parent chain reaches the current head, otherwise a squash merge
-                                  commit is appended
-practi migrate [path] [--keep]      move the workspace to a new data directory (cut: the old
-                                  directory is removed after per-file verification; --keep retains
-                                  it as .bak; no arg = ~/.practi; a path is recorded in ~/.practi-home)
-practi note add|list|edit|delete  local learning notes pinned to node hashes (sidecar notes.json)
-practi note promote <note-id> [--out <file>]
-                                  turn a note back into a draft document of its owning direct
-                                  root, with the note spliced in at the node it was pinned to — it
-                                  drafts and stops, never edits for you (under content addressing an
-                                  edit is a new hash, and that is your call)
-practi new <file.json>            create a pop from a JSON document (or --json '<text>', or stdin)
-practi push [hash] [--branch <b>] [--message <text>]
-                                  one call: store the document and bind it as the branch head (the
-                                  commit is appended with parent = current head). Requires a bound
-                                  instance — POP lives on the hub only as practice instances
-practi pull                       sync the bound instance's revisions into the workspace (git pull
-                                  inside the repository): missing chain revisions are fetched
-                                  (hash-verified), the branch head is fast-forwarded or the tip
-                                  is checked out
-practi remove <hash>              take a direct pop out of the local directory (registry op;
-                                  GCs nodes unreachable from the rest — shared indirect nodes survive)
-practi remote set <url> | remove  point practi at a hub
-practi repair                     backfill missing claim timestamps from node file times (idempotent)
-practi search [query...]          search every stored node — direct, indirect and orphans alike:
-                                  field-weighted BM25 with title-first ranking, `field:` scoping
-                                  (name: desc: content: flow: loop: op: hash:), and multi-word AND
-                                  that may match across fields. Hits name the field that matched,
-                                  and a relax tier covers a strict majority of terms when strict
-                                  matching finds nothing (labeled as relaxed). --limit N; --json;
-                                  --notes also indexes your local notes (off by default).
-                                  Empty query = browse direct roots
-practi show <hash> [--json] [--doc]   inspect one node (hash prefix OK; --json steps carry content — the reproduction view)
-practi similar <hash> [--limit N] [--json]
-                                  content neighbours: the target subtree becomes the query and every
-                                  stored node is scored against it, each hit listing the shared terms
-                                  that carried it. Literal (character-bigram + latin-word relevance),
-                                  not semantics — a paraphrase sharing no wording will not surface
-practi skill install               install the bundled use-practi skill (default: ~/.agents/skills)
-practi skill update                refresh the installed use-practi skill (--dir to target another dir)
-practi skill uninstall             remove the installed use-practi skill
-practi skill import <dir>          replay a `practi skill export` directory back into a POP (sidecar required; foreign skills enter POP by authoring, not import)
-practi skill export <ref> [--dir]  project a POP as an installable skill directory (SKILL.md + attachment files + pop.doc.json sidecar)
-practi spec                       print the bundled pop-spec.md (no network fetch)
-practi switch <branch>            switch the bound instance's current branch (local pointer; bring
-                                  the content into the workspace with "practi pull")
-practi unclaim <hash>             take a referenced direct pop back to indirect (fails when unreferenced —
-                                  that would orphan it; delete with "remove" instead)
-practi update                     self-update via npm (checks the registry's latest)
-practi version | --version        show CLI + pop-spec versions
-practi web [--port 4317] [--no-open]  browse direct POPs in a local web UI
+npm install -g @arshdelight/practi
 ```
+
+```bash
+birth · edit · sync (run inside a practice folder unless noted)
+  practi new <name> [--base <file.json>] [-m <msg>]  birth a practice folder in cwd;
+                                   --base seeds the first revision from a pop document
+  practi commit [-m <msg>] [--amend]   snapshot the working file as a new revision
+                                   (local only; nothing to commit when it matches the
+                                   head; --amend replaces the head instead)
+  practi export <hash> [-o <file>]       write any revision back out as a document
+  practi push [--force]            sync to the hub (first push creates the instance there)
+  practi pull                      fetch missing revisions, fast-forward, update the
+                                   working file (refuses when it has uncommitted changes)
+  practi clone <owner>/<name>[@branch] [--dir <path>]
+                                   clone a hub practice into a local folder (full chain);
+                                   just <name> = one of your own
+
+history
+  practi log [--branch <b>] [--limit N] [--json]   commits, tip first
+  practi branch [name] [-d <name>] [--from <hash>]   list (* = current) / create / delete
+  practi switch <branch>           switch branches; the working file follows the head
+                                   (refuses when dirty — commit first)
+  practi merge <branch>            fast-forward, else a pointer move (same-tree commits
+                                   are identical — POP §9.1: one row per root)
+  practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
+                                   rewrite the local chain; the working file is left as
+                                   is (git reset semantics) — keep it with a commit or
+                                   discard it with export
+
+inside a practice folder
+  practi show <hash> [--json] [--doc]   inspect one revision node (hash prefix OK)
+  practi search [query...] [--json]     search this practice's revisions (BM25, title-first,
+                                   multi-word AND across fields, field: scoping, hash
+                                   prefixes, labeled partial-match tier; --notes includes
+                                   local notes)
+  practi similar <hash>         content neighbours within this practice (literal bigram
+                                   similarity — a paraphrase will not surface)
+  practi lint                   quality hints on the current branch head (read-only, always
+                                   exits 0 — a to-do list, not a gate)
+  practi note add|list|edit|delete   learning notes pinned to node hashes (.practi/notes.json,
+                                   never uploaded; the notes sidebar in `practi web` writes
+                                   the same file)
+  practi blob add <file-or-url> [--name <name>]   store attachment bytes (.practi/blobs/)
+  practi gc [--apply]           free orphan blobs (dry-run by default)
+  practi web [--port 4317]      browse practices locally: inside a practice folder it serves
+                                   the commit chain, branches, and the per-revision reader
+                                   (wizard / standard view / tree); anywhere else it serves
+                                   the practices home (default ~/.practi/practices) as a
+                                   directory page — click through to the reader
+
+anywhere
+  practi init [path]            create the config home (credentials + remote; default ~/.practi)
+  practi remote set <url> | remove    point at a hub
+  practi login [--no-open] [--reauth]   OAuth sign-in (PKCE, browser consent); logout revokes
+  practi me                     show the signed-in account and scopes
+  practi config                 show config home and remote
+  practi ls [--remote] [--json]  cross-practice overview from the practices home
+                                (branch / head / revisions / unpushed per practice);
+                                --remote lists your practices on the hub instead
+  practi search --remote [query...] [--limit N] [--json]
+                                practices on the hub — public ones (hub ranking) plus
+                                yours by name/description; no query = browse the newest
+                                public. The public part works without a login
+  practi notifications [-n N] [--since D] [--until D] [--json]
+                                mailbox from the hub (recent N, or a since/until range;
+                                YYYY-MM-DD or ISO datetime)
+  practi visibility <owner>/<name> public|private
+                                request publication (enters hub review) or revert to private
+  practi appeal submit <owner>/<name> --root <hash> --reason <text> | list <owner>/<name>
+                                file a review appeal for a rejected version / list your appeals
+  practi delete <owner>/<name> --yes [--local <dir>]
+                                permanently delete the hub instance and its revisions;
+                                --local also removes that practice folder
+  practi fix <file.json> [--dry-run]  migrate a POP 1.x document file to 2.0
+  practi skill install | update | uninstall | import <dir> | export <ref>
+  practi spec                   print the bundled pop-spec.md (no network)
+  practi update                 self-update via npm
+                                (every command quietly checks the registry once per
+                                10 min — cached, failures included; add
+                                --checkversion to any command to force a re-check)
+  practi version | --version    show CLI + pop-spec versions
+```
+
+Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice` — each prints where it went (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview).
+
+A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain with branches. `practi push` births the hub copy on first push, `practi clone` brings a full chain down as a folder, and `ls --remote` / `search --remote` find what to clone. Content addressing is untouched: the hub re-derives hashes server-side with the same SDK.
+
+From source:
 
 ```bash
 npm run build -w @arshdelight/practi
 npm link -w @arshdelight/practi   # installs the `practi` command globally
 ```
 
-Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally).
+Both packages live in the same repo as an npm workspace (`npm install` at the root links them locally). The full command reference is [cli/README.md](cli/README.md); the agent-facing walkthrough is the [use-practi skill](skills/use-practi/SKILL.md).
 
 ## Repository semantics (for hosted hubs)
 

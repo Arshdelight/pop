@@ -65,6 +65,8 @@ usage (run inside a practice folder unless noted):
                                  fast-forward the branch, update the working file
   practi clone <owner>/<name>[@branch] [--dir <path>]
                                  clone a hub practice into a local practice folder
+                                 (just <name> = one of your own; find names with
+                                 \`practi ls --remote\` / \`practi search --remote\`)
   practi branch [name] [-d <name>] [--from <hash>]
                                  list / create / delete branches (* marks the current one)
   practi switch <branch>         switch branches (working file follows the head; refuses
@@ -95,8 +97,12 @@ anywhere:
   practi login [--no-open]       OAuth sign-in to the hub (browser consent)
   practi logout | me | remote set <url> | remove
   practi config                  show config home and remote
-  practi ls [--json]             cross-practice overview from the practices home
-                                 (branch / head / revisions / unpushed per practice)
+  practi ls [--remote] [--json]  cross-practice overview from the practices home
+                                 (branch / head / revisions / unpushed per practice);
+                                 --remote: your practices on the hub instead
+  practi search --remote [query...] [--limit N] [--json]
+                                 practices on the hub — public ones (hub ranking)
+                                 plus yours; no query = browse the newest public
   practi notifications [-n N] [--since D] [--until D] [--json]
                                  mailbox from the hub (recent N, or a since/until
                                  range; YYYY-MM-DD or ISO datetime)
@@ -194,11 +200,11 @@ async function main(rawArgv: string[]): Promise<number> {
     case 'ls': {
       const { values } = parseArgs({
         args: rest,
-        options: { ...COMMON, json: { type: 'boolean' as const } },
+        options: { ...COMMON, json: { type: 'boolean' as const }, remote: { type: 'boolean' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi ls [--json]   (cross-practice overview from the practices home)'); return 0; }
-      return runLs({ dataDir: str(values['data-dir']), json: values.json === true });
+      if (values.help) { console.log('usage: practi ls [--remote] [--json]   (the practices home; --remote = your practices on the hub)'); return 0; }
+      return runLs({ dataDir: str(values['data-dir']), json: values.json === true, remote: values.remote === true });
     }
     case 'lint': {
       const { values } = parseArgs({
@@ -398,7 +404,11 @@ async function main(rawArgv: string[]): Promise<number> {
         options: { ...COMMON, dir: { type: 'string' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi clone <owner>/<name>[@branch] [--dir <path>]   (clone a hub practice into a local folder)'); return 0; }
+      if (values.help) {
+        console.log('usage: practi clone <owner>/<name>[@branch] [--dir <path>]   (a hub practice → a local folder)');
+        console.log('       practi clone <name> [--dir <path>]   (one of your own practices — the owner is you)');
+        return 0;
+      }
       return await runClone({ positional: positionals, dir: values.dir });
     }
     case 'branch': {
@@ -493,12 +503,14 @@ async function main(rawArgv: string[]): Promise<number> {
           limit: { type: 'string' as const },
           json: { type: 'boolean' as const },
           notes: { type: 'boolean' as const },
+          remote: { type: 'boolean' as const },
           dir: { type: 'string' as const },
         },
         allowPositionals: true,
       });
       if (values.help) {
-        console.log('usage: practi search [query...] [--limit N] [--json] [--notes]   (search this practice\'s revisions)');
+        console.log('usage: practi search [query...] [--limit N] [--json] [--notes]   (this practice\'s revisions)');
+        console.log('       practi search --remote [query...] [--limit N] [--json]   (practices on the hub: public + yours; no query = browse)');
         return 0;
       }
       const limit = values.limit ? Number(values.limit) : 20;
@@ -508,6 +520,8 @@ async function main(rawArgv: string[]): Promise<number> {
         json: values.json === true,
         notes: values.notes === true,
         dir: values.dir,
+        remote: values.remote === true,
+        dataDir: str(values['data-dir']),
       });
     }
     case 'similar': {

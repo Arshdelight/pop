@@ -9,8 +9,9 @@ description: Record, version, search, and manage practices with the practi
   "amend", "revert to v1", "squash my history"), search or read practices
   ("search my practices", "find a how-to I saved", "what else is about this"),
   annotate learning ("take a note on this step", "note what I learned while
-  reproducing"), or sync with the hub ("publish this practice", "clone my
-  practices") — even when practi is not mentioned by name. Also for any
+  reproducing"), or use the hub ("publish this practice", "clone my
+  practices", "what do I have on practihub", "is there a public practice
+  about X") — even when practi is not mentioned by name. Also for any
   explicit practi CLI usage (practi new, practi commit, practi log, practi
   show, practi search, practi export, practi note, practi skill export, …),
   and for converting between formats ("turn this skill into a POP", "export
@@ -312,8 +313,16 @@ practi push [--force]                     # sync to the hub: first push creates 
                                            # unreachable revisions
 practi pull                               # fetch missing revisions, fast-forward the branch,
                                            # update the working file (refuses when dirty)
+practi ls --remote [--json]           # your practices on the hub — private, reviewing
+                                       # and public alike; read it before cloning one of
+                                       # your own by bare name
+practi search --remote [q] [--json]   # practices on the hub: public ones (hub ranking)
+                                       # plus yours by name/description; no query =
+                                       # browse the newest public. Public part works
+                                       # without a login
 practi clone <owner>/<name>[@branch] [--dir <path>]   # a hub practice → a local folder
-                                           # (full chain + working file; git clone)
+                                           # (full chain + working file; git clone);
+                                           # just <name> = one of your own
 practi notifications [-n N] [--since D] [--until D] [--json]
                                            # mailbox from the hub: recent N or a since/until
                                            # range (YYYY-MM-DD or ISO datetime); read-only —
@@ -360,6 +369,7 @@ practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
 - **Results are ranked title-first and each says why it matched.** Trust the explanation over the number.
 - **`practi similar <hash>` answers the other question** — not "where did I write X" but "what else is about X". Literal: a paraphrase sharing no wording will not surface.
 - Across practices, `practi ls` is the one-glance overview — branch, head, revision count and **unpushed** count for every practice in the home (unpushed also counts history rewrites that cleared push stamps). Browse folders in your file manager for anything richer — a practice folder *is* its own listing.
+- **On the hub, two commands answer the same two questions.** `practi ls --remote` lists every practice you have on the hub, whatever its visibility — many of them may have no local folder. `practi search --remote <q>` searches the hub: public practices by their wording (title hits first), plus your own by name and description — not step content. With no query it browses the newest public practices. It is literal like the local search, so on an empty result try other words rather than the same ones again. Without a login only the public part is searched. Every result names its `owner/name`, ready for `practi clone`.
 
 ## Local notes
 

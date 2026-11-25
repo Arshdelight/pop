@@ -3,10 +3,13 @@ import path from 'node:path';
 import { defaultDataDir } from '../state.js';
 import { chainPathFor, loadChain } from '../practice.js';
 import { shortHash } from '../render.js';
+import { runLsRemote } from './discover.js';
 
 export interface LsOpts {
   dataDir?: string;
   json?: boolean;
+  /** 列 hub 上我的实例（owner 全量视角），不扫本地家目录 */
+  remote?: boolean;
 }
 
 /**
@@ -17,7 +20,8 @@ export interface LsOpts {
  * 2026-11-18 恢复：旧集中 workspace 的 direct/indirect 注册表语义已随实例文件夹模型
  * 退役（4ab7987），本命令是新语义重写，不是旧实现复用。
  */
-export function runLs(opts: LsOpts): number {
+export async function runLs(opts: LsOpts): Promise<number> {
+  if (opts.remote === true) return runLsRemote(opts);
   const home = path.join(opts.dataDir ?? defaultDataDir(), 'practices');
 
   interface Entry {

@@ -8,6 +8,7 @@ import {
   type DocEntry,
   type FieldName,
 } from '../retrieval.js';
+import { runSearchRemote } from './discover.js';
 
 export interface SearchOpts {
   dir?: string;
@@ -16,6 +17,9 @@ export interface SearchOpts {
   json: boolean;
   /** 把本地笔记（.practi/notes.json）一并纳入索引文本；默认关，避免改变既有命中集合 */
   notes: boolean;
+  /** 查 hub 上的实践（公开 + 我的）而不是这个实践的节点池；anywhere 命令 */
+  remote?: boolean;
+  dataDir?: string;
 }
 
 interface LocalHit {
@@ -39,6 +43,7 @@ interface LocalHit {
  * - （--semantic 本地向量召回已随 2026-11-17 早期精简移除；hub 侧语义检索同轮拆除）
  */
 export async function runSearch(opts: SearchOpts): Promise<number> {
+  if (opts.remote === true) return runSearchRemote(opts);
   const repo = resolveRepo({ dir: opts.dir, verb: 'search' });
   if (repo === null) return 1;
   const query = parseQuery(opts.positional);

@@ -131,6 +131,98 @@ export async function authedFetch(
   return toReply(res);
 }
 
+// ── 发现面（practi ls --remote / search --remote）：hub 实例的 CLI 侧投影 ──
+
+/** hub 实例一行。owner/name 就是 clone 的地址；title=头文档标题（POP 根 name），
+ *  excerpt=实例描述、回落头文档描述 */
+export interface RemoteInstance {
+  owner: string;
+  name: string;
+  title: string | null;
+  excerpt: string | null;
+  /** PRIVATE | PUBLIC_REVIEWING | PUBLIC */
+  visibility: string;
+  revisions: number;
+  /** ISO 时间；hub 没给=null */
+  updatedAt: string | null;
+}
+
+function text(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+
+function hubError(status: number, body: Record<string, unknown>): string {
+  const code = text(body.code);
+  const detail = text(body.message) ?? text(body.error) ?? 'failed';
+  return `hub returned HTTP ${status}${code ? ` (${code})` : ''} — ${detail}`;
+}
+
+function toInstance(row: Record<string, unknown>, owner: string | null): RemoteInstance | null {
+  const name = text(row.name);
+  if (name === null || owner === null) return null;
+  return {
+    owner,
+    name,
+    title: text(row.head_name),
+    excerpt: text(row.description) ?? text(row.head_content),
+    visibility: text(row.visibility) ?? 'PUBLIC',
+    revisions: typeof row.revision_count === 'number' ? row.revision_count : 0,
+    updatedAt: text(row.updated_at),
+  };
+}
+
+/** 我的实例全量（GET /api/v1/instances：owner 视角，私密/审核中/公开都在）。需登录。 */
+export async function fetchMyInstances(home: string, remote: string): Promise<RemoteInstance[]> {
+  const res = await authedFetch(home, remote, '/api/v1/instances');
+  const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+  if (!res.ok) throw new Error(hubError(res.status, body));
+  const results = Array.isArray(body.results) ? (body.results as Record<string, unknown>[]) : [];
+  return results.flatMap((r) => {
+    const instance = toInstance(r, text(r.owner_account));
+    return instance ? [instance] : [];
+  });
+}
+
+/** 公开实例的浏览与检索（GET /api/v1/search/instances，匿名）：q 为空=按更新时间倒序浏览，
+ *  非空=hub 的词法排名（按整串匹配）。total=浏览时的公开总数 / 检索时的命中总数。
+ *  返回 null = 这个 hub 还没有该端点（404）。 */
+export async function fetchPublicInstances(
+  remote: string,
+  q: string,
+  limit: number
+): Promise<{ results: RemoteInstance[]; total: number } | null> {
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (q !== '') qs.set('q', q);
+  let res: ApiReply;
+  try {
+    res = toReply(await fetchUrl(`${remote}/api/v1/search/instances?${qs}`));
+  } catch (e) {
+    throw new Error(`cannot reach ${remote} — is the hub running? (${(e as Error).message})`);
+  }
+  if (res.status === 404) return null;
+  const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+  if (!res.ok) throw new Error(hubError(res.status, body));
+  const results = Array.isArray(body.results) ? (body.results as Record<string, unknown>[]) : [];
+  return {
+    results: results.flatMap((r) => {
+      const instance = toInstance(r, text(r.owner));
+      return instance ? [instance] : [];
+    }),
+    total: typeof body.total === 'number' ? body.total : results.length,
+  };
+}
+
+/** 当前登录账号（auth username）——实例地址的 owner 段（/u/{account}/{name}） */
+export async function fetchMyUsername(home: string, remote: string): Promise<string> {
+  const res = await authedFetch(home, remote, '/api/auth/me');
+  const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+  const username = text(body.username);
+  if (username === null) {
+    throw new Error(`cannot tell which account is signed in — ${res.ok ? 'no username in the reply' : hubError(res.status, body)}`);
+  }
+  return username;
+}
+
 /** hub 端点一律要 `sha256:` 全形 root_hash；CLI 面子统一接受裸 64-hex 自动补前缀。
  *  前缀短哈希这里不猜——直传端点的命令没法可靠解析任意公开文档的前缀，
  *  宁要全哈希也不要猜错。返回 null = 不是全哈希。 */
