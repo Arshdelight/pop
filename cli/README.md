@@ -35,7 +35,8 @@ birth · edit · sync (run inside a practice folder unless noted)
   practi pull                      fetch missing revisions, fast-forward, update the
                                    working file (refuses when it has uncommitted changes)
   practi clone <owner>/<name>[@branch] [--dir <path>]
-                                   clone a hub practice into a local folder (full chain)
+                                   clone a hub practice into a local folder (full chain);
+                                   just <name> = one of your own
 
 history
   practi log [--branch <b>] [--limit N] [--json]   commits, tip first
@@ -76,8 +77,13 @@ anywhere
   practi login [--no-open] [--reauth]   OAuth sign-in (PKCE, browser consent); logout revokes
   practi me                     show the signed-in account and scopes
   practi config                 show config home and remote
-  practi ls [--json]            cross-practice overview from the practices home
-                                (branch / head / revisions / unpushed per practice)
+  practi ls [--remote] [--json]  cross-practice overview from the practices home
+                                (branch / head / revisions / unpushed per practice);
+                                --remote lists your practices on the hub instead
+  practi search --remote [query...] [--limit N] [--json]
+                                practices on the hub — public ones (hub ranking) plus
+                                yours by name/description; no query = browse the newest
+                                public. The public part works without a login
   practi fix <file.json> [--dry-run]  migrate a POP 1.x document file to 2.0
   practi skill install | update | uninstall | import <dir> | export <ref>
   practi spec                   print the bundled pop-spec.md (no network)
@@ -100,7 +106,7 @@ Editing is replacing: content addressing means a commit produces a **new root ha
 
 ### Hub (practihub, optional)
 
-A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain with branches. `practi push` births the hub copy on first push; `practi clone <owner>/<name>` brings a full chain down as a folder. Content addressing is untouched: the hub re-derives hashes server-side with the same SDK, and visibility follows the instance (PUBLIC chains readable by anyone, PRIVATE only by the owner). Everything hub-side needs `practi login` + `practi remote set`.
+A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain with branches. `practi push` births the hub copy on first push; `practi clone <owner>/<name>` brings a full chain down as a folder. To find what to clone: `practi ls --remote` lists your practices on the hub, `practi search --remote [query]` browses or searches the public ones (plus your own), and `practi clone <name>` takes one of your own without the owner. Content addressing is untouched: the hub re-derives hashes server-side with the same SDK, and visibility follows the instance (PUBLIC chains readable by anyone, PRIVATE only by the owner). Everything hub-side needs `practi remote set`; whatever touches your account — and every clone — also needs `practi login` (browsing and searching public practices is the one thing that works anonymously).
 
 ## License
 
