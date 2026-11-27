@@ -273,6 +273,141 @@ export async function fetchRemoteDoc(
   return { rootHash: parsed.rootHash, status: body.status ?? 'PRIVATE' };
 }
 
+// ── 直读面（带地址直接操作 hub，2026-11-27）：不落 workspace 的实例视图与修订读取 ──
+
+/** 实例视图的直读形态（GET /api/v1/instances/{o}/{n}?branch=）：比 InstanceChainView
+ *  多带元数据与修订详情（message/created_at/status），供 show/log/set 直连 hub 用。
+ *  text() 复用下方发现面的同名工具 */
+
+export interface DirectInstanceView {
+  name: string;
+  description: string | null;
+  visibility: string;
+  /** 被改进实践的根哈希（refines 边）；null=无 */
+  refines: string | null;
+  owner: { account: string };
+  branches: { name: string; head_hash: string | null; is_default: boolean }[];
+  branch: string;
+  /** 当前支 tip（null=尚无版本） */
+  branch_head_hash: string | null;
+  /** 当前支历史，新的在先 */
+  revisions: { seq: number; root_hash: string; parent_hash: string | null; message: string; created_at: string; status: string }[];
+}
+
+/** hub 应答的非 2xx：带 status 与 E_ 码，写路径按码给可执行的下一步
+ *  （E_INSTANCE_NOT_FOUND → 提示 new、E_BRANCH_NOT_FOUND → 建支、E_HEAD_MOVED → 重读）。
+ *  message 与 hubErrorMessage 同形——`hub returned HTTP <s> (<code>) — <detail>`；
+ *  读路径（show/log/set）只透传 message，行为不变。 */
+export class HubApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+export function hubErrorMessage(status: number, body: Record<string, unknown>): string {
+  const code = text(body.code);
+  const detail = text(body.message) ?? text(body.error) ?? 'failed';
+  return `hub returned HTTP ${status}${code ? ` (${code})` : ''} — ${detail}`;
+}
+
+/** GET 实例视图（show/log 直读共用口径）。authedFetch 先验凭据后联网——未登录在请求前就被拦下 */
+export async function fetchDirectInstance(
+  dataDir: string,
+  remote: string,
+  owner: string,
+  name: string,
+  branch?: string
+): Promise<DirectInstanceView> {
+  const q = branch !== undefined ? `?branch=${encodeURIComponent(branch)}` : '';
+  const res = await authedFetch(
+    dataDir,
+    remote,
+    `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}${q}`
+  );
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new HubApiError(res.status, text(body.code), hubErrorMessage(res.status, body));
+  const revisions = Array.isArray(body.revisions) ? (body.revisions as Record<string, unknown>[]) : [];
+  return {
+    name: text(body.name) ?? name,
+    description: text(body.description),
+    visibility: text(body.visibility) ?? 'PRIVATE',
+    refines: text(body.refines),
+    owner: { account: (body.owner as { account?: unknown } | undefined)?.account === undefined ? owner : String((body.owner as { account: unknown }).account) },
+    branches: (Array.isArray(body.branches) ? (body.branches as Record<string, unknown>[]) : [])
+      .filter((b) => text(b.name) !== null)
+      .map((b) => ({
+        name: text(b.name) as string,
+        head_hash: text(b.head_hash),
+        is_default: b.is_default === true,
+      })),
+    branch: text(body.branch) ?? branch ?? 'main',
+    branch_head_hash: text(body.branch_head_hash),
+    revisions: revisions
+      .filter((r) => text(r.root_hash) !== null && typeof r.seq === 'number')
+      .map((r) => ({
+        seq: r.seq as number,
+        root_hash: text(r.root_hash) as string,
+        parent_hash: text(r.parent_hash),
+        message: text(r.message) ?? '',
+        created_at: text(r.created_at) ?? '',
+        status: text(r.status) ?? 'PRIVATE',
+      })),
+  };
+}
+
+/** GET 单修订（show 直读）：返回展开过的完整文档。哈希验算在调用方（show 要先
+ *  parseDocument 再对根，两步并一步就不重复解析了）。 */
+export async function fetchDirectRevision(
+  dataDir: string,
+  remote: string,
+  owner: string,
+  name: string,
+  hash: string
+): Promise<{ root_hash: string; document: unknown; status: string }> {
+  const res = await authedFetch(
+    dataDir,
+    remote,
+    `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/revisions/${encodeURIComponent(hash)}`
+  );
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new HubApiError(res.status, text(body.code), hubErrorMessage(res.status, body));
+  if (body.document === undefined || body.document === null) {
+    throw new Error(`${hash} — response missing document`);
+  }
+  return {
+    root_hash: text(body.root_hash) ?? hash,
+    document: body.document,
+    status: text(body.status) ?? 'PRIVATE',
+  };
+}
+
+/** PATCH 实例元数据（set）：body 只带调用方给的字段 */
+export async function patchInstanceMetadata(
+  dataDir: string,
+  remote: string,
+  owner: string,
+  name: string,
+  patch: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const res = await authedFetch(
+    dataDir,
+    remote,
+    `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    }
+  );
+  const body = (await res.json().catch(() => ({})) as Record<string, unknown>);
+  if (!res.ok) throw new HubApiError(res.status, text(body.code), hubErrorMessage(res.status, body));
+  return body;
+}
+
 // ── blob 通道（hub 扩展端点 /api/v1/blobs/{hash}，spec §5/§8；hub 2026-11-18 正门） ──
 
 /** 递归收集文档树全部附件 hash（action-only，practice 无附件表；ChildRef 子树的字节

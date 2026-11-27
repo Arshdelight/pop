@@ -1,4 +1,5 @@
-import { defaultDataDir, loadState } from '../state.js';
+import { DEFAULT_REMOTE_URL, defaultDataDir, describeDataDir, loadState, remoteUrl } from '../state.js';
+import { CLI_VERSION, POP_SPEC_VERSION } from '../version.js';
 import {
   saveCredentials,
   deleteCredentials,
@@ -58,12 +59,7 @@ function carryOverRegisteredClient(dataDir: string, remote: string, resource: st
  */
 export async function runLogin(opts: LoginOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
-  const remote = state.remote.url;
+  const remote = remoteUrl(dataDir);
   const resource = cliResource(remote);
   const existing = loadCredentials(dataDir);
   if (opts.reauth === true && existing) {
@@ -174,15 +170,23 @@ export interface MeOpts {
   dataDir?: string;
 }
 
-/** practi me：校验登录态，显示当前用户/角色/scope */
+/** practi me：登录态 + 配置面（原 `practi config` 并入，2026-11-27）。未登录也打印
+ *  配置家与 remote（标明默认值还是 remote set 设的），并指路 `practi login`。 */
 export async function runMe(opts: MeOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
+  const { dir, via } = describeDataDir(opts.dataDir);
   const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
+  const configured = state.remote !== undefined;
+  const remote = configured ? state.remote!.url : DEFAULT_REMOTE_URL;
+  console.log(`practi:    ${CLI_VERSION}   pop-spec: ${POP_SPEC_VERSION}`);
+  console.log(`config home: ${dir}  (via ${via})  — credentials + remote; practice folders live anywhere`);
+  console.log(`remote:     ${remote}${configured ? '  (set with `practi remote set`)' : '  (default — change with `practi remote set <url>`)'}`);
+  const creds = loadCredentials(dataDir);
+  if (!creds) {
+    console.error('not logged in — run `practi login` first');
     return 1;
   }
-  const res = await authedFetch(dataDir, state.remote.url, '/api/auth/me');
+  const res = await authedFetch(dataDir, remote, '/api/auth/me');
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     console.error(`error: not authenticated — ${typeof body.error === 'string' ? body.error : `HTTP ${res.status}`}`);
@@ -191,8 +195,6 @@ export async function runMe(opts: MeOpts): Promise<number> {
   console.log(`username:     ${body.username ?? '(unknown)'}`);
   console.log(`profile:      ${body.profileUsername ?? '(none)'}`);
   if (body.role) console.log(`role:         ${body.role}`);
-  const creds = loadCredentials(dataDir);
-  if (creds?.scope) console.log(`scopes:       ${creds.scope}`);
-  console.log(`remote:       ${state.remote.url}`);
+  if (creds.scope) console.log(`scopes:       ${creds.scope}`);
   return 0;
 }

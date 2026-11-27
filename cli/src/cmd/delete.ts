@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadCredentials } from '../credentials.js';
 import { authedFetch } from '../client.js';
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 
 export interface DeleteOpts {
   dataDir?: string;
@@ -22,11 +22,7 @@ function parseTarget(target: string | undefined): { owner: string; name: string 
  *  （chain.json 的 name 相同；记录了 owner 的还要 owner 相同），不是就拒删。 */
 export async function runDelete(opts: DeleteOpts): Promise<number> {
   const dir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
+  const remote = remoteUrl(dir);
   const target = parseTarget(opts.positional[0]);
   if (!target) {
     console.error('usage: practi delete <owner>/<name> --yes [--local <dir>]');
@@ -64,7 +60,7 @@ export async function runDelete(opts: DeleteOpts): Promise<number> {
 
   const res = await authedFetch(
     dir,
-    state.remote.url,
+    remote,
     `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
     { method: 'DELETE' }
   );

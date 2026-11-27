@@ -30,7 +30,6 @@ Nodes carry no ids: a node's content hash is its only address, and the root hash
 
 ```bash
 npm install -g @arshdelight/practi
-practi init                                    # create the config home (~/.practi by default)
 practi new make-tea --base tea.json -m "first"  # birth a practice folder from a document (the tree above, saved as tea.json)
 practi web                                     # browse it in a local web UI
 ```
@@ -87,8 +86,9 @@ birth · edit · sync (run inside a practice folder unless noted)
   practi new <name> [--base <file.json>] [-m <msg>]  birth a practice folder in cwd;
                                    --base seeds the first revision from a pop document
   practi commit [-m <msg>] [--amend]   snapshot the working file as a new revision
-                                   (local only; nothing to commit when it matches the
-                                   head; --amend replaces the head instead)
+                                   (nothing to commit when it matches the head;
+                                   --amend replaces the head instead; with an
+                                   <owner>/<name> address it goes straight to the hub)
   practi export <hash> [-o <file>]       write any revision back out as a document
   practi push [--force]            sync to the hub (first push creates the instance there)
   practi pull                      fetch missing revisions, fast-forward, update the
@@ -108,6 +108,31 @@ history
                                    rewrite the local chain; the working file is left as
                                    is (git reset semantics) — keep it with a commit or
                                    discard it with export
+
+straight from the hub (an address — <owner>/<name>[@branch] — needs no local folder)
+  practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]
+                                   inspect a hub revision: default the branch head,
+                                   vN = the Nth revision; --doc prints the document
+                                   JSON and hints the --base for the next commit
+  practi log <owner>/<name>[@branch] [--limit N] [--json]
+                                   the hub revision history, tip first (dated)
+  practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
+                                   update instance metadata (--description "" clears)
+  practi commit <owner>/<name>[@branch] --file <path|-> [-m <msg>]
+                                   [--base <hash|vN>] [--amend] [--force]
+                                   commit a document file straight to the hub, no local
+                                   folder: appended on top of the branch head (--base
+                                   pins the parent, checked before anything is sent);
+                                   --amend replaces the head revision (older ones stay);
+                                   --force replaces the chain with this one document
+                                   (earlier versions become unreachable)
+  practi new <name> --file <path|-> [-m <msg>]
+                                   create the instance on the hub (private) and land the
+                                   first revision — no local folder is born (name taken?
+                                   add to it with commit --file instead)
+  practi blob add <owner>/<name> <file-or-url> [--name <name>]
+                                   upload attachment bytes straight to the hub and print
+                                   the ready-to-paste entry (no local pool touched)
 
 inside a practice folder
   practi show <hash> [--json] [--doc]   inspect one revision node (hash prefix OK)
@@ -131,11 +156,10 @@ inside a practice folder
                                    directory page — click through to the reader
 
 anywhere
-  practi init [path]            create the config home (credentials + remote; default ~/.practi)
-  practi remote set <url> | remove    point at a hub
+  practi remote set <url> | remove    point at another hub (default: https://practihub.com;
+                                   remove falls back to it)
   practi login [--no-open] [--reauth]   OAuth sign-in (PKCE, browser consent); logout revokes
-  practi me                     show the signed-in account and scopes
-  practi config                 show config home and remote
+  practi me                     show the signed-in account, config home and remote
   practi ls [--remote] [--json]  cross-practice overview from the practices home
                                 (branch / head / revisions / unpushed per practice);
                                 --remote lists your practices on the hub instead
@@ -163,7 +187,7 @@ anywhere
   practi version | --version    show CLI + pop-spec versions
 ```
 
-Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice` — each prints where it went (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview).
+Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice` — each prints where it went (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview). `init` / `config` retired 2026-11-27 into `practi me`: hub commands default to practihub.com and the config home builds itself on login.
 
 A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain with branches. `practi push` births the hub copy on first push, `practi clone` brings a full chain down as a folder, and `ls --remote` / `search --remote` find what to clone. Content addressing is untouched: the hub re-derives hashes server-side with the same SDK.
 

@@ -1,5 +1,5 @@
 import { authedFetch, normalizeHashRef } from '../client.js';
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 
 interface AppealItem {
   id: string;
@@ -29,12 +29,7 @@ const USAGE_LINES = [
 
 export async function runAppeal(opts: AppealOpts): Promise<number> {
   const dir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
-  const remote = state.remote.url;
+  const remote = remoteUrl(dir);
   const target = opts.positional[0];
   if (!target || !/^[^/]+\/[^/]+$/.test(target)) {
     console.error(USAGE_LINES.join('\n'));

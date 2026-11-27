@@ -9,15 +9,21 @@ import path from 'node:path';
  */
 export const STATE_FILE = 'practi.json';
 
-/** 官方 hub 地址。仅作文档示例（`practi remote set` 的 usage 举例）——
- *  CLI 不设隐式默认：未配置 remote 时 hub 命令明确报错并指路 `practi remote set`。 */
+/** 官方 hub 地址：未配置 remote 时的隐式默认（2026-11-27 拍板）——
+ *  `practi remote set` 只为换 hub，`remove` 回落到这里。 */
 export const DEFAULT_REMOTE_URL = 'https://practihub.com';
 
 export interface State {
   schema: 1;
-  /** Remote hub origin（如 https://practihub.com）。无隐式默认——未配置时 hub 命令
-   *  报 "no remote configured" 并指路 `practi remote set`。`practi remote set|remove` 维护。 */
+  /** Remote hub origin（如 https://practihub.com）。可缺省——未配置时 hub 命令用
+   *  DEFAULT_REMOTE_URL（remoteUrl 取值）。`practi remote set|remove` 维护。 */
   remote?: { url: string };
+}
+
+/** hub 命令的统一远端取值：配置了用配置的，没配置回落官方地址。
+ *  是否为默认值（`practi me` 标明来源）看 loadState(dataDir).remote 有无。 */
+export function remoteUrl(dataDir: string): string {
+  return loadState(dataDir).remote?.url ?? DEFAULT_REMOTE_URL;
 }
 
 /* --------------------------------------------------------------- */
@@ -77,6 +83,23 @@ export function defaultDataDir(): string {
 
 export function statePath(dataDir: string): string {
   return path.join(dataDir, STATE_FILE);
+}
+
+/** Resolution transparency: answers "why this directory" — explicit --data-dir,
+ *  session env, persisted pointer, or convention.（原 `practi config` 的判定，
+ *  config 退役后由 `practi me` 沿用） */
+export function describeDataDir(explicit?: string): { dir: string; via: string } {
+  if (explicit) return { dir: path.resolve(explicit), via: '--data-dir' };
+  const r = dataDirResolution();
+  const via =
+    r.via === 'env'
+      ? process.env.PRACTI_HOME
+        ? '$PRACTI_HOME'
+        : '$POP_HOME'
+      : r.via === 'pointer'
+        ? `pointer ${pointerPath()}`
+        : 'convention';
+  return { dir: r.dir, via };
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {

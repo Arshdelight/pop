@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 import { loadCredentials } from '../credentials.js';
 import { exportSubtree, initWorkspace, loadWorkspace } from '@arshdelight/pop-sdk';
 import { fetchInstanceChain, syncInstanceObjects, type InstanceChainView } from '../sync.js';
@@ -34,11 +34,7 @@ export function parseCloneRef(ref: string): { owner?: string; name: string; bran
  */
 export async function runClone(opts: CloneOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
+  const remote = remoteUrl(dataDir);
   const ref = opts.positional[0];
   const parsed = ref ? parseCloneRef(ref) : null;
   if (!parsed) {
@@ -59,10 +55,10 @@ export async function runClone(opts: CloneOpts): Promise<number> {
 
   // 先问 hub、后建目录：实例不存在时不留空文件夹（`clone <name>` 靠名字猜时常见的失败路径）
   // 只给 <name>：owner 段 = 当前登录账号（auth username）
-  const owner = parsed.owner ?? (await fetchMyUsername(dataDir, state.remote.url));
+  const owner = parsed.owner ?? (await fetchMyUsername(dataDir, remote));
   let view: InstanceChainView;
   try {
-    view = await fetchInstanceChain(dataDir, state.remote.url, owner, name, branch);
+    view = await fetchInstanceChain(dataDir, remote, owner, name, branch);
   } catch (e) {
     if (parsed.owner !== undefined) throw e;
     console.error(
@@ -78,7 +74,7 @@ export async function runClone(opts: CloneOpts): Promise<number> {
     // practice.yaml 已在（半途重试）——沿用
   }
   const ws = loadWorkspace(poolDir);
-  const sync = await syncInstanceObjects(dataDir, poolDir, state.remote.url, owner, name, view, (h) => ws.nodes.has(h));
+  const sync = await syncInstanceObjects(dataDir, poolDir, remote, owner, name, view, (h) => ws.nodes.has(h));
   if (sync.failed.length > 0) {
     console.error(`clone incomplete: ${sync.failed.length} revision(s) failed to fetch`);
     return 1;

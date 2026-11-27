@@ -30,7 +30,6 @@
 
 ```bash
 npm install -g @arshdelight/practi
-practi init                                    # 创建配置家（默认 ~/.practi）
 practi new make-tea --base tea.json -m "first"  # 从一份文档诞生实践文件夹（把上面的树存成 tea.json）
 practi web                                     # 在本地 web UI 里浏览
 ```
@@ -87,8 +86,8 @@ npm install -g @arshdelight/practi
   practi new <name> [--base <file.json>] [-m <msg>]  在当前目录诞生一个实践文件夹；
                                    --base 用一份 pop 文档种入第一个版本
   practi commit [-m <msg>] [--amend]   把工作文件存为一个新版本
-                                   （仅本地；与头版本相同时无可提交；
-                                   --amend 改为替换头版本）
+                                   （与头版本相同时无可提交；--amend 改为替换
+                                   头版本；带 <owner>/<name> 地址时直接写 hub）
   practi export <hash> [-o <file>]       把任一版本写回成文档
   practi push [--force]            同步到 hub（首次推送在那里创建实例）
   practi pull                      拉取缺失的版本、快进分支、更新工作文件
@@ -108,6 +107,29 @@ npm install -g @arshdelight/practi
                                    改写本地提交链；工作文件原样不动
                                    （git reset 语义）——想留住就用 commit 收下，
                                    想丢弃就用 export 取回头版本
+
+带地址直连 hub（<owner>/<name>[@branch]，不需要本地文件夹）
+  practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]
+                                   查看 hub 上的一个版本：默认支头，vN = 第 N 版；
+                                   --doc 打印文档 JSON，并提示下一版提交的
+                                   --base 用哪个
+  practi log <owner>/<name>[@branch] [--limit N] [--json]
+                                   hub 上的版本历史，新的在前（带日期）
+  practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
+                                   改实例元数据（--description "" 表示清空）
+  practi commit <owner>/<name>[@branch] --file <path|-> [-m <msg>]
+                                   [--base <hash|vN>] [--amend] [--force]
+                                   把一份文档文件直接提交到 hub，不需要本地文件夹：
+                                   追加在支头之后（--base 指定父版本，发送前先在
+                                   本地核对）；--amend 替换支头那条版本（更早的
+                                   保留）；--force 用这一份文档替换整条链
+                                   （之前的版本不可达）
+  practi new <name> --file <path|-> [-m <msg>]
+                                   在 hub 上创建实例（私有）并落第一版——不建任何
+                                   本地文件夹（名字被占了就用 commit --file 加进去）
+  practi blob add <owner>/<name> <file-or-url> [--name <name>]
+                                   把附件字节直接传到 hub 并打印可粘贴的条目
+                                   （不落本地池）
 
 实践文件夹内
   practi show <hash> [--json] [--doc]   查看一个版本节点（hash 前缀即可）
@@ -129,11 +151,10 @@ npm install -g @arshdelight/practi
                                    目录页——点进去就是阅读器
 
 任何地方
-  practi init [path]            创建配置家（凭据 + 远端；默认 ~/.practi）
-  practi remote set <url> | remove    指向一个 hub
+  practi remote set <url> | remove    指向另一个 hub（默认 https://practihub.com；
+                                   remove 回落到默认）
   practi login [--no-open] [--reauth]   OAuth 登录（PKCE，浏览器授权）；logout 吊销
-  practi me                     查看当前登录账号与 scope
-  practi config                 查看配置家与远端
+  practi me                     查看当前登录账号、配置家与远端
   practi ls [--remote] [--json]  practices 家目录的跨实践概览
                                 （每个实践的分支 / 头 / 版本数 / 未推送数）；
                                 --remote 改为列出你在 hub 上的实践
@@ -161,7 +182,7 @@ npm install -g @arshdelight/practi
   practi version | --version    查看 CLI 与 pop-spec 版本
 ```
 
-随 pops 登记簿退役的命令（2026-10-20）：`edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice`——各自会打印去向（`ls` 于 2026-11-18 以文件夹模型语义回归：跨实践概览）。
+随 pops 登记簿退役的命令（2026-10-20）：`edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice`——各自会打印去向（`ls` 于 2026-11-18 以文件夹模型语义回归：跨实践概览）。`init` / `config` 于 2026-11-27 并入 `practi me`：hub 命令默认连 practihub.com，登录时配置家按需自建。
 
 一个实践文件夹对应 hub 上的一个**实例**——单 owner、GitHub 式的仓库，容纳一份 POP 的演进链与分支。`practi push` 在首次推送时在 hub 上创建它，`practi clone` 把整条链拉下来成为文件夹，`ls --remote` / `search --remote` 负责找到要克隆什么。内容寻址不受影响：hub 用同一份 SDK 在服务端重新推导哈希。
 
