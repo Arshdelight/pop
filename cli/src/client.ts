@@ -294,7 +294,21 @@ export interface DirectInstanceView {
   revisions: { seq: number; root_hash: string; parent_hash: string | null; message: string; created_at: string; status: string }[];
 }
 
-function hubErrorMessage(status: number, body: Record<string, unknown>): string {
+/** hub 应答的非 2xx：带 status 与 E_ 码，写路径按码给可执行的下一步
+ *  （E_INSTANCE_NOT_FOUND → 提示 new、E_BRANCH_NOT_FOUND → 建支、E_HEAD_MOVED → 重读）。
+ *  message 与 hubErrorMessage 同形——`hub returned HTTP <s> (<code>) — <detail>`；
+ *  读路径（show/log/set）只透传 message，行为不变。 */
+export class HubApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+export function hubErrorMessage(status: number, body: Record<string, unknown>): string {
   const code = text(body.code);
   const detail = text(body.message) ?? text(body.error) ?? 'failed';
   return `hub returned HTTP ${status}${code ? ` (${code})` : ''} — ${detail}`;
@@ -315,7 +329,7 @@ export async function fetchDirectInstance(
     `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}${q}`
   );
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) throw new Error(hubErrorMessage(res.status, body));
+  if (!res.ok) throw new HubApiError(res.status, text(body.code), hubErrorMessage(res.status, body));
   const revisions = Array.isArray(body.revisions) ? (body.revisions as Record<string, unknown>[]) : [];
   return {
     name: text(body.name) ?? name,
@@ -360,7 +374,7 @@ export async function fetchDirectRevision(
     `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/revisions/${encodeURIComponent(hash)}`
   );
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!res.ok) throw new Error(hubErrorMessage(res.status, body));
+  if (!res.ok) throw new HubApiError(res.status, text(body.code), hubErrorMessage(res.status, body));
   if (body.document === undefined || body.document === null) {
     throw new Error(`${hash} — response missing document`);
   }
@@ -390,7 +404,7 @@ export async function patchInstanceMetadata(
     }
   );
   const body = (await res.json().catch(() => ({})) as Record<string, unknown>);
-  if (!res.ok) throw new Error(hubErrorMessage(res.status, body));
+  if (!res.ok) throw new HubApiError(res.status, text(body.code), hubErrorMessage(res.status, body));
   return body;
 }
 

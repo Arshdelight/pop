@@ -44,8 +44,9 @@ function detailOf(body: Record<string, unknown>, status: number): string {
       : `HTTP ${status}`;
 }
 
-/** hub E_BLOB_MISSING 应答里的缺失 hash 列表（body.missing；非该错误/无数组 → null） */
-function missingBlobsOf(body: Record<string, unknown>): string[] | null {
+/** hub E_BLOB_MISSING 应答里的缺失 hash 列表（body.missing；非该错误/无数组 → null）。
+ *  push 与直写 commit（cmd/commit.ts）共用 */
+export function missingBlobsOf(body: Record<string, unknown>): string[] | null {
   if (body.code !== 'E_BLOB_MISSING' || !Array.isArray(body.missing)) return null;
   const hashes = body.missing.filter((h): h is string => typeof h === 'string' && h !== '');
   return hashes.length > 0 ? hashes : null;
@@ -214,8 +215,11 @@ export async function pushRepo(
     return 0;
   }
 
-  // FF 逐条推（服务端 parent=当前支头自动落链）。附件字节缺失（E_BLOB_MISSING）时
-  // 自动从本地池补传后重推一次——正常路径零额外请求，blob 已在 hub 的重复推送无感
+  // FF 逐条推（每条带 parent_hash：第一条=推送开始时看到的 hub 头，空支为 null，
+  // 之后每条=上一条的根；hub 回 409 E_HEAD_MOVED 说明推送中途有并发写入，不落版本）。
+  // 附件字节缺失（E_BLOB_MISSING）时自动从本地池补传后重推一次——正常路径零额外
+  // 请求，blob 已在 hub 的重复推送无感
+  let parent: string | null = hubHead;
   for (const c of path) {
     const doc = exportDoc(repo, c.root);
     if (doc === null) {
@@ -226,7 +230,11 @@ export async function pushRepo(
       authedFetch(opts.dataDir, opts.remote, `${base}/branches/${encodeURIComponent(branch)}/revisions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(c.message !== '' ? { document: doc, message: c.message } : { document: doc }),
+        body: JSON.stringify(
+          c.message !== ''
+            ? { document: doc, message: c.message, parent_hash: parent }
+            : { document: doc, parent_hash: parent }
+        ),
       });
     let res = await post();
     let body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -241,9 +249,17 @@ export async function pushRepo(
       body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     }
     if (!res.ok) {
+      if (res.status === 409 && body.code === 'E_HEAD_MOVED') {
+        console.error(
+          `push failed at v${c.seq} (${shortHash(c.root)}): the hub's head moved during the push (E_HEAD_MOVED)` +
+            ` — run \`practi pull\` to reconcile, then push again`
+        );
+        return 1;
+      }
       console.error(`push failed at v${c.seq} (${shortHash(c.root)}): ${detailOf(body, res.status)}`);
       return 1;
     }
+    parent = c.root;
     c.pushedAt = new Date().toISOString();
     if (opts.verbose) console.log(`  v${c.seq}  ${shortHash(c.root)}  ${c.message}`);
   }
@@ -324,7 +340,7 @@ export async function runPush(opts: PushOpts): Promise<number> {
   if (repo === null) return 1;
   const head = chainHead(repo.chain);
   if (head === null) {
-    console.error(`error: practice "${repo.chain.name}" has no revisions yet — \`practi publish <pop> --to ${repo.chain.name}\` first`);
+    console.error(`error: practice "${repo.chain.name}" has no revisions yet — write the working file and \`practi commit -m "..."\` first`);
     return 1;
   }
   return pushRepo(repo, { dataDir, remote: remoteUrl(dataDir), force: opts.force, verbose: true });

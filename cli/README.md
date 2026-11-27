@@ -28,8 +28,9 @@ birth · edit · sync (run inside a practice folder unless noted)
   practi new <name> [--base <file.json>] [-m <msg>]  birth a practice folder in cwd;
                                    --base seeds the first revision from a pop document
   practi commit [-m <msg>] [--amend]   snapshot the working file as a new revision
-                                   (local only; nothing to commit when it matches the
-                                   head; --amend replaces the head instead)
+                                   (nothing to commit when it matches the head;
+                                   --amend replaces the head instead; with an
+                                   <owner>/<name> address it goes straight to the hub)
   practi export <hash> [-o <file>]       write any revision back out as a document
   practi push [--force]            sync to the hub (first push creates the instance there)
   practi pull                      fetch missing revisions, fast-forward, update the
@@ -59,6 +60,21 @@ straight from the hub (an address — <owner>/<name>[@branch] — needs no local
                                    the hub revision history, tip first (dated)
   practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
                                    update instance metadata (--description "" clears)
+  practi commit <owner>/<name>[@branch] --file <path|-> [-m <msg>]
+                                   [--base <hash|vN>] [--amend] [--force]
+                                   commit a document file straight to the hub, no local
+                                   folder: appended on top of the branch head (--base
+                                   pins the parent, checked before anything is sent);
+                                   --amend replaces the head revision (older ones stay);
+                                   --force replaces the chain with this one document
+                                   (earlier versions become unreachable)
+  practi new <name> --file <path|-> [-m <msg>]
+                                   create the instance on the hub (private) and land the
+                                   first revision — no local folder is born (name taken?
+                                   add to it with commit --file instead)
+  practi blob add <owner>/<name> <file-or-url> [--name <name>]
+                                   upload attachment bytes straight to the hub and print
+                                   the ready-to-paste entry (no local pool touched)
 
 inside a practice folder
   practi show <hash> [--json] [--doc]   inspect one revision node (hash prefix OK)

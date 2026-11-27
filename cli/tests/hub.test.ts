@@ -27,6 +27,10 @@ interface MockState {
   lastMessage: string | null;
   /** force 端点收到的链（断言用） */
   lastForceCommits: { seq: number; root_hash: string; parent_hash: string | null; message: string }[] | null;
+  /** 追加端点逐条收到的 parent_hash（断言用；push 每条都带） */
+  parentHashes: (string | null)[];
+  /** 一次性拒绝：下一次 POST revisions 回这个应答（模拟并发换头 409 等） */
+  rejectOnce: { status: number; body: Record<string, unknown> } | null;
   remoteDocs: Map<string, unknown>;
   storeCalls: number;
   forceCalls: number;
@@ -57,6 +61,8 @@ beforeAll(async () => {
     forceDropped: 0,
     lastMessage: null,
     lastForceCommits: null,
+    parentHashes: [],
+    rejectOnce: null,
     createdBranches: [],
     remoteDocs: new Map(),
     storeCalls: 0,
@@ -143,10 +149,27 @@ beforeAll(async () => {
           respond(res, 200, { ok: true, head: body.commits.at(-1)?.root_hash ?? null, dropped: mock.forceDropped });
           return;
         }
-        const body = JSON.parse(await readBody(req)) as { document: unknown; message?: string };
+        const body = JSON.parse(await readBody(req)) as { document: unknown; message?: string; parent_hash?: string | null };
+        // 真实 hub 契约：给了 parent_hash 就核对当前支头，不符 409 E_HEAD_MOVED 不落版本
+        if (mock.rejectOnce) {
+          const r = mock.rejectOnce;
+          mock.rejectOnce = null;
+          respond(res, r.status, r.body);
+          return;
+        }
+        const hubHead = mock.mainChain?.[0]?.root_hash ?? null;
+        if (body.parent_hash !== undefined && body.parent_hash !== hubHead) {
+          respond(res, 409, { code: 'E_HEAD_MOVED', message: `parent ${body.parent_hash} is not the current head (${hubHead})` });
+          return;
+        }
         const root = parseDocument(body.document).rootHash;
         mock.storeCalls++;
         mock.lastMessage = body.message ?? null;
+        mock.parentHashes.push(body.parent_hash ?? null);
+        mock.mainChain = [
+          { seq: mock.storeCalls, root_hash: root, parent_hash: body.parent_hash ?? null },
+          ...(mock.mainChain ?? []),
+        ];
         respond(res, 201, { root_hash: root, status: 'PRIVATE', branch: decodeURIComponent(branchName), seq: mock.storeCalls });
         return;
       }
@@ -419,6 +442,39 @@ describe('push：首推创建/缺支自动创建/FF/分叉/--force', () => {
     expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
     expect(out.stdout).toMatch(/branch created on the hub: feat/);
     expect(mock.createdBranches).toEqual(['feat']);
+  });
+
+  it('FF 逐条推送各带正确的 parent_hash（首条=hub 头）；hub 中途回 409 E_HEAD_MOVED → 报错退出 1', async () => {
+    const home = await hubHome();
+    const parent = tempDataDir();
+    const file = writeDoc(parent, 'seed-doc.json', DOC);
+    await runIn(parent, home, ['new', 'ff-practice', '--base', file]);
+    const repo = path.join(parent, 'ff-practice');
+    const wf = workingFile(repo);
+    fs.writeFileSync(wf, JSON.stringify(DOC2, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '-m', 'second']);
+    fs.writeFileSync(wf, JSON.stringify({ name: 'Third pop', content: 'third body' }, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '-m', 'third']);
+    const chain = chainOf(repo);
+    const [root1, root2, root3] = chain.commits.map((c) => c.root);
+
+    // hub 只到 v1：快进两条，两条请求各带前驱的根
+    mock.mainChain = [{ seq: 1, root_hash: root1, parent_hash: null }];
+    mock.parentHashes = [];
+    const out = await runIn(repo, home, ['push']);
+    expect(out.code, `stdout=${out.stdout} stderr=${out.stderr}`).toBe(0);
+    expect(mock.parentHashes).toEqual([root1, root2]);
+    expect(mock.mainChain![0]!.root_hash).toBe(root3);
+
+    // 模拟并发：hub 在推送中途回 409 E_HEAD_MOVED → 指去 practi pull，退出 1
+    fs.writeFileSync(wf, JSON.stringify({ name: 'Fourth pop', content: 'fourth body' }, null, 2) + '\n', 'utf8');
+    await runIn(repo, home, ['commit', '-m', 'fourth']);
+    mock.rejectOnce = { status: 409, body: { code: 'E_HEAD_MOVED', message: 'branch head moved during push' } };
+    const failed = await runIn(repo, home, ['push']);
+    expect(failed.code).toBe(1);
+    expect(failed.stderr).toMatch(/E_HEAD_MOVED/);
+    expect(failed.stderr).toMatch(/practi pull/);
+    mock.mainChain = [];
   });
 
   it('分叉报错；--force 全链覆盖（hub dropped 回执透传）', async () => {

@@ -1,21 +1,17 @@
 ---
 name: use-practi
 description: Record, version, search, and manage practices with the practi
-  CLI — each practice is a self-contained folder whose pop is a plain JSON
-  document you edit with any editor, with full local history beside it (like
-  .git) and optional practihub sync. Use whenever the user wants to save what
-  was just done as a reusable practice ("record this practice", "save this
-  session", "turn this into steps"), version or rewrite one ("commit this",
-  "amend", "revert to v1", "squash my history"), search or read practices
-  ("search my practices", "find a how-to I saved", "what else is about this"),
-  annotate learning ("take a note on this step", "note what I learned while
-  reproducing"), or use the hub ("publish this practice", "clone my
-  practices", "what do I have on practihub", "is there a public practice
-  about X") — even when practi is not mentioned by name. Also for any
-  explicit practi CLI usage (practi new, practi commit, practi log, practi
-  show, practi search, practi export, practi note, practi skill export, …),
-  and for converting between formats ("turn this skill into a POP", "export
-  this practice as a skill").
+  CLI. A practice is a POP — a plain JSON document — kept in a local folder
+  with full history (like .git), or edited straight on practihub by address
+  (<owner>/<name>) with no local folder. Use whenever the user wants to save
+  what was just done as a reusable practice ("record this practice", "save
+  this session"), version or rewrite one ("commit this", "amend"), search or
+  read practices ("search my practices", "what do I have on practihub", "is
+  there a public practice about X"), update a practice that lives on the hub
+  ("change the pop in liz/tea", "add a version"), or convert between formats
+  ("turn this skill into a POP", "export this practice as a skill") — even
+  when practi is not mentioned by name. Also for any explicit practi CLI usage
+  (practi new, commit, push, show, log, set, search, …).
 ---
 
 One JSON document = one practice tree. Leaves are **actions** — atomic skills; interior nodes are **practices** — compositions. Everything except `name` is optional, and type is inferred: a node with `children` is a practice, one without is an action.
@@ -334,6 +330,18 @@ practi log <owner>/<name>[@branch] [--limit N] [--json]
 practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
                                            # update instance metadata (--description ""
                                            # clears it) — no local folder needed
+practi commit <owner>/<name>[@branch] --file <path|-> [-m <msg>] [--base <hash|vN>] [--amend] [--force]
+                                           # commit a document file straight to the hub, no
+                                           # local folder: appended on top of the branch
+                                           # head; --base pins the parent (checked before
+                                           # anything is sent — a mismatch refuses with
+                                           # zero requests); --amend replaces the head
+                                           # revision (older ones stay); --force replaces
+                                           # the chain with this one document — every
+                                           # earlier version becomes unreachable
+practi new <name> --file <path|-> [-m <msg>]   # create the instance on the hub and land v1
+practi blob add <owner>/<name> <file-or-url> [--name <name>]
+                                           # upload attachment bytes straight to the hub
 practi notifications [-n N] [--since D] [--until D] [--json]
                                            # mailbox from the hub: recent N or a since/until
                                            # range (YYYY-MM-DD or ISO datetime); read-only —
@@ -365,6 +373,7 @@ practi history reword <seq> -m <msg> | squash <seq> | drop <seq> | reset <seq>
 ```
 
 - **The commit is repository state, the document is a snapshot.** History lives in `chain.json` (local) and the hub instance's commit chain (remote) — never in the document.
+- **The read-edit-write loop, straight on the hub** — no local folder needed: `practi show <owner>/<name> --doc > x.json` (it hints the `--base` for that revision), edit `x.json`, then `practi commit <owner>/<name> --file x.json -m "…" --base vN`. `--base` is verified against the branch head before anything is sent: a mismatch refuses with zero requests — re-read with `show --doc` and redo the edit on the latest output (if someone else moved the head first, the hub says so with `E_HEAD_MOVED`, same advice). `--amend` replaces the head revision in place — older revisions stay readable, and without `-m` the original message is kept; other branches pointing at the old head move back to its parent. `--force` replaces the whole chain with the one document: **every earlier version becomes unreachable** (the hub reports how many it dropped) — only to discard history on purpose. Attachment bytes must reach the hub first (`practi blob add <owner>/<name> <file>`); a commit naming missing bytes is refused with the hashes to upload.
 - **The hub never changes the content.** Pushes are re-hashed server-side with the same SDK; visibility follows the instance (a PUBLIC instance's chain is readable by anyone, PRIVATE only by its owner); `practi visibility` switches it.
 - Deleting a practice folder removes the local copy only — the hub instance stays until `practi delete` removes it (permanent).
 
@@ -426,5 +435,6 @@ practi skill import <dir>                # replay a `practi skill export` direct
 - **Turn a session into a practice** — extract the *practices* the conversation produced → for each, follow “From a session to a practice” above (promise → the reader's steps → per step `inputs` / `content` / `outputs` / `notice` → wire the products → shape → check the derived lists; match the nearest exemplar) → `practi new <name> --base doc.json -m "first"` → resolve every `W_*` and re-read it as a newcomer (edit the working file, `commit` again) → `practi push` when it should live on the hub.
 - **Find prior art** — `cd` into the practice → `practi search <query>` (add `--notes`; `field:` when you know the field) → `practi show <hash>`. No wording recall? `practi similar <hash>` from a node you do have.
 - **Learn from a practice** — reproduce it, then pin what you learned: `practi note add <node-hash> -m "…"`. Fold it back by editing the working file and committing.
-- **Improve a practice** — edit `<name>.json` → `practi commit -m "what changed"` → `practi push`. Oops: `commit --amend`, `history reset <seq>` (working file kept — keep or discard), or `export <head>` and re-edit. Improving someone else's practice is a new instance on the hub declaring `refines` → the original's root hash (§9.1) — a hub-web action.
+- **Improve a practice** — edit `<name>.json` → `practi commit -m "what changed"` → `practi push`. Oops: `commit --amend`, `history reset <seq>` (working file kept — keep or discard), or `export <head>` and re-edit. Improving someone else's practice is a new instance on the hub declaring `refines` → the original's root hash (§9.1): `practi new <name> --file doc.json`, then `practi set <owner>/<name> --refines <hash>`.
+- **Improve a practice straight on the hub, no folder** — `practi show <owner>/<name> --doc > x.json` (it prints the `--base` hint) → edit `x.json` → `practi commit <owner>/<name> --file x.json -m "what changed" --base vN`. Landed a mistake? `--amend` replaces that version.
 - **Reproduce someone's practice** — `practi clone <owner>/<name>` → follow the working file (or `practi web`) → pin notes as you learn.

@@ -86,8 +86,8 @@ npm install -g @arshdelight/practi
   practi new <name> [--base <file.json>] [-m <msg>]  在当前目录诞生一个实践文件夹；
                                    --base 用一份 pop 文档种入第一个版本
   practi commit [-m <msg>] [--amend]   把工作文件存为一个新版本
-                                   （仅本地；与头版本相同时无可提交；
-                                   --amend 改为替换头版本）
+                                   （与头版本相同时无可提交；--amend 改为替换
+                                   头版本；带 <owner>/<name> 地址时直接写 hub）
   practi export <hash> [-o <file>]       把任一版本写回成文档
   practi push [--force]            同步到 hub（首次推送在那里创建实例）
   practi pull                      拉取缺失的版本、快进分支、更新工作文件
@@ -117,6 +117,19 @@ npm install -g @arshdelight/practi
                                    hub 上的版本历史，新的在前（带日期）
   practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
                                    改实例元数据（--description "" 表示清空）
+  practi commit <owner>/<name>[@branch] --file <path|-> [-m <msg>]
+                                   [--base <hash|vN>] [--amend] [--force]
+                                   把一份文档文件直接提交到 hub，不需要本地文件夹：
+                                   追加在支头之后（--base 指定父版本，发送前先在
+                                   本地核对）；--amend 替换支头那条版本（更早的
+                                   保留）；--force 用这一份文档替换整条链
+                                   （之前的版本不可达）
+  practi new <name> --file <path|-> [-m <msg>]
+                                   在 hub 上创建实例（私有）并落第一版——不建任何
+                                   本地文件夹（名字被占了就用 commit --file 加进去）
+  practi blob add <owner>/<name> <file-or-url> [--name <name>]
+                                   把附件字节直接传到 hub 并打印可粘贴的条目
+                                   （不落本地池）
 
 实践文件夹内
   practi show <hash> [--json] [--doc]   查看一个版本节点（hash 前缀即可）
