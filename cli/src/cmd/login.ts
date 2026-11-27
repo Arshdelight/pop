@@ -1,7 +1,15 @@
 import { defaultDataDir, loadState } from '../state.js';
-import { saveCredentials, deleteCredentials, loadCredentials, isAccessTokenFresh, authPath } from '../credentials.js';
+import {
+  saveCredentials,
+  deleteCredentials,
+  loadCredentials,
+  isAccessTokenFresh,
+  authPath,
+  type Credentials,
+} from '../credentials.js';
 import {
   cliResource,
+  clientExists,
   discoverAs,
   registerClient,
   createLoopbackSession,
@@ -12,6 +20,11 @@ import {
   revokeToken,
   LOGIN_SCOPES,
 } from '../oauth.js';
+import {
+  loadRegisteredClientId,
+  saveRegisteredClientId,
+  forgetRegisteredClientId,
+} from '../client-registry.js';
 import { authedFetch, validAccessToken, HubUnreachableError } from '../client.js';
 
 export interface LoginOpts {
@@ -23,9 +36,24 @@ export interface LoginOpts {
 }
 
 /**
+ * 升级衔接：删旧凭据前，把凭据里的 client_id 抢救进登记文件（该 remote 还没有登记时）——
+ * 0.29 之前的用户第一次重登不用新登记。只认与本次 resource 一致的凭据，
+ * 另一个 hub 签发的 client_id 对当前 remote 没有意义。
+ */
+function carryOverRegisteredClient(dataDir: string, remote: string, resource: string, creds: Credentials): void {
+  if (!creds.client_id) return;
+  if (creds.resource && creds.resource !== resource) return;
+  if (loadRegisteredClientId(dataDir, remote) !== null) return;
+  saveRegisteredClientId(dataDir, remote, creds.client_id);
+}
+
+/**
  * practi login：OAuth 2.1 Authorization Code + PKCE（loopback 回调）登录 practihub。
  * 浏览器授权 → 换 access+refresh token → 凭证存 $dataDir/practi.auth.json（独立于 workspace 状态）。
  * 之后命令自动用 refresh token 续期（rotation），无需再次交互。
+ * client_id 按 remote 记在 $dataDir/practi.client.json：登记一次就复用，不再每次登录都往 hub
+ * 新增一条登记（hub 对回环回调忽略端口比较，RFC 8252——一个登记可以一直用）。
+ * 登记在 hub 侧没了（client-info 404）才重新登记——每次登录前先问一次。
  * --reauth：已登录时不必先 logout——一步重换凭据（revoke 是 best-effort，不阻塞）。
  */
 export async function runLogin(opts: LoginOpts): Promise<number> {
@@ -43,11 +71,13 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
       ? existing.resource.replace(/\/cli$/, '')
       : remote;
     await revokeToken(revokeTarget, existing.client_id, existing.refresh_token, 'refresh_token');
+    carryOverRegisteredClient(dataDir, remote, resource, existing);
     deleteCredentials(dataDir);
     console.log('logged out');
   } else if (existing) {
     if (existing.resource && existing.resource !== resource) {
       // 凭据由另一个 hub 签发，对当前 remote 无用——清掉直接走新登录
+      // （client_id 不抢救：那是另一个 hub 的登记）
       console.error(`note: stored credentials were issued for ${existing.resource}, not ${resource} — clearing them`);
       deleteCredentials(dataDir);
     } else if (isAccessTokenFresh(existing)) {
@@ -66,6 +96,7 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
           return 1;
         }
         console.error(`note: stored credentials are dead — clearing them (${(e as Error).message})`);
+        carryOverRegisteredClient(dataDir, remote, resource, existing);
         deleteCredentials(dataDir);
       }
     }
@@ -77,7 +108,19 @@ export async function runLogin(opts: LoginOpts): Promise<number> {
   const meta = await discoverAs(remote);
   const session = createLoopbackSession();
   try {
-    const { client_id: clientId } = await registerClient(remote, session.redirectUri);
+    // client_id 复用：登记文件里有就先问 hub 是否还认——exists/unknown 都复用（unknown 是
+    // 网络失败或应答形状不对，不能因此多登记一条），只有 missing（hub 确认没了）才重登记。
+    let clientId = loadRegisteredClientId(dataDir, remote);
+    if (clientId !== null && (await clientExists(remote, clientId)) === 'missing') {
+      forgetRegisteredClientId(dataDir, remote);
+      clientId = null;
+    }
+    if (clientId === null) {
+      const { client_id: fresh } = await registerClient(remote, session.redirectUri);
+      // 立刻记账，赶在打开浏览器之前：授权随时可能被中途放弃，登记先落盘，下次登录直接复用
+      saveRegisteredClientId(dataDir, remote, fresh);
+      clientId = fresh;
+    }
     const pkce = generatePkcePair();
     const url = buildAuthorizeUrl({
       authorizationEndpoint: meta.authorization_endpoint,
