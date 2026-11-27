@@ -104,7 +104,7 @@ anywhere
   practi version | --version    show CLI + pop-spec versions
 ```
 
-Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview) — each prints where it went. The config home (`~/.practi`) only holds `practi.json` (remote) and `practi.auth.json` (credentials); practices are plain folders wherever you keep your documents.
+Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview) — each prints where it went. The config home (`~/.practi`) only holds `practi.json` (remote), `practi.auth.json` (credentials) and `practi.client.json` (the registered OAuth client, reused across logins); practices are plain folders wherever you keep your documents.
 
 ### Editing
 

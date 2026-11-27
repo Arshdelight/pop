@@ -36,7 +36,7 @@ green-tea/
                       content-addressed), blobs/ (attachment bytes), notes.json
 ```
 
-The config home (default `~/.practi`) only holds credentials and the remote — `practi.json` (remote) and `practi.auth.json` (OAuth). Practices themselves are plain folders, wherever you keep your documents; deleting a folder deletes the practice (the hub copy stays).
+The config home (default `~/.practi`) only holds credentials and the remote — `practi.json` (remote), `practi.auth.json` (OAuth) and `practi.client.json` (the registered OAuth client, reused across logins). Practices themselves are plain folders, wherever you keep your documents; deleting a folder deletes the practice (the hub copy stays).
 
 ## Setup
 
