@@ -112,6 +112,29 @@ export async function registerClient(
   return r.json as { client_id: string };
 }
 
+export type ClientExistence = 'exists' | 'missing' | 'unknown';
+
+/** hub 上是否还有这条 client 登记（GET /api/auth/oauth/client-info?client_id=…）。
+ *  200 → exists；404 且响应体是 JSON、error === "Client not found" → missing；
+ *  其余一切（网络失败、5xx、形状不符的 404、非 JSON）→ unknown——只有 hub 确认没了才算没。 */
+export async function clientExists(remote: string, clientId: string): Promise<ClientExistence> {
+  let r: { status: number; ok: boolean; json: unknown; text: string };
+  try {
+    r = await jsonFetch(
+      `${new URL(remote).origin}/api/auth/oauth/client-info?client_id=${encodeURIComponent(clientId)}`,
+      { headers: { accept: 'application/json' }, timeoutMs: 10_000 },
+    );
+  } catch {
+    return 'unknown';
+  }
+  if (r.ok) return 'exists';
+  if (r.status === 404) {
+    const body = r.json as Record<string, unknown> | null;
+    if (typeof body === 'object' && body !== null && body.error === 'Client not found') return 'missing';
+  }
+  return 'unknown';
+}
+
 /** PKCE S256：verifier + challenge */
 export function generatePkcePair(): PkcePair {
   const verifier = randomBytes(32).toString('base64url');

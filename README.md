@@ -76,7 +76,7 @@ green-tea/
     blobs/              attachment bytes
 ```
 
-The working file and the head usually match; when they don't, you have **uncommitted changes** — `practi commit` snapshots them as a new revision. The config home (`~/.practi`) only holds `practi.json` (remote) and `practi.auth.json` (credentials); practices are plain folders wherever you keep your documents.
+The working file and the head usually match; when they don't, you have **uncommitted changes** — `practi commit` snapshots them as a new revision. The config home (`~/.practi`) only holds `practi.json` (remote), `practi.auth.json` (credentials) and `practi.client.json` (the registered OAuth client, reused across logins); practices are plain folders wherever you keep your documents.
 
 ```bash
 npm install -g @arshdelight/practi

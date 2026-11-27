@@ -76,7 +76,7 @@ green-tea/
     blobs/              附件字节
 ```
 
-工作文件通常与头版本一致；不一致时就是有**未提交的改动**——`practi commit` 把它存成一个新版本。配置家（`~/.practi`）只放 `practi.json`（远端）和 `practi.auth.json`（凭据）；实践本身是普通文件夹，放在你存放文档的任何地方。
+工作文件通常与头版本一致；不一致时就是有**未提交的改动**——`practi commit` 把它存成一个新版本。配置家（`~/.practi`）只放 `practi.json`（远端）、`practi.auth.json`（凭据）和 `practi.client.json`（登记过的 OAuth 客户端，登录时复用）；实践本身是普通文件夹，放在你存放文档的任何地方。
 
 ```bash
 npm install -g @arshdelight/practi

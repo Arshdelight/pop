@@ -128,9 +128,10 @@ options:
                                  the 10-min cache; a newer release is announced
                                  before every command until you update)
 
-the config home (default ~/.practi) keeps practi.json (remote) and
-practi.auth.json (OAuth credentials) — practices themselves are plain
-folders, wherever you keep your documents.
+the config home (default ~/.practi) keeps practi.json (remote),
+practi.auth.json (OAuth credentials) and practi.client.json (the
+registered OAuth client, reused across logins) — practices themselves
+are plain folders, wherever you keep your documents.
 `;
 
 const COMMON = {
