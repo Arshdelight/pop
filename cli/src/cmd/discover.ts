@@ -1,4 +1,4 @@
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 import { loadCredentials } from '../credentials.js';
 import { fetchMyInstances, fetchPublicInstances, type RemoteInstance } from '../client.js';
 
@@ -54,12 +54,8 @@ export interface LsRemoteOpts {
 /** practi ls --remote：我在 hub 上的全部实践（私密/审核中/公开），按最近更新排 */
 export async function runLsRemote(opts: LsRemoteOpts): Promise<number> {
   const home = opts.dataDir ?? defaultDataDir();
-  const state = loadState(home);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
-  const rows = await fetchMyInstances(home, state.remote.url);
+  const remote = remoteUrl(home);
+  const rows = await fetchMyInstances(home, remote);
 
   if (opts.json) {
     console.log(JSON.stringify(rows.map(jsonRow), null, 2));
@@ -91,12 +87,7 @@ export interface SearchRemoteOpts {
 /** practi search --remote [query...]：公开实践（hub 排名）+ 我自己的（按名字/描述匹配，排前面） */
 export async function runSearchRemote(opts: SearchRemoteOpts): Promise<number> {
   const home = opts.dataDir ?? defaultDataDir();
-  const state = loadState(home);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
-  const remote = state.remote.url;
+  const remote = remoteUrl(home);
   const terms = opts.positional.join(' ').split(/\s+/).filter((t) => t !== '');
   const browse = terms.length === 0;
 

@@ -187,7 +187,7 @@ describe('practi ls --remote：我在 hub 上的实践', () => {
     ]);
   });
 
-  it('空列表：空态提示（exit 0）；未登录 → 1；未配置 remote → 1', async () => {
+  it('空列表：空态提示（exit 0）；未登录 → 1；未配置 remote 也先被未登录拦下（默认 practihub.com，不联网）', async () => {
     const home = await hubHome();
     myRows = [];
     const empty = await pop(home, ['ls', '--remote']);
@@ -199,11 +199,15 @@ describe('practi ls --remote：我在 hub 上的实践', () => {
     expect(noLogin.code).toBe(1);
     expect(noLogin.stderr).toMatch(/not logged in/);
 
+    // 2026-11-27 起未配置 remote 回落默认 https://practihub.com：凭据检查在联网之前
+    // （authedFetch → requireCredentials 先抛），所以裸配置家 + 无凭据在这里就被拦下，
+    // 绝不真的去连 practihub.com
     const bare = tempDataDir();
     await init(bare);
     const noRemote = await pop(bare, ['ls', '--remote']);
     expect(noRemote.code).toBe(1);
-    expect(noRemote.stderr).toMatch(/no remote configured/);
+    expect(noRemote.stderr).toMatch(/not logged in/);
+    expect(noRemote.stderr).not.toMatch(/no remote configured/);
   });
 });
 

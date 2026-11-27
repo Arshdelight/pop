@@ -7,7 +7,7 @@ export interface RemoteOpts {
   positional: string[];
 }
 
-/** practi remote set / remove。看当前挂靠用 `practi config`（remote show 已砍——与 config 重复）。 */
+/** practi remote set / remove。看当前挂靠用 `practi me`（config 已退役并入）。 */
 export async function runRemote(opts: RemoteOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
   const state = loadState(dataDir);
@@ -40,13 +40,13 @@ export async function runRemote(opts: RemoteOpts): Promise<number> {
     case 'remove': {
       delete state.remote;
       saveState(dataDir, state);
-      console.log('remote removed — hub commands need `practi remote set <url>` first');
+      console.log('remote removed — hub commands fall back to the default (https://practihub.com)');
       // 凭据保留在盘上：重设同一 hub 会话不丢；`remote set` 到不同 hub 时会 revoke 并清除
       return 0;
     }
     default:
       console.error('error: missing action — set or remove');
-      console.error('usage: practi remote set <url> | remove   (see the current remote with `practi config`)');
+      console.error('usage: practi remote set <url> | remove   (see the current remote with `practi me`)');
       return 1;
   }
 }

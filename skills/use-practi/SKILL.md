@@ -42,8 +42,10 @@ The config home (default `~/.practi`) only holds credentials and the remote — 
 
 ```bash
 npm install -g @arshdelight/practi
-practi init          # create the config home (credentials + remote)
-practi config        # show config home and remote
+practi me            # account, config home and remote (nothing to init — the
+                     # config home builds itself on login; hub commands default
+                     # to practihub.com, `practi remote set <url>` only to use
+                     # another hub)
 practi --checkversion   # force a version check now (otherwise every command
                      # quietly checks the registry once per 10 min — cached,
                      # failures included)
@@ -295,12 +297,11 @@ practi web                     # browse practices locally — inside a practice 
 
 ## Hub workflow (optional, practihub)
 
-A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain, with branches. Everything hub-side needs:
+A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain, with branches. Everything hub-side needs login only; hub commands default to practihub.com — `practi remote set <url>` is only for pointing at another hub:
 
 ```bash
-practi remote set https://practihub.com   # point at the hub (remove falls back to it)
 practi login                              # OAuth sign-in (browser consent); --no-open prints the URL
-practi me                                 # show the signed-in account and scopes
+practi me                                 # account, config home and remote
 practi logout                             # revoke + drop stored credentials
 ```
 
@@ -323,6 +324,16 @@ practi search --remote [q] [--json]   # practices on the hub: public ones (hub r
 practi clone <owner>/<name>[@branch] [--dir <path>]   # a hub practice → a local folder
                                            # (full chain + working file; git clone);
                                            # just <name> = one of your own
+practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]
+                                           # read a hub revision without cloning (default =
+                                           # the branch head; vN = the Nth revision); --doc
+                                           # prints the document JSON and hints the --base
+                                           # for the next commit on top of it
+practi log <owner>/<name>[@branch] [--limit N] [--json]
+                                           # the hub revision history, newest first, dated
+practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
+                                           # update instance metadata (--description ""
+                                           # clears it) — no local folder needed
 practi notifications [-n N] [--since D] [--until D] [--json]
                                            # mailbox from the hub: recent N or a since/until
                                            # range (YYYY-MM-DD or ISO datetime); read-only —

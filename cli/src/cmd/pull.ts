@@ -1,4 +1,4 @@
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 import { fetchRemoteDoc } from '../client.js';
 import { fetchInstanceChain } from '../sync.js';
 import { dirtyGuardMessage, isDirty, openPool, resolveRepo, saveChain, writeWorkingFile } from '../practice.js';
@@ -19,11 +19,7 @@ export interface PullOpts {
  */
 export async function runPull(opts: PullOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
+  const remote = remoteUrl(dataDir);
   const repo = resolveRepo({ dir: opts.dir, verb: 'pull' });
   if (repo === null) return 1;
   const chain = repo.chain;
@@ -37,7 +33,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
   }
   openPool(repo); // 池标记就绪检查（practice.yaml/nodes 缺失即在此报）
 
-  const view = await fetchInstanceChain(dataDir, state.remote.url, chain.owner, chain.name, chain.current);
+  const view = await fetchInstanceChain(dataDir, remote, chain.owner, chain.name, chain.current);
 
   // 补齐：hub 链上本地缺的对象与链条目
   const knownRoots = new Set(chain.commits.map((c) => c.root));
@@ -47,7 +43,7 @@ export async function runPull(opts: PullOpts): Promise<number> {
     if (rev.missing) continue;
     if (!knownRoots.has(rev.root_hash)) {
       try {
-        await fetchRemoteDoc(dataDir, repo.poolDir, state.remote.url, chain.owner, chain.name, rev.root_hash);
+        await fetchRemoteDoc(dataDir, repo.poolDir, remote, chain.owner, chain.name, rev.root_hash);
         fetched++;
       } catch (e) {
         console.error(`pull failed: ${(e as Error).message}`);

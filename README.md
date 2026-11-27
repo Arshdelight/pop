@@ -30,7 +30,6 @@ Nodes carry no ids: a node's content hash is its only address, and the root hash
 
 ```bash
 npm install -g @arshdelight/practi
-practi init                                    # create the config home (~/.practi by default)
 practi new make-tea --base tea.json -m "first"  # birth a practice folder from a document (the tree above, saved as tea.json)
 practi web                                     # browse it in a local web UI
 ```
@@ -109,6 +108,16 @@ history
                                    is (git reset semantics) — keep it with a commit or
                                    discard it with export
 
+straight from the hub (an address — <owner>/<name>[@branch] — needs no local folder)
+  practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]
+                                   inspect a hub revision: default the branch head,
+                                   vN = the Nth revision; --doc prints the document
+                                   JSON and hints the --base for the next commit
+  practi log <owner>/<name>[@branch] [--limit N] [--json]
+                                   the hub revision history, tip first (dated)
+  practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
+                                   update instance metadata (--description "" clears)
+
 inside a practice folder
   practi show <hash> [--json] [--doc]   inspect one revision node (hash prefix OK)
   practi search [query...] [--json]     search this practice's revisions (BM25, title-first,
@@ -131,11 +140,10 @@ inside a practice folder
                                    directory page — click through to the reader
 
 anywhere
-  practi init [path]            create the config home (credentials + remote; default ~/.practi)
-  practi remote set <url> | remove    point at a hub
+  practi remote set <url> | remove    point at another hub (default: https://practihub.com;
+                                   remove falls back to it)
   practi login [--no-open] [--reauth]   OAuth sign-in (PKCE, browser consent); logout revokes
-  practi me                     show the signed-in account and scopes
-  practi config                 show config home and remote
+  practi me                     show the signed-in account, config home and remote
   practi ls [--remote] [--json]  cross-practice overview from the practices home
                                 (branch / head / revisions / unpushed per practice);
                                 --remote lists your practices on the hub instead
@@ -163,7 +171,7 @@ anywhere
   practi version | --version    show CLI + pop-spec versions
 ```
 
-Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice` — each prints where it went (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview).
+Retired with the pops registry (2026-10-20): `edit` `list` `remove` `claim` `unclaim` `publish` `fetch` `repair` `migrate` `instance` `practice` — each prints where it went (`ls` returned 2026-11-18 with folder-model semantics: cross-practice overview). `init` / `config` retired 2026-11-27 into `practi me`: hub commands default to practihub.com and the config home builds itself on login.
 
 A practice folder maps one-to-one onto a hub **instance** — a single-owner, GitHub-like home for one POP's revision chain with branches. `practi push` births the hub copy on first push, `practi clone` brings a full chain down as a folder, and `ls --remote` / `search --remote` find what to clone. Content addressing is untouched: the hub re-derives hashes server-side with the same SDK.
 

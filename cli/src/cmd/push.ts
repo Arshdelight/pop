@@ -1,5 +1,5 @@
 import { exportSubtree, resolveNodeRef, createFromDoc, readBlob } from '@arshdelight/pop-sdk';
-import { defaultDataDir, loadState, type State } from '../state.js';
+import { defaultDataDir, loadState, remoteUrl, type State } from '../state.js';
 import { authedFetch, collectAttachmentHashes, uploadBlob, blobOnHub } from '../client.js';
 import { shortHash } from '../render.js';
 import {
@@ -320,11 +320,6 @@ async function forcePush(
  */
 export async function runPush(opts: PushOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
   const repo = resolveRepo({ dir: opts.dir, verb: 'push' });
   if (repo === null) return 1;
   const head = chainHead(repo.chain);
@@ -332,5 +327,5 @@ export async function runPush(opts: PushOpts): Promise<number> {
     console.error(`error: practice "${repo.chain.name}" has no revisions yet — \`practi publish <pop> --to ${repo.chain.name}\` first`);
     return 1;
   }
-  return pushRepo(repo, { dataDir, remote: state.remote.url, force: opts.force, verbose: true });
+  return pushRepo(repo, { dataDir, remote: remoteUrl(dataDir), force: opts.force, verbose: true });
 }

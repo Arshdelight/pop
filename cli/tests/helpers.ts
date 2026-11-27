@@ -102,8 +102,13 @@ export function tempDataDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'practi-test-'));
 }
 
-export async function init(dataDir: string): Promise<PopResult> {
-  return pop(dataDir, ['init']);
+/**
+ * A config home for tests. `practi init` retired (2026-11-27): hub commands default
+ * to practihub.com and login/remote set build the home on demand — so tests just
+ * create the directory. (Kept async: call sites all `await init(dir)`.)
+ */
+export async function init(dataDir: string): Promise<void> {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
 /** The practice's chain file (.practi/chain.json) */

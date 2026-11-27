@@ -1,5 +1,5 @@
 import { authedFetch } from '../client.js';
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 
 export interface VisibilityOpts {
   dataDir?: string;
@@ -11,11 +11,7 @@ export interface VisibilityOpts {
  *  public 方向 hub 受理进审核流（PUBLIC_REVIEWING，判定走通知）；private 即时生效可随时再来 */
 export async function runVisibility(opts: VisibilityOpts): Promise<number> {
   const dir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
+  const remote = remoteUrl(dir);
   const target = opts.positional[0];
   const mode = opts.positional[1];
   if (!target || !/^[^/]+\/[^/]+$/.test(target) || (mode !== 'public' && mode !== 'private')) {
@@ -26,7 +22,7 @@ export async function runVisibility(opts: VisibilityOpts): Promise<number> {
   const visibility = mode === 'public' ? 'PUBLIC' : 'PRIVATE';
   const res = await authedFetch(
     dir,
-    state.remote.url,
+    remote,
     `/api/v1/instances/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
     {
       method: 'PATCH',

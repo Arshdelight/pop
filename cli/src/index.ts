@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { PracticeError } from '@arshdelight/pop-sdk';
-import { runInit } from './cmd/init.js';
-import { runConfig } from './cmd/config.js';
 import { runLs } from './cmd/ls.js';
 import { versionCheckNotify } from './version-check.js';
 import { runLint } from './cmd/lint.js';
@@ -11,6 +9,7 @@ import { runCommit } from './cmd/commit.js';
 import { runExport } from './cmd/export.js';
 import { runGc } from './cmd/gc.js';
 import { runShow } from './cmd/show.js';
+import { runSet } from './cmd/set.js';
 import { runWeb } from './web.js';
 import { runBlobAdd } from './cmd/blob.js';
 import { runSearch } from './cmd/search.js';
@@ -80,6 +79,16 @@ usage (run inside a practice folder unless noted):
                                  push reconciles with the hub — divergence needs --force
   practi export is the read-back door; the working file is the write door
 
+straight from the hub (no local folder needed — the address is <owner>/<name>[@branch]):
+  practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]
+                                 inspect a hub revision (default = the branch head;
+                                 vN = the Nth revision; --doc prints the document
+                                 JSON and hints the --base for the next commit)
+  practi log <owner>/<name>[@branch] [--limit N] [--json]
+                                 the hub revision history (tip first, dated)
+  practi set <owner>/<name> [--name <n>] [--description <text>] [--refines <hash>]
+                                 update instance metadata (--description "" clears)
+
 inside a practice folder also:
   practi show <hash> [--json] [--doc]   inspect one revision node (hash prefix OK)
   practi search [query...] [--json]     search this practice's revisions
@@ -93,10 +102,11 @@ inside a practice folder also:
                                         else serves the practices home)
 
 anywhere:
-  practi init [path]             create the config home (credentials + remote)
   practi login [--no-open]       OAuth sign-in to the hub (browser consent)
-  practi logout | me | remote set <url> | remove
-  practi config                  show config home and remote
+  practi logout | me             me shows the account, config home and remote
+  practi remote set <url> | remove
+                                 only to use another hub — hub commands default
+                                 to https://practihub.com (remove falls back to it)
   practi ls [--remote] [--json]  cross-practice overview from the practices home
                                  (branch / head / revisions / unpushed per practice);
                                  --remote: your practices on the hub instead
@@ -157,6 +167,8 @@ function retired(cmd: string): number {
     migrate: 'the config home is tiny — move the folder and point $PRACTI_HOME at it',
     instance: 'retired by the practice-folder model (2026-10-20)',
     practice: 'commands are flat now: `practi new <name>` / `practi log` / ... (the practice prefix retired)',
+    init: 'nothing to set up — hub commands default to practihub.com and login builds the config home on demand; `practi me` shows it',
+    config: 'merged into `practi me` — it shows the account, config home and remote',
   };
   console.error(`\`practi ${cmd}\` was retired — ${pointers[cmd] ?? 'see practi --help'}`);
   return 1;
@@ -188,15 +200,31 @@ async function main(rawArgv: string[]): Promise<number> {
       if (values.help) { console.log('usage: practi gc [--apply]   (free orphan blobs; dry-run by default)'); return 0; }
       return runGc({ dir: str(values.dir), apply: values.apply === true });
     }
-    case 'init': {
-      const { values, positionals } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi init [path]   (create the config home: credentials + remote)'); return 0; }
-      return runInit({ dataDir: str(values['data-dir']), positional: positionals });
-    }
-    case 'config': {
-      const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi config'); return 0; }
-      return runConfig({ dataDir: str(values['data-dir']) });
+    case 'init':
+      return retired('init');
+    case 'config':
+      return retired('config');
+    case 'set': {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        options: { ...COMMON, name: { type: 'string' as const }, description: { type: 'string' as const }, refines: { type: 'string' as const } },
+        allowPositionals: true,
+      });
+      if (values.help) {
+        console.log('usage: practi set <owner>/<name> [--name <new-name>] [--description <text>] [--refines <hash>]   (update instance metadata; --description "" clears)');
+        return 0;
+      }
+      if (positionals.length !== 1) {
+        console.error('usage: practi set <owner>/<name> [--name <new-name>] [--description <text>] [--refines <hash>]');
+        return 1;
+      }
+      return await runSet({
+        dataDir: str(values['data-dir']),
+        positional: positionals,
+        name: values.name,
+        description: values.description,
+        refines: values.refines,
+      });
     }
     case 'ls': {
       const { values } = parseArgs({
@@ -253,12 +281,16 @@ async function main(rawArgv: string[]): Promise<number> {
     case 'show': {
       const { values, positionals } = parseArgs({
         args: rest,
-        options: { ...COMMON, json: { type: 'boolean' as const }, doc: { type: 'boolean' as const }, dir: { type: 'string' as const } },
+        options: { ...COMMON, json: { type: 'boolean' as const }, doc: { type: 'boolean' as const }, rev: { type: 'string' as const }, dir: { type: 'string' as const } },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi show <hash> [--json] [--doc]'); return 0; }
-      if (positionals.length === 0) { console.error('usage: practi show <hash> [--json] [--doc]'); return 1; }
-      return runShow({ hash: positionals[0], json: values.json === true, doc: values.doc === true, dir: values.dir });
+      if (values.help) {
+        console.log('usage: practi show <hash> [--json] [--doc]   (a local revision node; hash prefix OK)');
+        console.log('       practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]   (a hub revision, no local folder)');
+        return 0;
+      }
+      if (positionals.length === 0) { console.error('usage: practi show <hash> [--json] [--doc]   |   practi show <owner>/<name>[@branch] [--rev <hash|vN>] [--json] [--doc]'); return 1; }
+      return await runShow({ hash: positionals[0], json: values.json === true, doc: values.doc === true, rev: values.rev, dir: values.dir, dataDir: str(values['data-dir']) });
     }
     case 'web': {
       const { values } = parseArgs({
@@ -366,7 +398,7 @@ async function main(rawArgv: string[]): Promise<number> {
     }
     case 'me': {
       const { values } = parseArgs({ args: rest, options: COMMON, allowPositionals: true });
-      if (values.help) { console.log('usage: practi me   (show the signed-in account)'); return 0; }
+      if (values.help) { console.log('usage: practi me   (show the signed-in account, config home and remote)'); return 0; }
       return runMe({ dataDir: str(values['data-dir']) });
     }
     case 'remote': {
@@ -448,7 +480,7 @@ async function main(rawArgv: string[]): Promise<number> {
       return runMerge({ positional: positionals, dir: values.dir });
     }
     case 'log': {
-      const { values } = parseArgs({
+      const { values, positionals } = parseArgs({
         args: rest,
         options: {
           ...COMMON,
@@ -459,13 +491,15 @@ async function main(rawArgv: string[]): Promise<number> {
         },
         allowPositionals: true,
       });
-      if (values.help) { console.log('usage: practi log [--branch <b>] [--limit N] [--json]   (the commit history, tip first)'); return 0; }
+      if (values.help) { console.log('usage: practi log [--branch <b>] [--limit N] [--json]   (the local commit history, tip first)'); console.log('       practi log <owner>/<name>[@branch] [--limit N] [--json]   (a hub practice history)'); return 0; }
       const logLimit = values.limit ? Number(values.limit) : undefined;
-      return runLog({
+      return await runLog({
         branch: values.branch,
         limit: logLimit !== undefined && Number.isInteger(logLimit) && logLimit > 0 ? logLimit : undefined,
         json: values.json === true,
         dir: values.dir,
+        ref: positionals[0],
+        dataDir: str(values['data-dir']),
       });
     }
     case 'history': {

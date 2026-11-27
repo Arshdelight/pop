@@ -1,5 +1,5 @@
 import { authedFetch } from '../client.js';
-import { defaultDataDir, loadState } from '../state.js';
+import { defaultDataDir, remoteUrl } from '../state.js';
 
 export interface NotificationRow {
   id: string;
@@ -55,11 +55,7 @@ export function normalizeDateBound(value: string, edge: 'since' | 'until'): stri
  */
 export async function runNotifications(opts: NotificationsOpts): Promise<number> {
   const dataDir = opts.dataDir ?? defaultDataDir();
-  const state = loadState(dataDir);
-  if (!state.remote) {
-    console.error('error: no remote configured — run `practi remote set <url>` first');
-    return 1;
-  }
+  const remote = remoteUrl(dataDir);
 
   let since: string | null | undefined;
   let until: string | null | undefined;
@@ -84,7 +80,7 @@ export async function runNotifications(opts: NotificationsOpts): Promise<number>
   if (until) params.set('until', until);
   const qs = params.toString();
 
-  const res = await authedFetch(dataDir, state.remote.url, `/api/v1/notifications${qs ? `?${qs}` : ''}`);
+  const res = await authedFetch(dataDir, remote, `/api/v1/notifications${qs ? `?${qs}` : ''}`);
   if (!res.ok) {
     const body = (await res.json()) as { error?: string; code?: string };
     console.error(`error: hub returned HTTP ${res.status}${body.code ? ` (${body.code})` : ''} — ${body.error ?? 'failed to list notifications'}`);

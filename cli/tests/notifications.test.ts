@@ -126,16 +126,19 @@ describe('practi notifications：hub 信箱查询', () => {
     expect(parsed.items[0].kind).toBe('issue_created');
   });
 
-  it('非法日期 → 1 + stderr 指引；未配置 remote → 1', async () => {
+  it('非法日期 → 1 + stderr 指引；未配置 remote 也先被未登录拦下（默认 practihub.com，不联网）', async () => {
     const home = await hubHome();
     const bad = await pop(home, ['notifications', '--since', 'not-a-date']);
     expect(bad.code).toBe(1);
     expect(bad.stderr).toMatch(/invalid --since/);
 
+    // 2026-11-27 起未配置 remote 回落默认 https://practihub.com：authedFetch 的凭据
+    // 检查在联网之前（requireCredentials 先抛），裸配置家 + 无凭据在这里就被拦下
     const bare = tempDataDir();
     await init(bare);
     const noRemote = await pop(bare, ['notifications']);
     expect(noRemote.code).toBe(1);
-    expect(noRemote.stderr).toMatch(/no remote configured/);
+    expect(noRemote.stderr).toMatch(/not logged in/);
+    expect(noRemote.stderr).not.toMatch(/no remote configured/);
   });
 });
